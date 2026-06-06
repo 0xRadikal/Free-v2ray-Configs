@@ -31,32 +31,93 @@ from typing import Dict, List, Optional, Tuple
 #: برند کانال — تنها جای تعریف
 BRAND_CHANNEL = "@Raydikalx"
 
-#: پروتکل‌های معتبر (دقیقاً مطابق _FREE_VALID_PREFIXES در ربات)
-VALID_PREFIXES: Tuple[str, ...] = (
-    "vmess://", "vless://", "trojan://", "ss://",
-    "shadowsocks://", "hy2://", "hysteria2://", "hysteria://",
-    "tuic://", "wireguard://", "warp://",
-)
+# ──────────────────────────────────────────────────────────────────────────────
+# 🧠 تشخیصِ هوشمندِ پروتکل (Dynamic / Future-proof)
+# ──────────────────────────────────────────────────────────────────────────────
+# سیستم به‌جای «لیستِ سفیدِ ثابت»، هر URI به‌شکلِ scheme://... را به‌عنوان یک
+# کانفیگِ معتبر می‌پذیرد (مگر اینکه در لیستِ سیاهِ scheme‌های غیرپروکسی باشد).
+# بنابراین اگر منابع فردا پروتکلِ جدیدی اضافه کنند (مثلاً anytls، juicity، snell،
+# mieru، ssh، و…)، خودکار شناسایی، تجمیع، تکراری‌زدایی و دسته‌بندی می‌شود —
+# بدونِ نیاز به تغییرِ کد.
 
-#: نگاشت scheme → نام پروتکلِ canonical (برای فایل‌های per-protocol)
-_SCHEME_TO_PROTOCOL: Dict[str, str] = {
-    "vmess": "vmess",
-    "vless": "vless",
-    "trojan": "trojan",
+#: نگاشتِ aliasهای شناخته‌شده → نامِ canonical (فقط برای تمیزی نام؛ نه محدودیت)
+_SCHEME_ALIASES: Dict[str, str] = {
     "ss": "shadowsocks",
     "shadowsocks": "shadowsocks",
+    "ssr": "shadowsocksr",
+    "hy": "hysteria",
+    "hysteria": "hysteria",
     "hy2": "hysteria2",
     "hysteria2": "hysteria2",
-    "hysteria": "hysteria",
-    "tuic": "tuic",
+    "wg": "wireguard",
     "wireguard": "wireguard",
     "warp": "wireguard",
+    "socks": "socks",
+    "socks5": "socks",
 }
 
-#: ترتیب نمایش پروتکل‌ها در خروجی/متادیتا
+#: scheme‌هایی که «پروکسی» نیستند و باید نادیده گرفته شوند (لیستِ سیاه)
+#: (لینک‌های وب، فایل، تصویر و…)، تا متنِ نویزِ منابع به‌اشتباه کانفیگ تلقی نشود.
+_NON_PROXY_SCHEMES: frozenset = frozenset({
+    "http", "https", "ftp", "ftps", "file", "data", "mailto", "tel", "sms",
+    "magnet", "git", "ssh+git", "ws", "wss", "tcp", "udp", "ipfs",
+    "android-app", "intent", "javascript", "blob", "about", "chrome",
+})
+
+#: الگوی یک URI پروکسی:  scheme://...   (scheme معتبرِ RFC: حروف/عدد/+/-/.)
+_URI_SCHEME_RE = re.compile(r"^([a-z][a-z0-9+\-.]*)://", re.IGNORECASE)
+
+#: حداقل طولِ یک کانفیگِ معتبر (کوتاه‌تر از این = نویز)
+_MIN_CONFIG_LEN = 12
+
+#: ترتیبِ ترجیحیِ نمایشِ پروتکل‌های پرکاربرد در خروجی/متادیتا.
+#: پروتکل‌های ناشناخته/جدید بعد از این‌ها به‌ترتیبِ الفبا می‌آیند (خودکار).
 PROTOCOL_ORDER: Tuple[str, ...] = (
-    "vless", "vmess", "trojan", "shadowsocks",
+    "vless", "vmess", "trojan", "shadowsocks", "shadowsocksr",
     "hysteria2", "hysteria", "tuic", "wireguard",
+    "juicity", "anytls", "snell", "mieru", "socks",
+)
+
+
+def normalize_scheme(scheme: str) -> str:
+    """نامِ scheme را به نامِ canonical پروتکل تبدیل می‌کند (هوشمند، با fallback)."""
+    s = (scheme or "").strip().lower()
+    return _SCHEME_ALIASES.get(s, s)
+
+
+def is_proxy_config(line: str) -> bool:
+    """
+    تشخیصِ هوشمندِ اینکه آیا یک خط، کانفیگِ پروکسیِ معتبر است.
+
+    منطق (future-proof):
+      • باید الگوی scheme:// داشته باشد
+      • scheme نباید در لیستِ سیاهِ غیرپروکسی باشد (http, ws, file, …)
+      • طولِ کافی داشته باشد و حاوی فاصلهٔ خالی نباشد (URIهای واقعی فاصله ندارند)
+    هر پروتکلِ جدیدی که این شرایط را داشته باشد، خودکار پذیرفته می‌شود.
+    """
+    if not line:
+        return False
+    line = line.strip()
+    if len(line) < _MIN_CONFIG_LEN or " " in line.split("#", 1)[0]:
+        return False
+    m = _URI_SCHEME_RE.match(line)
+    if not m:
+        return False
+    scheme = m.group(1).lower()
+    if scheme in _NON_PROXY_SCHEMES:
+        return False
+    # باید بعد از :// محتوای واقعی داشته باشد
+    after = line.split("://", 1)[1]
+    return bool(after) and not after.startswith(("/", "#"))
+
+
+#: سازگاریِ عقب‌رو: برخی توابع قدیمی هنوز به این نام رجوع می‌کنند.
+#: حالا این فقط «prefixهای رایج» است (برای heuristicِ تشخیصِ base64)، نه محدودیتِ پذیرش.
+VALID_PREFIXES: Tuple[str, ...] = (
+    "vmess://", "vless://", "trojan://", "ss://",
+    "shadowsocks://", "ssr://", "hy://", "hy2://", "hysteria://", "hysteria2://",
+    "tuic://", "wireguard://", "wg://", "warp://",
+    "juicity://", "anytls://", "snell://", "mieru://", "socks://", "socks5://",
 )
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -369,10 +430,19 @@ def brand_remark(line: str, idx: int) -> str:
 # ──────────────────────────────────────────────────────────────────────────────
 
 def protocol_of(line: str) -> Optional[str]:
-    """نام پروتکلِ canonical یک کانفیگ را برمی‌گرداند یا None."""
-    line = line.strip().lower()
-    scheme = line.split("://", 1)[0] if "://" in line else ""
-    return _SCHEME_TO_PROTOCOL.get(scheme)
+    """
+    نامِ canonical پروتکلِ یک کانفیگ را برمی‌گرداند (هوشمند).
+    برای هر scheme:// معتبر کار می‌کند — حتی پروتکل‌های جدید/ناشناخته.
+    """
+    if not line:
+        return None
+    m = _URI_SCHEME_RE.match(line.strip())
+    if not m:
+        return None
+    scheme = m.group(1).lower()
+    if scheme in _NON_PROXY_SCHEMES:
+        return None
+    return normalize_scheme(scheme)
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -396,7 +466,8 @@ def try_base64_decode(raw: str) -> Optional[str]:
                 non_empty = [l.strip() for l in text.splitlines() if l.strip()]
                 if not non_empty:
                     continue
-                valid = [l for l in non_empty if any(l.startswith(p) for p in VALID_PREFIXES)]
+                # هوشمند: هر scheme:// معتبر (نه فقط prefixهای ثابت) شمارش می‌شود
+                valid = [l for l in non_empty if is_proxy_config(l)]
                 if valid and (len(valid) / len(non_empty)) >= 0.20:
                     return text
             except UnicodeDecodeError:
@@ -413,13 +484,15 @@ def extract_valid_lines(content: str) -> List[str]:
          if l.strip() and not l.strip().startswith("//") and not l.strip().startswith("#")),
         "",
     )
-    if not any(first_real.startswith(p) for p in VALID_PREFIXES):
+    # اگر اولین خطِ واقعی، کانفیگِ پروکسی نبود → احتمالاً blob base64 است
+    if not is_proxy_config(first_real):
         decoded = try_base64_decode(content)
         if decoded:
             content = decoded
+    # هوشمند: هر scheme:// معتبر پذیرفته می‌شود (حتی پروتکل‌های جدید)
     return [
         line for raw in content.splitlines()
-        if (line := raw.strip()) and any(line.startswith(p) for p in VALID_PREFIXES)
+        if (line := raw.strip()) and is_proxy_config(line)
     ]
 
 

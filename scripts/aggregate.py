@@ -190,12 +190,15 @@ def write_protocols(out_dir: str, all_unique: List[str]) -> Dict[str, int]:
         if lines:
             _write_text(os.path.join(base, f"{proto}_base64.txt"),
                         core.encode_base64_subscription(lines))
-    # پروتکل‌های ناشناخته/خارج از ترتیب
-    for proto, lines in buckets.items():
+    # 🧠 پروتکل‌های ناشناخته/جدید (خارج از ترتیبِ شناخته‌شده) — خودکار فایل می‌سازند
+    for proto, lines in sorted(buckets.items(), key=lambda x: -len(x[1])):
         if proto not in counts:
             counts[proto] = len(lines)
             h = f"# @Raydikalx — {proto} — {len(lines)} configs\n"
             _write_text(os.path.join(base, f"{proto}.txt"), h + "\n".join(lines) + "\n")
+            if lines:
+                _write_text(os.path.join(base, f"{proto}_base64.txt"),
+                            core.encode_base64_subscription(lines))
     return counts
 
 
