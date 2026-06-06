@@ -1,0 +1,80 @@
+name: 🔄 Aggregate V2Ray Configs
+
+# ─────────────────────────────────────────────────────────────────────────────
+# جمع‌آوری، حذف تکراری/خراب، برندینگ و انتشار کانفیگ‌ها هر ۳۱ دقیقه
+# منبع: ۲۲ سورس (۹ سبک + ۱۳ انبوه) — بدون TCP-connect
+# توکن: از GITHUB_TOKEN داخلی Actions استفاده می‌شود (هیچ توکنی hardcode نشده)
+# ─────────────────────────────────────────────────────────────────────────────
+
+on:
+  schedule:
+    # هر ۳۱ دقیقه (cron حداقل دقت ۵ دقیقه دارد؛ */31 یعنی دقیقهٔ 0 و 31 هر ساعت)
+    - cron: "1,32 * * * *"
+  workflow_dispatch: {}        # اجرای دستی از تب Actions
+  push:
+    branches: [main]
+    paths:
+      - "scripts/**"
+      - ".github/workflows/aggregate.yml"
+
+# جلوگیری از اجرای هم‌زمانِ چند run (اگر یکی در حال اجراست، بعدی صبر می‌کند)
+concurrency:
+  group: aggregate
+  cancel-in-progress: false
+
+permissions:
+  contents: write              # برای commit/push نتایج
+
+jobs:
+  aggregate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: ⬇️ Checkout
+        uses: actions/checkout@v4
+
+      - name: 🐍 Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: 📦 Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: 🚀 Run aggregator
+        run: python scripts/aggregate.py --out .
+
+      - name: 📊 Job summary
+        if: always()
+        run: |
+          if [ -f index.json ]; then
+            python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          d = json.load(open("index.json"))
+          c = d["categories"]
+          print("## 🔄 Aggregation Result — @Raydikalx\n")
+          print(f"- **Updated:** {d['updated_at']}")
+          print(f"- **Elapsed:** {d['elapsed_seconds']}s\n")
+          print("| Category | Unique | Duplicates | Broken | Sources |")
+          print("|---|---|---|---|---|")
+          for k in ("all","heavy","light"):
+              b=c[k]
+              print(f"| {k} | {b['unique']} | {b['duplicates']} | {b['broken']} | {b['active_sources']} |")
+          print("\n### Protocols")
+          print(", ".join(f"`{k}`={v}" for k,v in d["protocols"].items() if v))
+          PY
+          fi
+
+      - name: 💾 Commit & push
+        run: |
+          git config user.name  "raydikalx-bot[actions]"
+          git config user.email "actions@users.noreply.github.com"
+          git add all/ heavy/ light/ protocols/ archive/ index.json
+          if git diff --cached --quiet; then
+            echo "No changes to commit."
+          else
+            STAMP=$(date -u +'%Y-%m-%d %H:%M UTC')
+            git commit -m "chore: auto-update configs ($STAMP) [@Raydikalx]"
+            git push
+          fi
