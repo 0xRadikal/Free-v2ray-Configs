@@ -70,11 +70,24 @@ jobs:
         run: |
           git config user.name  "raydikalx-bot[actions]"
           git config user.email "actions@users.noreply.github.com"
+          # فقط فایل‌های خروجی را stage کن (نه scripts/workflow)
           git add all/ heavy/ light/ protocols/ archive/ index.json
           if git diff --cached --quiet; then
             echo "No changes to commit."
-          else
-            STAMP=$(date -u +'%Y-%m-%d %H:%M UTC')
-            git commit -m "chore: auto-update configs ($STAMP) [@Raydikalx]"
-            git push
+            exit 0
           fi
+          STAMP=$(date -u +'%Y-%m-%d %H:%M UTC')
+          git commit -m "chore: auto-update configs ($STAMP) [@Raydikalx]"
+          # تلاشِ مقاوم در برابرِ race (دو run هم‌زمان): rebase + retry
+          for attempt in 1 2 3 4 5; do
+            if git push origin HEAD:main; then
+              echo "✅ pushed on attempt $attempt"
+              exit 0
+            fi
+            echo "⚠️ push rejected (attempt $attempt) — rebasing onto remote …"
+            git fetch origin main
+            git rebase -X ours origin/main || git rebase --abort
+            sleep $((attempt * 3))
+          done
+          echo "❌ could not push after retries"
+          exit 1
