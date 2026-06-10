@@ -53,10 +53,15 @@ USER_AGENTS = (
     "(KHTML, like Gecko) Chrome/120.0 Safari/537.36",
     "ClashforWindows/0.20.39",
 )
-FETCH_TIMEOUT = 15
-MAX_WORKERS = 12
-FETCH_RETRIES = 3          # تعدادِ تلاشِ مجدد در صورتِ خطا/خالی‌بودن
+FETCH_TIMEOUT = int(os.getenv("AGG_FETCH_TIMEOUT", "15"))
+MAX_WORKERS = int(os.getenv("AGG_MAX_WORKERS", "16"))
+FETCH_RETRIES = int(os.getenv("AGG_FETCH_RETRIES", "3"))  # تعدادِ تلاشِ مجدد در صورتِ خطا/خالی‌بودن
 RETRY_BACKOFF = 1.5        # ثانیه × شمارهٔ تلاش
+
+#: بازهٔ به‌روزرسانی (دقیقه) — باید با raydikalx/repo_trigger.py و
+#: UPDATE_INTERVAL_MINUTES در aggregate.yml هماهنگ باشد (پیش‌فرض ۱۵).
+#: قابلِ override با متغیرِ محیطی AGG_UPDATE_INTERVAL_MIN.
+UPDATE_INTERVAL_MIN = int(os.getenv("AGG_UPDATE_INTERVAL_MIN", "15"))
 
 #: گزارشِ سلامتِ منابع (پر می‌شود در fetch_all) — برای index.json و health.json
 SOURCE_HEALTH: Dict[str, dict] = {}
@@ -248,7 +253,7 @@ def write_protocols(out_dir: str, all_unique: List[str]) -> Dict[str, int]:
 def build_index(results: Dict[str, CategoryResult], proto_counts: Dict[str, int],
                 elapsed: float) -> dict:
     now = _dt.datetime.now(_dt.timezone.utc)
-    next_run = now + _dt.timedelta(minutes=31)
+    next_run = now + _dt.timedelta(minutes=UPDATE_INTERVAL_MIN)
 
     def cat_block(cat: str, r: CategoryResult) -> dict:
         return {
@@ -272,7 +277,7 @@ def build_index(results: Dict[str, CategoryResult], proto_counts: Dict[str, int]
         "updated_at": now.isoformat(),
         "updated_at_unix": int(now.timestamp()),
         "next_update_eta": next_run.isoformat(),
-        "update_interval_minutes": 31,
+        "update_interval_minutes": UPDATE_INTERVAL_MIN,
         "elapsed_seconds": round(elapsed, 1),
         "raw_base": RAW_BASE,
         "cdn_base": CDN_BASE,

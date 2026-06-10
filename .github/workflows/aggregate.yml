@@ -45,11 +45,13 @@ permissions:
   contents: write              # برای commit/push نتایج
 
 # فاصلهٔ هدفِ به‌روزرسانی (دقیقه). با update_interval_minutes در index.json یکی است.
+# ★ کاهش از ۳۱ → ۱۵ دقیقه (درخواستِ مالک: «وقفهٔ بینِ آپدیت‌ها را بیاور پایین»).
 env:
-  UPDATE_INTERVAL_MINUTES: "31"
-  # حاشیهٔ امنیتی: کمی کمتر از ۳۱ می‌گیریم تا اگر cron با ۱-۲ دقیقه تأخیر آمد،
-  # باز هم به‌جای رد شدن، اجرا شود (جلوگیری از «۶۲ دقیقه‌ای شدن» تصادفی).
-  FRESHNESS_GATE_MINUTES: "28"
+  UPDATE_INTERVAL_MINUTES: "15"
+  AGG_UPDATE_INTERVAL_MIN: "15"   # به aggregate.py پاس داده می‌شود (index.json/ETA)
+  # حاشیهٔ امنیتی: کمی کمتر از ۱۵ می‌گیریم تا اگر cron با ۱-۲ دقیقه تأخیر آمد،
+  # باز هم به‌جای رد شدن، اجرا شود (جلوگیری از «۳۰ دقیقه‌ای شدن» تصادفی).
+  FRESHNESS_GATE_MINUTES: "13"
 
 jobs:
   aggregate:
