@@ -2456,7 +2456,18 @@ proxies:
     path: linkvws
     headers:
       Host: seribus.org
-- name: US 🇺🇸 | @Raydikalx | 230
+- name: DE 🇩🇪 | @Raydikalx | 230
+  server: 141.95.65.9
+  port: 1234
+  type: vmess
+  uuid: 5c040f1d-45db-43bd-8d46-e4950e433735
+  alterId: 0
+  cipher: aes-128-gcm
+  udp: true
+  network: tcp
+  tls: true
+  servername: supervpn.super.com
+- name: US 🇺🇸 | @Raydikalx | 231
   server: 57.151.100.27
   port: 10086
   type: vmess
@@ -2466,16 +2477,8 @@ proxies:
   udp: true
   network: tcp
   tls: false
-- name: Global 🌐 | @Raydikalx | 231
-  server: sca10.myfymain.com
-  port: 8880
-  type: vless
-  uuid: 8dc7722c-2767-4eea-a28b-2f8daacc07e3
-  udp: true
-  network: grpc
-  tls: false
 - name: Global 🌐 | @Raydikalx | 232
-  server: sca13.myfymain.com
+  server: sca10.myfymain.com
   port: 8880
   type: vless
   uuid: 8dc7722c-2767-4eea-a28b-2f8daacc07e3
@@ -2492,6 +2495,13 @@ proxies:
   tls: false
 - name: Global 🌐 | @Raydikalx | 234
   server: 82.38.31.214
+  port: 8080
+  type: ss
+  cipher: chacha20-ietf-poly1305
+  password: k1dBOmOB4oqi7Ump37a1bQ
+  udp: true
+- name: Global 🌐 | @Raydikalx | 235
+  server: 82.38.31.210
   port: 8080
   type: ss
   cipher: chacha20-ietf-poly1305
@@ -2723,11 +2733,12 @@ proxy-groups:
   - Global 🌐 | @Raydikalx | 227
   - Global 🌐 | @Raydikalx | 228
   - CA 🇨🇦 | @Raydikalx | 229
-  - US 🇺🇸 | @Raydikalx | 230
-  - Global 🌐 | @Raydikalx | 231
+  - DE 🇩🇪 | @Raydikalx | 230
+  - US 🇺🇸 | @Raydikalx | 231
   - Global 🌐 | @Raydikalx | 232
   - Global 🌐 | @Raydikalx | 233
   - Global 🌐 | @Raydikalx | 234
+  - Global 🌐 | @Raydikalx | 235
 - name: ♻️ Auto
   type: url-test
   url: http://www.gstatic.com/generate_204
@@ -2954,11 +2965,12 @@ proxy-groups:
   - Global 🌐 | @Raydikalx | 227
   - Global 🌐 | @Raydikalx | 228
   - CA 🇨🇦 | @Raydikalx | 229
-  - US 🇺🇸 | @Raydikalx | 230
-  - Global 🌐 | @Raydikalx | 231
+  - DE 🇩🇪 | @Raydikalx | 230
+  - US 🇺🇸 | @Raydikalx | 231
   - Global 🌐 | @Raydikalx | 232
   - Global 🌐 | @Raydikalx | 233
   - Global 🌐 | @Raydikalx | 234
+  - Global 🌐 | @Raydikalx | 235
 - name: 🔯 Fallback
   type: fallback
   url: http://www.gstatic.com/generate_204
