@@ -46,9 +46,20 @@ GH_BRANCH = "main"
 RAW_BASE = f"https://raw.githubusercontent.com/{GH_USER}/{GH_REPO}/{GH_BRANCH}"
 CDN_BASE = f"https://cdn.jsdelivr.net/gh/{GH_USER}/{GH_REPO}@{GH_BRANCH}"
 
-USER_AGENT = "v2rayNG/1.8.36"
+# چند User-Agent متفاوت — برخی منابع به UAِ خاصی پاسخِ بهتر می‌دهند
+USER_AGENTS = (
+    "v2rayNG/1.8.36",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/120.0 Safari/537.36",
+    "ClashforWindows/0.20.39",
+)
 FETCH_TIMEOUT = 15
 MAX_WORKERS = 12
+FETCH_RETRIES = 3          # تعدادِ تلاشِ مجدد در صورتِ خطا/خالی‌بودن
+RETRY_BACKOFF = 1.5        # ثانیه × شمارهٔ تلاش
+
+#: گزارشِ سلامتِ منابع (پر می‌شود در fetch_all) — برای index.json و health.json
+SOURCE_HEALTH: Dict[str, dict] = {}
 
 
 def log(msg: str) -> None:
@@ -57,19 +68,51 @@ def log(msg: str) -> None:
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# واکشی منابع
+# واکشی منابع (با retry + backoff + گزارشِ سلامت)
 # ──────────────────────────────────────────────────────────────────────────────
 
 def fetch_source(url: str) -> Tuple[str, List[str]]:
-    """یک منبع → (url, لیست کانفیگ‌های معتبر). خطا → لیست خالی."""
-    try:
-        resp = requests.get(url, timeout=FETCH_TIMEOUT, headers={"User-Agent": USER_AGENT})
-        if resp.status_code != 200 or not resp.text.strip():
-            return url, []
-        return url, core.extract_valid_lines(resp.text.strip())
-    except Exception as e:
-        log(f"  ⚠️ fetch fail {url.split('/')[-1]}: {e}")
-        return url, []
+    """یک منبع → (url, لیست کانفیگ‌های معتبر) + ثبتِ سلامت در SOURCE_HEALTH.
+
+    رفتارِ مقاوم: تا FETCH_RETRIES بار تلاش می‌کند؛ بینِ تلاش‌ها UA را می‌چرخاند
+    و backoff اعمال می‌کند. اگر همهٔ تلاش‌ها ناموفق/خالی بودند، لیستِ خالی برمی‌گرداند
+    (مطابقِ رفتارِ قبلی) اما دلیلِ آن در گزارشِ سلامت ثبت می‌شود.
+    """
+    name = url.rsplit("/", 1)[-1] or url
+    last_err = ""
+    last_code = 0
+    t_start = time.time()
+    for attempt in range(1, FETCH_RETRIES + 1):
+        ua = USER_AGENTS[(attempt - 1) % len(USER_AGENTS)]
+        try:
+            resp = requests.get(url, timeout=FETCH_TIMEOUT, headers={"User-Agent": ua})
+            last_code = resp.status_code
+            body = resp.text.strip() if resp.text else ""
+            if resp.status_code == 200 and body:
+                cfgs = core.extract_valid_lines(body)
+                if cfgs:
+                    SOURCE_HEALTH[url] = {
+                        "name": name, "status": "ok", "count": len(cfgs),
+                        "http_code": resp.status_code, "attempts": attempt,
+                        "latency_ms": int((time.time() - t_start) * 1000),
+                    }
+                    return url, cfgs
+                # ۲۰۰ ولی صفر کانفیگِ معتبر → ممکن است فرمتِ ناشناخته باشد
+                last_err = "200 but 0 valid configs"
+            else:
+                last_err = f"HTTP {resp.status_code}" if resp.status_code != 200 else "empty body"
+        except Exception as e:  # noqa: BLE001
+            last_err = f"{type(e).__name__}: {str(e)[:80]}"
+        if attempt < FETCH_RETRIES:
+            time.sleep(RETRY_BACKOFF * attempt)
+    # شکستِ نهایی
+    SOURCE_HEALTH[url] = {
+        "name": name, "status": "empty" if "0 valid" in last_err else "fail",
+        "count": 0, "http_code": last_code, "attempts": FETCH_RETRIES,
+        "latency_ms": int((time.time() - t_start) * 1000), "error": last_err,
+    }
+    log(f"  ⚠️ fetch fail {name}: {last_err} (after {FETCH_RETRIES} tries)")
+    return url, []
 
 
 def fetch_all(urls: List[str]) -> Dict[str, List[str]]:
@@ -80,7 +123,7 @@ def fetch_all(urls: List[str]) -> Dict[str, List[str]]:
         for fut in as_completed(futs):
             url, cfgs = fut.result()
             results[url] = cfgs
-            log(f"  ✓ {len(cfgs):>5} configs ← {url.split('/')[-1]}")
+            log(f"  ✓ {len(cfgs):>5} configs ← {url.rsplit('/', 1)[-1]}")
     return results
 
 
@@ -254,7 +297,34 @@ def build_index(results: Dict[str, CategoryResult], proto_counts: Dict[str, int]
             "light_count": len(LIGHT_SOURCES),
             "heavy_count": len(HEAVY_SOURCES),
             "total_count": len(LIGHT_SOURCES) + len(HEAVY_SOURCES),
+            # ── گزارشِ سلامتِ منابع (حرفه‌ای): چند منبع زنده/مرده‌اند ──────────
+            "healthy": sum(1 for h in SOURCE_HEALTH.values() if h.get("status") == "ok"),
+            "unhealthy": sum(1 for h in SOURCE_HEALTH.values() if h.get("status") != "ok"),
+            "health_url": f"{CDN_BASE}/health.json",
         },
+    }
+
+
+def build_health_report(elapsed: float) -> dict:
+    """گزارشِ کاملِ سلامتِ هر منبع — برای مانیتورینگ و دیباگِ منابعِ مرده."""
+    now = _dt.datetime.now(_dt.timezone.utc)
+    items = []
+    for url in (LIGHT_SOURCES + HEAVY_SOURCES):
+        h = SOURCE_HEALTH.get(url, {"name": url.rsplit("/", 1)[-1], "status": "unknown", "count": 0})
+        tier = "light" if url in LIGHT_SOURCES else "heavy"
+        items.append({"url": url, "tier": tier, **h})
+    return {
+        "brand": core.BRAND_CHANNEL,
+        "checked_at": now.isoformat(),
+        "checked_at_unix": int(now.timestamp()),
+        "elapsed_seconds": round(elapsed, 1),
+        "summary": {
+            "total": len(items),
+            "ok": sum(1 for i in items if i.get("status") == "ok"),
+            "empty": sum(1 for i in items if i.get("status") == "empty"),
+            "fail": sum(1 for i in items if i.get("status") == "fail"),
+        },
+        "sources": items,
     }
 
 
@@ -299,6 +369,13 @@ def main() -> int:
     index = build_index(results, proto_counts, elapsed)
     _write_text(os.path.join(out_dir, "index.json"),
                 json.dumps(index, ensure_ascii=False, indent=2))
+
+    # ── گزارشِ سلامتِ منابع (حرفه‌ای) ─────────────────────────────────────────
+    health = build_health_report(elapsed)
+    _write_text(os.path.join(out_dir, "health.json"),
+                json.dumps(health, ensure_ascii=False, indent=2))
+    hs = health["summary"]
+    log(f"  • source health: {hs['ok']} ok / {hs['empty']} empty / {hs['fail']} fail")
 
     # خروجی برای GitHub Actions summary
     log(f"✅ Done in {elapsed:.1f}s — "

@@ -1,16 +1,35 @@
 name: 🔄 Aggregate V2Ray Configs
 
 # ─────────────────────────────────────────────────────────────────────────────
-# جمع‌آوری، حذف تکراری/خراب، برندینگ و انتشار کانفیگ‌ها هر ۳۱ دقیقه
+# جمع‌آوری، حذف تکراری/خراب، برندینگ و انتشار کانفیگ‌ها — هدف: هر ۳۱ دقیقه
 # منبع: ۲۲ سورس (۹ سبک + ۱۳ انبوه) — بدون TCP-connect
 # توکن: از GITHUB_TOKEN داخلی Actions استفاده می‌شود (هیچ توکنی hardcode نشده)
+#
+# ★ فیکسِ «به‌روزرسانی نشدن سرِ ساعت» ★
+#   تجربه نشان داده زمان‌بندیِ cron در GitHub Actions در ساعاتِ شلوغ تا ده‌ها
+#   دقیقه تأخیر می‌خورد یا اصلاً اجرا نمی‌شود (محدودیتِ شناخته‌شدهٔ پلتفرم).
+#   راهکارِ مقاوم (سه‌لایه):
+#     ۱) cron با تواترِ بالا (هر ۵ دقیقه) ← شانسِ بیشتر برای اجرا
+#     ۲) دروازهٔ زمانی (freshness gate): اگر index.json در < ۳۱ دقیقهٔ اخیر
+#        آپدیت شده باشد، job زود خارج می‌شود (کارِ سنگین انجام نمی‌دهد).
+#        نتیجه: تواترِ مؤثرِ به‌روزرسانی ≈ ۳۱ دقیقه، حتی با تأخیرِ cron.
+#     ۳) repository_dispatch ← سرورِ همیشه‌روشنِ ربات می‌تواند به‌عنوانِ
+#        fallbackِ تضمینی، workflow را trigger کند (event: aggregate-now).
 # ─────────────────────────────────────────────────────────────────────────────
 
 on:
   schedule:
-    # هر ۳۱ دقیقه (cron حداقل دقت ۵ دقیقه دارد؛ */31 یعنی دقیقهٔ 0 و 31 هر ساعت)
-    - cron: "1,32 * * * *"
-  workflow_dispatch: {}        # اجرای دستی از تب Actions
+    # هر ۵ دقیقه تلاش می‌کنیم؛ ولی «دروازهٔ زمانی» فقط هر ~۳۱ دقیقه واقعاً کار
+    # می‌کند. این الگو تأخیر/حذفِ cronِ گیت‌هاب را جبران می‌کند.
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+    inputs:
+      force:
+        description: "Force run (ignore freshness gate)"
+        required: false
+        default: "false"
+  repository_dispatch:
+    types: [aggregate-now]      # سرورِ ربات با این event می‌تواند trigger کند
   push:
     branches: [main]
     paths:
@@ -25,6 +44,13 @@ concurrency:
 permissions:
   contents: write              # برای commit/push نتایج
 
+# فاصلهٔ هدفِ به‌روزرسانی (دقیقه). با update_interval_minutes در index.json یکی است.
+env:
+  UPDATE_INTERVAL_MINUTES: "31"
+  # حاشیهٔ امنیتی: کمی کمتر از ۳۱ می‌گیریم تا اگر cron با ۱-۲ دقیقه تأخیر آمد،
+  # باز هم به‌جای رد شدن، اجرا شود (جلوگیری از «۶۲ دقیقه‌ای شدن» تصادفی).
+  FRESHNESS_GATE_MINUTES: "28"
+
 jobs:
   aggregate:
     runs-on: ubuntu-latest
@@ -33,20 +59,65 @@ jobs:
       - name: ⬇️ Checkout
         uses: actions/checkout@v4
 
+      # ── دروازهٔ زمانی: اگر به‌تازگی آپدیت شده، زود خارج شو ──────────────
+      - name: ⏱️ Freshness gate
+        id: gate
+        run: |
+          FORCE="${{ github.event.inputs.force }}"
+          EVENT="${{ github.event_name }}"
+          # رویدادهای دستی/دیسپچ/پوش همیشه اجرا می‌شوند (بدون دروازه)
+          if [ "$FORCE" = "true" ] || [ "$EVENT" = "workflow_dispatch" ] || \
+             [ "$EVENT" = "repository_dispatch" ] || [ "$EVENT" = "push" ]; then
+            echo "should_run=true" >> "$GITHUB_OUTPUT"
+            echo "✅ Manual/dispatch/push event → running unconditionally."
+            exit 0
+          fi
+          if [ ! -f index.json ]; then
+            echo "should_run=true" >> "$GITHUB_OUTPUT"
+            echo "✅ No index.json yet → running."
+            exit 0
+          fi
+          # اختلافِ زمانِ آخرین آپدیت با حالا (ثانیه)
+          AGE=$(python - <<'PY'
+          import json, time, datetime
+          try:
+              d = json.load(open("index.json"))
+              u = d.get("updated_at_unix")
+              if not u:
+                  ts = d.get("updated_at")
+                  u = datetime.datetime.fromisoformat(ts).timestamp() if ts else 0
+              print(int(time.time() - float(u)))
+          except Exception:
+              print(10**9)  # خطا → قدیمی فرض کن تا اجرا شود
+          PY
+          )
+          GATE_SEC=$(( FRESHNESS_GATE_MINUTES * 60 ))
+          echo "Last update age: ${AGE}s | gate: ${GATE_SEC}s"
+          if [ "$AGE" -ge "$GATE_SEC" ]; then
+            echo "should_run=true" >> "$GITHUB_OUTPUT"
+            echo "✅ Stale enough → running aggregation."
+          else
+            echo "should_run=false" >> "$GITHUB_OUTPUT"
+            echo "⏭️ Updated ${AGE}s ago (< ${GATE_SEC}s) → skipping this tick."
+          fi
+
       - name: 🐍 Setup Python
+        if: steps.gate.outputs.should_run == 'true'
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
           cache: pip
 
       - name: 📦 Install dependencies
+        if: steps.gate.outputs.should_run == 'true'
         run: pip install -r requirements.txt
 
       - name: 🚀 Run aggregator
+        if: steps.gate.outputs.should_run == 'true'
         run: python scripts/aggregate.py --out .
 
       - name: 📊 Job summary
-        if: always()
+        if: always() && steps.gate.outputs.should_run == 'true'
         run: |
           if [ -f index.json ]; then
             python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
@@ -55,6 +126,7 @@ jobs:
           c = d["categories"]
           print("## 🔄 Aggregation Result — @Raydikalx\n")
           print(f"- **Updated:** {d['updated_at']}")
+          print(f"- **Next ETA:** {d.get('next_update_eta','?')}")
           print(f"- **Elapsed:** {d['elapsed_seconds']}s\n")
           print("| Category | Unique | Duplicates | Broken | Sources |")
           print("|---|---|---|---|---|")
@@ -65,13 +137,33 @@ jobs:
           print(", ".join(f"`{k}`={v}" for k,v in d["protocols"].items() if v))
           PY
           fi
+          # ── خلاصهٔ سلامتِ منابع ────────────────────────────────────────────
+          if [ -f health.json ]; then
+            python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          h = json.load(open("health.json"))
+          s = h["summary"]
+          print(f"\n### 🩺 Source Health — {s['ok']}/{s['total']} ok"
+                f" ({s['empty']} empty, {s['fail']} fail)")
+          dead = [x for x in h["sources"] if x.get("status") != "ok"]
+          if dead:
+              print("\n<details><summary>⚠️ Unhealthy sources</summary>\n")
+              print("| Tier | Source | Status | HTTP | Error |")
+              print("|---|---|---|---|---|")
+              for x in dead:
+                  print(f"| {x['tier']} | {x.get('name','?')} | {x.get('status','?')}"
+                        f" | {x.get('http_code','-')} | {x.get('error','-')} |")
+              print("\n</details>")
+          PY
+          fi
 
       - name: 💾 Commit & push
+        if: steps.gate.outputs.should_run == 'true'
         run: |
           git config user.name  "raydikalx-bot[actions]"
           git config user.email "actions@users.noreply.github.com"
           # فقط فایل‌های خروجی را stage کن (نه scripts/workflow)
-          git add all/ heavy/ light/ protocols/ archive/ index.json
+          git add all/ heavy/ light/ protocols/ archive/ index.json health.json
           if git diff --cached --quiet; then
             echo "No changes to commit."
             exit 0

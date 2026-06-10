@@ -62,6 +62,7 @@ light/      configs.txt · configs_base64.txt · clash.yaml · singbox.json   (9
 protocols/  vless.txt · vmess.txt · trojan.txt · … (+ *_base64.txt)         (split from ALL)
 archive/    <cat>_broken.txt · <cat>_duplicates.txt (+ base64)             (removed configs)
 index.json  full metadata: counts, timestamps, protocol breakdown, all URLs
+health.json per-source health report: ok/empty/fail, http code, latency, errors
 scripts/    the aggregation pipeline (core.py · converters.py · sources.py · aggregate.py)
 ```
 
@@ -71,6 +72,15 @@ scripts/    the aggregation pipeline (core.py · converters.py · sources.py · 
 
 Contains per-category counts (unique / duplicates / broken), protocol breakdown,
 last-update timestamp, next-update ETA, and every file URL (raw + CDN).
+
+## 🩺 Source health — `health.json`
+
+`https://cdn.jsdelivr.net/gh/0xRadikal/Free-v2ray-Configs@main/health.json`
+
+A per-source health report regenerated on every run: for each of the 22 sources it
+records `status` (`ok` / `empty` / `fail`), HTTP code, attempt count, latency, the
+yielded config count, and the last error (if any). Makes dead/changed upstreams
+immediately visible. A summary (`healthy` / `unhealthy`) is also embedded in `index.json`.
 
 ---
 
@@ -82,6 +92,18 @@ last-update timestamp, next-update ETA, and every file URL (raw + CDN).
 4. **Brand** — every remark rewritten to `{CC} {flag} | @Raydikalx | {index}`.
 5. **Emit** — txt + base64 + Clash YAML + Sing-box JSON, per-protocol splits, archives, `index.json`.
 6. **Publish** — GitHub Actions commits results every ~31 min; served via jsDelivr CDN.
+
+### ⏱️ Reliable ~31-minute scheduling
+
+GitHub's `schedule:` cron is best-effort and is frequently delayed or skipped during
+busy periods. To guarantee a steady cadence this repo uses a **three-layer** approach:
+
+1. **High-frequency cron** (`*/5 * * * *`) — more chances to actually fire.
+2. **Freshness gate** — each tick exits early if `index.json` was updated < 28 min ago,
+   so heavy work runs only ~every 31 min (no wasted runs, no double updates).
+3. **`repository_dispatch` fallback** — the always-on bot server sends an
+   `aggregate-now` event every 31 min, guaranteeing a run even if cron is dropped.
+   Manual `workflow_dispatch` (with optional `force`) is also supported.
 
 ## 🙌 Sources
 
