@@ -319,10 +319,12 @@
         "IE 🇮🇪 | @Raydikalx | 309",
         "FR 🇫🇷 | @Raydikalx | 310",
         "FR 🇫🇷 | @Raydikalx | 311",
-        "Global 🌐 | @Raydikalx | 315",
+        "DE 🇩🇪 | @Raydikalx | 315",
         "Global 🌐 | @Raydikalx | 316",
         "Global 🌐 | @Raydikalx | 317",
-        "Global 🌐 | @Raydikalx | 318"
+        "RU 🇷🇺 | @Raydikalx | 318",
+        "Global 🌐 | @Raydikalx | 319",
+        "Global 🌐 | @Raydikalx | 320"
       ],
       "default": "♻️ Auto"
     },
@@ -641,10 +643,12 @@
         "IE 🇮🇪 | @Raydikalx | 309",
         "FR 🇫🇷 | @Raydikalx | 310",
         "FR 🇫🇷 | @Raydikalx | 311",
-        "Global 🌐 | @Raydikalx | 315",
+        "DE 🇩🇪 | @Raydikalx | 315",
         "Global 🌐 | @Raydikalx | 316",
         "Global 🌐 | @Raydikalx | 317",
-        "Global 🌐 | @Raydikalx | 318"
+        "RU 🇷🇺 | @Raydikalx | 318",
+        "Global 🌐 | @Raydikalx | 319",
+        "Global 🌐 | @Raydikalx | 320"
       ],
       "url": "http://www.gstatic.com/generate_204",
       "interval": "5m"
@@ -5868,8 +5872,26 @@
       }
     },
     {
+      "type": "trojan",
+      "tag": "DE 🇩🇪 | @Raydikalx | 315",
+      "server": "188.114.97.6",
+      "server_port": 443,
+      "password": "mitivpn",
+      "tls": {
+        "enabled": true,
+        "server_name": "global.fastly.com.mitivpn-a.site"
+      },
+      "transport": {
+        "type": "ws",
+        "path": "/ed=mitivpn",
+        "headers": {
+          "Host": "sdasdfgv.global.ssl.fastly.top.mitivpn-a.site"
+        }
+      }
+    },
+    {
       "type": "shadowsocks",
-      "tag": "Global 🌐 | @Raydikalx | 315",
+      "tag": "Global 🌐 | @Raydikalx | 316",
       "server": "82.38.31.35",
       "server_port": 8080,
       "method": "chacha20-ietf-poly1305",
@@ -5877,7 +5899,7 @@
     },
     {
       "type": "vless",
-      "tag": "Global 🌐 | @Raydikalx | 316",
+      "tag": "Global 🌐 | @Raydikalx | 317",
       "server": "85.234.114.53",
       "server_port": 22231,
       "uuid": "afcac633-0e1a-46c3-bef2-cc01cc0097c8",
@@ -5892,8 +5914,20 @@
       }
     },
     {
+      "type": "vless",
+      "tag": "RU 🇷🇺 | @Raydikalx | 318",
+      "server": "85.234.114.53",
+      "server_port": 443,
+      "uuid": "afcac633-0e1a-46c3-bef2-cc01cc0097c8",
+      "flow": "xtls-rprx-vision",
+      "tls": {
+        "enabled": true,
+        "server_name": "r1.mizulina.top"
+      }
+    },
+    {
       "type": "vmess",
-      "tag": "Global 🌐 | @Raydikalx | 317",
+      "tag": "Global 🌐 | @Raydikalx | 319",
       "server": "57.151.100.27",
       "server_port": 10086,
       "uuid": "550e8400-e29b-41d4-a716-446655440000",
@@ -5902,7 +5936,7 @@
     },
     {
       "type": "vless",
-      "tag": "Global 🌐 | @Raydikalx | 318",
+      "tag": "Global 🌐 | @Raydikalx | 320",
       "server": "sca10.myfymain.com",
       "server_port": 8880,
       "uuid": "8dc7722c-2767-4eea-a28b-2f8daacc07e3"
