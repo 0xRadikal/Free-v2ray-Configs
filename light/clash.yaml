@@ -4131,33 +4131,16 @@ proxies:
   udp: true
   sni: trojan.burgerip.co.uk
 - name: Global 🌐 | @Raydikalx | 352
-  server: 82.38.31.35
-  port: 8080
-  type: ss
-  cipher: chacha20-ietf-poly1305
-  password: oZIoA69Q8yhcQV8ka3Pa3A
+  server: 85.234.114.53
+  port: 22231
+  type: vless
+  uuid: afcac633-0e1a-46c3-bef2-cc01cc0097c8
   udp: true
+  network: tcp
+  tls: true
+  flow: xtls-rprx-vision
+  servername: r1.mizulina.top
 - name: Global 🌐 | @Raydikalx | 353
-  server: 85.234.114.53
-  port: 22231
-  type: vless
-  uuid: afcac633-0e1a-46c3-bef2-cc01cc0097c8
-  udp: true
-  network: tcp
-  tls: true
-  flow: xtls-rprx-vision
-  servername: r1.mizulina.top
-- name: RU 🇷🇺 | @Raydikalx | 354
-  server: 85.234.114.53
-  port: 22231
-  type: vless
-  uuid: afcac633-0e1a-46c3-bef2-cc01cc0097c8
-  udp: true
-  network: tcp
-  tls: true
-  flow: xtls-rprx-vision
-  servername: r1.mizulina.top
-- name: Global 🌐 | @Raydikalx | 355
   server: 57.151.100.27
   port: 10086
   type: vmess
@@ -4167,7 +4150,7 @@ proxies:
   udp: true
   network: tcp
   tls: false
-- name: Global 🌐 | @Raydikalx | 356
+- name: Global 🌐 | @Raydikalx | 354
   server: 151.115.164.129
   port: 8880
   type: vless
@@ -4175,7 +4158,7 @@ proxies:
   udp: true
   network: grpc
   tls: false
-- name: Global 🌐 | @Raydikalx | 357
+- name: Global 🌐 | @Raydikalx | 355
   server: sca10.myfymain.com
   port: 8880
   type: vless
@@ -4183,6 +4166,23 @@ proxies:
   udp: true
   network: grpc
   tls: false
+- name: Global 🌐 | @Raydikalx | 356
+  server: 172.233.17.76
+  port: 22324
+  type: vmess
+  uuid: 04621bae-ab36-11ec-b909-0242ac120002
+  alterId: 1
+  cipher: auto
+  udp: true
+  network: tcp
+  tls: false
+- name: Global 🌐 | @Raydikalx | 357
+  server: 82.38.31.35
+  port: 8080
+  type: ss
+  cipher: chacha20-ietf-poly1305
+  password: oZIoA69Q8yhcQV8ka3Pa3A
+  udp: true
 proxy-groups:
 - name: 🚀 @Raydikalx
   type: select
@@ -4539,7 +4539,7 @@ proxy-groups:
   - Global 🌐 | @Raydikalx | 348
   - Global 🌐 | @Raydikalx | 352
   - Global 🌐 | @Raydikalx | 353
-  - RU 🇷🇺 | @Raydikalx | 354
+  - Global 🌐 | @Raydikalx | 354
   - Global 🌐 | @Raydikalx | 355
   - Global 🌐 | @Raydikalx | 356
   - Global 🌐 | @Raydikalx | 357
@@ -4899,7 +4899,7 @@ proxy-groups:
   - Global 🌐 | @Raydikalx | 348
   - Global 🌐 | @Raydikalx | 352
   - Global 🌐 | @Raydikalx | 353
-  - RU 🇷🇺 | @Raydikalx | 354
+  - Global 🌐 | @Raydikalx | 354
   - Global 🌐 | @Raydikalx | 355
   - Global 🌐 | @Raydikalx | 356
   - Global 🌐 | @Raydikalx | 357
