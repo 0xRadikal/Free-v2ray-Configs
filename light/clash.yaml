@@ -3630,22 +3630,7 @@ proxies:
   password: telegram-id-privatevpns
   udp: true
   sni: trojan.burgerip.co.uk
-- name: CA 🇨🇦 | @Raydikalx | 307
-  server: 158.51.121.63
-  port: 443
-  type: vmess
-  uuid: 03fcc618-b93d-6796-6aed-8a38c975d581
-  alterId: 0
-  cipher: auto
-  udp: true
-  network: ws
-  tls: true
-  servername: seribus.org
-  ws-opts:
-    path: linkvws
-    headers:
-      Host: seribus.org
-- name: US 🇺🇸 | @Raydikalx | 308
+- name: US 🇺🇸 | @Raydikalx | 307
   server: 57.151.100.27
   port: 10086
   type: vmess
@@ -3655,7 +3640,7 @@ proxies:
   udp: true
   network: tcp
   tls: false
-- name: Global 🌐 | @Raydikalx | 309
+- name: Global 🌐 | @Raydikalx | 308
   server: 151.115.164.129
   port: 8880
   type: vless
@@ -3663,7 +3648,7 @@ proxies:
   udp: true
   network: grpc
   tls: false
-- name: Global 🌐 | @Raydikalx | 310
+- name: Global 🌐 | @Raydikalx | 309
   server: 151.115.164.134
   port: 8880
   type: vless
@@ -3671,7 +3656,7 @@ proxies:
   udp: true
   network: grpc
   tls: false
-- name: Global 🌐 | @Raydikalx | 311
+- name: Global 🌐 | @Raydikalx | 310
   server: sca10.myfymain.com
   port: 8880
   type: vless
@@ -3679,7 +3664,7 @@ proxies:
   udp: true
   network: grpc
   tls: false
-- name: Global 🌐 | @Raydikalx | 312
+- name: Global 🌐 | @Raydikalx | 311
   server: 82.38.31.35
   port: 8080
   type: ss
@@ -3996,12 +3981,11 @@ proxy-groups:
   - US 🇺🇸 | @Raydikalx | 302
   - FR 🇫🇷 | @Raydikalx | 303
   - FR 🇫🇷 | @Raydikalx | 304
-  - CA 🇨🇦 | @Raydikalx | 307
-  - US 🇺🇸 | @Raydikalx | 308
+  - US 🇺🇸 | @Raydikalx | 307
+  - Global 🌐 | @Raydikalx | 308
   - Global 🌐 | @Raydikalx | 309
   - Global 🌐 | @Raydikalx | 310
   - Global 🌐 | @Raydikalx | 311
-  - Global 🌐 | @Raydikalx | 312
 - name: ♻️ Auto
   type: url-test
   url: http://www.gstatic.com/generate_204
@@ -4312,12 +4296,11 @@ proxy-groups:
   - US 🇺🇸 | @Raydikalx | 302
   - FR 🇫🇷 | @Raydikalx | 303
   - FR 🇫🇷 | @Raydikalx | 304
-  - CA 🇨🇦 | @Raydikalx | 307
-  - US 🇺🇸 | @Raydikalx | 308
+  - US 🇺🇸 | @Raydikalx | 307
+  - Global 🌐 | @Raydikalx | 308
   - Global 🌐 | @Raydikalx | 309
   - Global 🌐 | @Raydikalx | 310
   - Global 🌐 | @Raydikalx | 311
-  - Global 🌐 | @Raydikalx | 312
 - name: 🔯 Fallback
   type: fallback
   url: http://www.gstatic.com/generate_204
