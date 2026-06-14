@@ -3684,13 +3684,31 @@ proxies:
     headers:
       Host: dns.google.com
 - name: Global 🌐 | @Raydikalx | 313
+  server: 57.151.100.27
+  port: 10086
+  type: vmess
+  uuid: 550e8400-e29b-41d4-a716-446655440000
+  alterId: 0
+  cipher: auto
+  udp: true
+  network: tcp
+  tls: false
+- name: Global 🌐 | @Raydikalx | 314
   server: 82.38.31.35
   port: 8080
   type: ss
   cipher: chacha20-ietf-poly1305
   password: oZIoA69Q8yhcQV8ka3Pa3A
   udp: true
-- name: Global 🌐 | @Raydikalx | 314
+- name: Global 🌐 | @Raydikalx | 315
+  server: sca26.myfymain.com
+  port: 8880
+  type: vless
+  uuid: 8dc7722c-2767-4eea-a28b-2f8daacc07e3
+  udp: true
+  network: grpc
+  tls: false
+- name: Global 🌐 | @Raydikalx | 316
   server: 85.234.114.53
   port: 22231
   type: vless
@@ -3700,7 +3718,7 @@ proxies:
   tls: true
   flow: xtls-rprx-vision
   servername: r1.mizulina.top
-- name: Global 🌐 | @Raydikalx | 315
+- name: Global 🌐 | @Raydikalx | 317
   server: 193.23.222.99
   port: 55152
   type: vless
@@ -3713,17 +3731,7 @@ proxies:
   reality-opts:
     public-key: fX2XkujtqhnkQDy-Lwgqm_OofDs1qO5ytvVNM6aV4C4
     short-id: ddcac8ed
-- name: Global 🌐 | @Raydikalx | 316
-  server: 57.151.100.27
-  port: 10086
-  type: vmess
-  uuid: 550e8400-e29b-41d4-a716-446655440000
-  alterId: 0
-  cipher: auto
-  udp: true
-  network: tcp
-  tls: false
-- name: Global 🌐 | @Raydikalx | 317
+- name: Global 🌐 | @Raydikalx | 318
   server: 151.115.164.129
   port: 8880
   type: vless
@@ -4051,6 +4059,7 @@ proxy-groups:
   - Global 🌐 | @Raydikalx | 315
   - Global 🌐 | @Raydikalx | 316
   - Global 🌐 | @Raydikalx | 317
+  - Global 🌐 | @Raydikalx | 318
 - name: ♻️ Auto
   type: url-test
   url: http://www.gstatic.com/generate_204
@@ -4371,6 +4380,7 @@ proxy-groups:
   - Global 🌐 | @Raydikalx | 315
   - Global 🌐 | @Raydikalx | 316
   - Global 🌐 | @Raydikalx | 317
+  - Global 🌐 | @Raydikalx | 318
 - name: 🔯 Fallback
   type: fallback
   url: http://www.gstatic.com/generate_204
