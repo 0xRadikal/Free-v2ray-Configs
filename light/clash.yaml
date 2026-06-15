@@ -4020,7 +4020,22 @@ proxies:
   cipher: chacha20-ietf-poly1305
   password: oZIoA69Q8yhcQV8ka3Pa3A
   udp: true
-- name: CA 🇨🇦 | @Raydikalx | 327
+- name: Global 🌐 | @Raydikalx | 327
+  server: 104.17.77.77
+  port: 8443
+  type: vmess
+  uuid: 60441548-b68e-43b2-8191-e3b884be4b3c
+  alterId: 0
+  cipher: none
+  udp: true
+  network: ws
+  tls: true
+  servername: v2ray1.dozapp.xyz
+  ws-opts:
+    path: /lMnsZUN4/
+    headers:
+      Host: v2ray1.dozapp.xyz
+- name: CA 🇨🇦 | @Raydikalx | 328
   server: 158.51.121.63
   port: 443
   type: vmess
@@ -4035,49 +4050,7 @@ proxies:
     path: linkvws
     headers:
       Host: seribus.org
-- name: US 🇺🇸 | @Raydikalx | 328
-  server: 57.151.100.27
-  port: 10086
-  type: vmess
-  uuid: 550e8400-e29b-41d4-a716-446655440000
-  alterId: 0
-  cipher: auto
-  udp: true
-  network: tcp
-  tls: false
 - name: Global 🌐 | @Raydikalx | 329
-  server: sca16.myfymain.com
-  port: 8880
-  type: vless
-  uuid: 8dc7722c-2767-4eea-a28b-2f8daacc07e3
-  udp: true
-  network: grpc
-  tls: false
-- name: Global 🌐 | @Raydikalx | 330
-  server: 151.115.164.129
-  port: 8880
-  type: vless
-  uuid: 8dc7722c-2767-4eea-a28b-2f8daacc07e3
-  udp: true
-  network: grpc
-  tls: false
-- name: Global 🌐 | @Raydikalx | 331
-  server: 151.115.164.134
-  port: 8880
-  type: vless
-  uuid: 8dc7722c-2767-4eea-a28b-2f8daacc07e3
-  udp: true
-  network: grpc
-  tls: false
-- name: Global 🌐 | @Raydikalx | 332
-  server: sca10.myfymain.com
-  port: 8880
-  type: vless
-  uuid: 8dc7722c-2767-4eea-a28b-2f8daacc07e3
-  udp: true
-  network: grpc
-  tls: false
-- name: RU 🇷🇺 | @Raydikalx | 333
   server: 85.234.114.53
   port: 22231
   type: vless
@@ -4087,14 +4060,77 @@ proxies:
   tls: true
   flow: xtls-rprx-vision
   servername: r1.mizulina.top
+- name: Global 🌐 | @Raydikalx | 330
+  server: 151.115.164.36
+  port: 8880
+  type: vless
+  uuid: 8dc7722c-2767-4eea-a28b-2f8daacc07e3
+  udp: true
+  network: grpc
+  tls: false
+- name: Global 🌐 | @Raydikalx | 331
+  server: 193.23.222.99
+  port: 55152
+  type: vless
+  uuid: 827466ba-0910-4c48-b156-2f37fdbda362
+  udp: true
+  network: tcp
+  tls: true
+  flow: xtls-rprx-vision
+  servername: cloudflare.com
+  reality-opts:
+    public-key: fX2XkujtqhnkQDy-Lwgqm_OofDs1qO5ytvVNM6aV4C4
+    short-id: ddcac8ed
+- name: Global 🌐 | @Raydikalx | 332
+  server: 57.151.100.27
+  port: 10086
+  type: vmess
+  uuid: 550e8400-e29b-41d4-a716-446655440000
+  alterId: 0
+  cipher: auto
+  udp: true
+  network: tcp
+  tls: false
+- name: Global 🌐 | @Raydikalx | 333
+  server: sca16.myfymain.com
+  port: 8880
+  type: vless
+  uuid: 8dc7722c-2767-4eea-a28b-2f8daacc07e3
+  udp: true
+  network: grpc
+  tls: false
 - name: Global 🌐 | @Raydikalx | 334
+  server: 151.115.164.129
+  port: 8880
+  type: vless
+  uuid: 8dc7722c-2767-4eea-a28b-2f8daacc07e3
+  udp: true
+  network: grpc
+  tls: false
+- name: Global 🌐 | @Raydikalx | 335
+  server: 151.115.164.134
+  port: 8880
+  type: vless
+  uuid: 8dc7722c-2767-4eea-a28b-2f8daacc07e3
+  udp: true
+  network: grpc
+  tls: false
+- name: Global 🌐 | @Raydikalx | 336
+  server: sca10.myfymain.com
+  port: 8880
+  type: vless
+  uuid: 8dc7722c-2767-4eea-a28b-2f8daacc07e3
+  udp: true
+  network: grpc
+  tls: false
+- name: Global 🌐 | @Raydikalx | 337
   server: 82.38.31.155
   port: 8080
   type: ss
   cipher: chacha20-ietf-poly1305
   password: oZIoA69Q8yhcQV8ka3Pa3A
   udp: true
-- name: Global 🌐 | @Raydikalx | 335
+- name: Global 🌐 | @Raydikalx | 338
   server: 144.31.131.33
   port: 443
   type: vless
@@ -4108,21 +4144,21 @@ proxies:
     public-key: djH9iD2QV748ocK-wPH7HvDd03lu88zHhS4G-61w6Dc
     short-id: a120
   client-fingerprint: chrome
-- name: Global 🌐 | @Raydikalx | 336
+- name: Global 🌐 | @Raydikalx | 339
   server: 82.38.31.214
   port: 8080
   type: ss
   cipher: chacha20-ietf-poly1305
   password: k1dBOmOB4oqi7Ump37a1bQ
   udp: true
-- name: Global 🌐 | @Raydikalx | 337
+- name: Global 🌐 | @Raydikalx | 340
   server: 82.38.31.176
   port: 8080
   type: ss
   cipher: chacha20-ietf-poly1305
   password: k1dBOmOB4oqi7Ump37a1bQ
   udp: true
-- name: Global 🌐 | @Raydikalx | 338
+- name: Global 🌐 | @Raydikalx | 341
   server: 82.38.31.210
   port: 8080
   type: ss
@@ -4459,18 +4495,21 @@ proxy-groups:
   - FR 🇫🇷 | @Raydikalx | 322
   - FR 🇫🇷 | @Raydikalx | 323
   - Global 🌐 | @Raydikalx | 326
-  - CA 🇨🇦 | @Raydikalx | 327
-  - US 🇺🇸 | @Raydikalx | 328
+  - Global 🌐 | @Raydikalx | 327
+  - CA 🇨🇦 | @Raydikalx | 328
   - Global 🌐 | @Raydikalx | 329
   - Global 🌐 | @Raydikalx | 330
   - Global 🌐 | @Raydikalx | 331
   - Global 🌐 | @Raydikalx | 332
-  - RU 🇷🇺 | @Raydikalx | 333
+  - Global 🌐 | @Raydikalx | 333
   - Global 🌐 | @Raydikalx | 334
   - Global 🌐 | @Raydikalx | 335
   - Global 🌐 | @Raydikalx | 336
   - Global 🌐 | @Raydikalx | 337
   - Global 🌐 | @Raydikalx | 338
+  - Global 🌐 | @Raydikalx | 339
+  - Global 🌐 | @Raydikalx | 340
+  - Global 🌐 | @Raydikalx | 341
 - name: ♻️ Auto
   type: url-test
   url: http://www.gstatic.com/generate_204
@@ -4801,18 +4840,21 @@ proxy-groups:
   - FR 🇫🇷 | @Raydikalx | 322
   - FR 🇫🇷 | @Raydikalx | 323
   - Global 🌐 | @Raydikalx | 326
-  - CA 🇨🇦 | @Raydikalx | 327
-  - US 🇺🇸 | @Raydikalx | 328
+  - Global 🌐 | @Raydikalx | 327
+  - CA 🇨🇦 | @Raydikalx | 328
   - Global 🌐 | @Raydikalx | 329
   - Global 🌐 | @Raydikalx | 330
   - Global 🌐 | @Raydikalx | 331
   - Global 🌐 | @Raydikalx | 332
-  - RU 🇷🇺 | @Raydikalx | 333
+  - Global 🌐 | @Raydikalx | 333
   - Global 🌐 | @Raydikalx | 334
   - Global 🌐 | @Raydikalx | 335
   - Global 🌐 | @Raydikalx | 336
   - Global 🌐 | @Raydikalx | 337
   - Global 🌐 | @Raydikalx | 338
+  - Global 🌐 | @Raydikalx | 339
+  - Global 🌐 | @Raydikalx | 340
+  - Global 🌐 | @Raydikalx | 341
 - name: 🔯 Fallback
   type: fallback
   url: http://www.gstatic.com/generate_204
