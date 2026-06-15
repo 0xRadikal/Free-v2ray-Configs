@@ -3623,6 +3623,19 @@ proxies:
   flow: xtls-rprx-vision
   servername: r1.mizulina.top
 - name: Global 🌐 | @Raydikalx | 300
+  server: 193.23.222.99
+  port: 55152
+  type: vless
+  uuid: 827466ba-0910-4c48-b156-2f37fdbda362
+  udp: true
+  network: tcp
+  tls: true
+  flow: xtls-rprx-vision
+  servername: cloudflare.com
+  reality-opts:
+    public-key: fX2XkujtqhnkQDy-Lwgqm_OofDs1qO5ytvVNM6aV4C4
+    short-id: ddcac8ed
+- name: Global 🌐 | @Raydikalx | 301
   server: 151.115.164.134
   port: 8880
   type: vless
@@ -3630,7 +3643,7 @@ proxies:
   udp: true
   network: grpc
   tls: false
-- name: Global 🌐 | @Raydikalx | 301
+- name: Global 🌐 | @Raydikalx | 302
   server: sca10.myfymain.com
   port: 8880
   type: vless
@@ -3638,7 +3651,7 @@ proxies:
   udp: true
   network: grpc
   tls: false
-- name: Global 🌐 | @Raydikalx | 302
+- name: Global 🌐 | @Raydikalx | 303
   server: 144.31.131.33
   port: 443
   type: vless
@@ -3958,6 +3971,7 @@ proxy-groups:
   - Global 🌐 | @Raydikalx | 300
   - Global 🌐 | @Raydikalx | 301
   - Global 🌐 | @Raydikalx | 302
+  - Global 🌐 | @Raydikalx | 303
 - name: ♻️ Auto
   type: url-test
   url: http://www.gstatic.com/generate_204
@@ -4264,6 +4278,7 @@ proxy-groups:
   - Global 🌐 | @Raydikalx | 300
   - Global 🌐 | @Raydikalx | 301
   - Global 🌐 | @Raydikalx | 302
+  - Global 🌐 | @Raydikalx | 303
 - name: 🔯 Fallback
   type: fallback
   url: http://www.gstatic.com/generate_204
