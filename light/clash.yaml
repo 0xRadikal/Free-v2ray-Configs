@@ -4156,21 +4156,13 @@ proxies:
   udp: true
   sni: trojan.burgerip.co.uk
 - name: Global 🌐 | @Raydikalx | 343
-  server: 151.115.164.129
-  port: 8880
-  type: vless
-  uuid: 8dc7722c-2767-4eea-a28b-2f8daacc07e3
-  udp: true
-  network: grpc
-  tls: false
-- name: Global 🌐 | @Raydikalx | 344
   server: 82.38.31.35
   port: 8080
   type: ss
   cipher: chacha20-ietf-poly1305
   password: oZIoA69Q8yhcQV8ka3Pa3A
   udp: true
-- name: CA 🇨🇦 | @Raydikalx | 345
+- name: CA 🇨🇦 | @Raydikalx | 344
   server: 158.51.121.63
   port: 443
   type: vmess
@@ -4185,7 +4177,7 @@ proxies:
     path: linkvws
     headers:
       Host: seribus.org
-- name: Global 🌐 | @Raydikalx | 346
+- name: Global 🌐 | @Raydikalx | 345
   server: 85.234.114.53
   port: 22231
   type: vless
@@ -4195,7 +4187,7 @@ proxies:
   tls: true
   flow: xtls-rprx-vision
   servername: r1.mizulina.top
-- name: Global 🌐 | @Raydikalx | 347
+- name: Global 🌐 | @Raydikalx | 346
   server: 151.115.164.36
   port: 8880
   type: vless
@@ -4203,7 +4195,7 @@ proxies:
   udp: true
   network: grpc
   tls: false
-- name: US 🇺🇸 | @Raydikalx | 348
+- name: US 🇺🇸 | @Raydikalx | 347
   server: 57.151.100.27
   port: 10086
   type: vmess
@@ -4212,6 +4204,14 @@ proxies:
   cipher: auto
   udp: true
   network: tcp
+  tls: false
+- name: Global 🌐 | @Raydikalx | 348
+  server: 151.115.164.129
+  port: 8880
+  type: vless
+  uuid: 8dc7722c-2767-4eea-a28b-2f8daacc07e3
+  udp: true
+  network: grpc
   tls: false
 - name: Global 🌐 | @Raydikalx | 349
   server: 151.115.164.134
@@ -4230,13 +4230,21 @@ proxies:
   network: grpc
   tls: false
 - name: Global 🌐 | @Raydikalx | 351
+  server: sca17.myfymain.com
+  port: 8880
+  type: vless
+  uuid: 8dc7722c-2767-4eea-a28b-2f8daacc07e3
+  udp: true
+  network: grpc
+  tls: false
+- name: Global 🌐 | @Raydikalx | 352
   server: 82.38.31.155
   port: 8080
   type: ss
   cipher: chacha20-ietf-poly1305
   password: oZIoA69Q8yhcQV8ka3Pa3A
   udp: true
-- name: Global 🌐 | @Raydikalx | 352
+- name: Global 🌐 | @Raydikalx | 353
   server: 144.31.131.33
   port: 443
   type: vless
@@ -4250,21 +4258,21 @@ proxies:
     public-key: djH9iD2QV748ocK-wPH7HvDd03lu88zHhS4G-61w6Dc
     short-id: a120
   client-fingerprint: chrome
-- name: Global 🌐 | @Raydikalx | 353
+- name: Global 🌐 | @Raydikalx | 354
   server: 82.38.31.214
   port: 8080
   type: ss
   cipher: chacha20-ietf-poly1305
   password: k1dBOmOB4oqi7Ump37a1bQ
   udp: true
-- name: Global 🌐 | @Raydikalx | 354
+- name: Global 🌐 | @Raydikalx | 355
   server: 82.38.31.176
   port: 8080
   type: ss
   cipher: chacha20-ietf-poly1305
   password: k1dBOmOB4oqi7Ump37a1bQ
   udp: true
-- name: Global 🌐 | @Raydikalx | 355
+- name: Global 🌐 | @Raydikalx | 356
   server: 82.38.31.210
   port: 8080
   type: ss
@@ -4618,11 +4626,11 @@ proxy-groups:
   - FR 🇫🇷 | @Raydikalx | 339
   - FR 🇫🇷 | @Raydikalx | 340
   - Global 🌐 | @Raydikalx | 343
-  - Global 🌐 | @Raydikalx | 344
-  - CA 🇨🇦 | @Raydikalx | 345
+  - CA 🇨🇦 | @Raydikalx | 344
+  - Global 🌐 | @Raydikalx | 345
   - Global 🌐 | @Raydikalx | 346
-  - Global 🌐 | @Raydikalx | 347
-  - US 🇺🇸 | @Raydikalx | 348
+  - US 🇺🇸 | @Raydikalx | 347
+  - Global 🌐 | @Raydikalx | 348
   - Global 🌐 | @Raydikalx | 349
   - Global 🌐 | @Raydikalx | 350
   - Global 🌐 | @Raydikalx | 351
@@ -4630,6 +4638,7 @@ proxy-groups:
   - Global 🌐 | @Raydikalx | 353
   - Global 🌐 | @Raydikalx | 354
   - Global 🌐 | @Raydikalx | 355
+  - Global 🌐 | @Raydikalx | 356
 - name: ♻️ Auto
   type: url-test
   url: http://www.gstatic.com/generate_204
@@ -4977,11 +4986,11 @@ proxy-groups:
   - FR 🇫🇷 | @Raydikalx | 339
   - FR 🇫🇷 | @Raydikalx | 340
   - Global 🌐 | @Raydikalx | 343
-  - Global 🌐 | @Raydikalx | 344
-  - CA 🇨🇦 | @Raydikalx | 345
+  - CA 🇨🇦 | @Raydikalx | 344
+  - Global 🌐 | @Raydikalx | 345
   - Global 🌐 | @Raydikalx | 346
-  - Global 🌐 | @Raydikalx | 347
-  - US 🇺🇸 | @Raydikalx | 348
+  - US 🇺🇸 | @Raydikalx | 347
+  - Global 🌐 | @Raydikalx | 348
   - Global 🌐 | @Raydikalx | 349
   - Global 🌐 | @Raydikalx | 350
   - Global 🌐 | @Raydikalx | 351
@@ -4989,6 +4998,7 @@ proxy-groups:
   - Global 🌐 | @Raydikalx | 353
   - Global 🌐 | @Raydikalx | 354
   - Global 🌐 | @Raydikalx | 355
+  - Global 🌐 | @Raydikalx | 356
 - name: 🔯 Fallback
   type: fallback
   url: http://www.gstatic.com/generate_204
