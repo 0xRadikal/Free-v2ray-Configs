@@ -3540,13 +3540,21 @@ proxies:
   udp: true
   sni: trojan.burgerip.co.uk
 - name: Global 🌐 | @Raydikalx | 296
+  server: 151.115.164.129
+  port: 8880
+  type: vless
+  uuid: 8dc7722c-2767-4eea-a28b-2f8daacc07e3
+  udp: true
+  network: grpc
+  tls: false
+- name: Global 🌐 | @Raydikalx | 297
   server: 82.38.31.35
   port: 8080
   type: ss
   cipher: chacha20-ietf-poly1305
   password: oZIoA69Q8yhcQV8ka3Pa3A
   udp: true
-- name: CA 🇨🇦 | @Raydikalx | 297
+- name: CA 🇨🇦 | @Raydikalx | 298
   server: 158.51.121.63
   port: 443
   type: vmess
@@ -3561,7 +3569,7 @@ proxies:
     path: linkvws
     headers:
       Host: seribus.org
-- name: Global 🌐 | @Raydikalx | 298
+- name: Global 🌐 | @Raydikalx | 299
   server: 85.234.114.53
   port: 22231
   type: vless
@@ -3571,7 +3579,7 @@ proxies:
   tls: true
   flow: xtls-rprx-vision
   servername: r1.mizulina.top
-- name: US 🇺🇸 | @Raydikalx | 299
+- name: US 🇺🇸 | @Raydikalx | 300
   server: 57.151.100.27
   port: 10086
   type: vmess
@@ -3581,16 +3589,8 @@ proxies:
   udp: true
   network: tcp
   tls: false
-- name: Global 🌐 | @Raydikalx | 300
-  server: 151.115.164.129
-  port: 8880
-  type: vless
-  uuid: 8dc7722c-2767-4eea-a28b-2f8daacc07e3
-  udp: true
-  network: grpc
-  tls: false
 - name: Global 🌐 | @Raydikalx | 301
-  server: 151.115.164.134
+  server: sca16.myfymain.com
   port: 8880
   type: vless
   uuid: 8dc7722c-2767-4eea-a28b-2f8daacc07e3
@@ -3598,6 +3598,22 @@ proxies:
   network: grpc
   tls: false
 - name: Global 🌐 | @Raydikalx | 302
+  server: 151.115.164.134
+  port: 8880
+  type: vless
+  uuid: 8dc7722c-2767-4eea-a28b-2f8daacc07e3
+  udp: true
+  network: grpc
+  tls: false
+- name: Global 🌐 | @Raydikalx | 303
+  server: sca10.myfymain.com
+  port: 8880
+  type: vless
+  uuid: 8dc7722c-2767-4eea-a28b-2f8daacc07e3
+  udp: true
+  network: grpc
+  tls: false
+- name: Global 🌐 | @Raydikalx | 304
   server: 144.31.131.33
   port: 443
   type: vless
@@ -3910,12 +3926,14 @@ proxy-groups:
   - FR 🇫🇷 | @Raydikalx | 291
   - FR 🇫🇷 | @Raydikalx | 292
   - Global 🌐 | @Raydikalx | 296
-  - CA 🇨🇦 | @Raydikalx | 297
-  - Global 🌐 | @Raydikalx | 298
-  - US 🇺🇸 | @Raydikalx | 299
-  - Global 🌐 | @Raydikalx | 300
+  - Global 🌐 | @Raydikalx | 297
+  - CA 🇨🇦 | @Raydikalx | 298
+  - Global 🌐 | @Raydikalx | 299
+  - US 🇺🇸 | @Raydikalx | 300
   - Global 🌐 | @Raydikalx | 301
   - Global 🌐 | @Raydikalx | 302
+  - Global 🌐 | @Raydikalx | 303
+  - Global 🌐 | @Raydikalx | 304
 - name: ♻️ Auto
   type: url-test
   url: http://www.gstatic.com/generate_204
@@ -4215,12 +4233,14 @@ proxy-groups:
   - FR 🇫🇷 | @Raydikalx | 291
   - FR 🇫🇷 | @Raydikalx | 292
   - Global 🌐 | @Raydikalx | 296
-  - CA 🇨🇦 | @Raydikalx | 297
-  - Global 🌐 | @Raydikalx | 298
-  - US 🇺🇸 | @Raydikalx | 299
-  - Global 🌐 | @Raydikalx | 300
+  - Global 🌐 | @Raydikalx | 297
+  - CA 🇨🇦 | @Raydikalx | 298
+  - Global 🌐 | @Raydikalx | 299
+  - US 🇺🇸 | @Raydikalx | 300
   - Global 🌐 | @Raydikalx | 301
   - Global 🌐 | @Raydikalx | 302
+  - Global 🌐 | @Raydikalx | 303
+  - Global 🌐 | @Raydikalx | 304
 - name: 🔯 Fallback
   type: fallback
   url: http://www.gstatic.com/generate_204
