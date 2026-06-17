@@ -3600,6 +3600,20 @@ proxies:
   udp: true
   network: grpc
   tls: false
+- name: Global 🌐 | @Raydikalx | 313
+  server: 144.31.131.33
+  port: 443
+  type: vless
+  uuid: ae852d97-85f5-45cf-82a4-254eba345480
+  udp: true
+  network: tcp
+  tls: true
+  flow: xtls-rprx-vision
+  servername: cdn.cdnjst.org
+  reality-opts:
+    public-key: djH9iD2QV748ocK-wPH7HvDd03lu88zHhS4G-61w6Dc
+    short-id: a120
+  client-fingerprint: chrome
 proxy-groups:
 - name: 🚀 @Raydikalx
   type: select
@@ -3915,6 +3929,7 @@ proxy-groups:
   - Global 🌐 | @Raydikalx | 310
   - Global 🌐 | @Raydikalx | 311
   - Global 🌐 | @Raydikalx | 312
+  - Global 🌐 | @Raydikalx | 313
 - name: ♻️ Auto
   type: url-test
   url: http://www.gstatic.com/generate_204
@@ -4230,6 +4245,7 @@ proxy-groups:
   - Global 🌐 | @Raydikalx | 310
   - Global 🌐 | @Raydikalx | 311
   - Global 🌐 | @Raydikalx | 312
+  - Global 🌐 | @Raydikalx | 313
 - name: 🔯 Fallback
   type: fallback
   url: http://www.gstatic.com/generate_204
