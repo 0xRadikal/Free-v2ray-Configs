@@ -3667,7 +3667,7 @@ proxies:
   network: tcp
   tls: false
 - name: Global 🌐 | @Raydikalx | 313
-  server: 151.115.164.134
+  server: 151.115.164.129
   port: 8880
   type: vless
   uuid: 8dc7722c-2767-4eea-a28b-2f8daacc07e3
@@ -3675,7 +3675,7 @@ proxies:
   network: grpc
   tls: false
 - name: Global 🌐 | @Raydikalx | 314
-  server: sca10.myfymain.com
+  server: 151.115.164.134
   port: 8880
   type: vless
   uuid: 8dc7722c-2767-4eea-a28b-2f8daacc07e3
@@ -3683,13 +3683,28 @@ proxies:
   network: grpc
   tls: false
 - name: Global 🌐 | @Raydikalx | 315
+  server: sca10.myfymain.com
+  port: 8880
+  type: vless
+  uuid: 8dc7722c-2767-4eea-a28b-2f8daacc07e3
+  udp: true
+  network: grpc
+  tls: false
+- name: Global 🌐 | @Raydikalx | 316
+  server: 82.38.31.155
+  port: 8080
+  type: ss
+  cipher: chacha20-ietf-poly1305
+  password: oZIoA69Q8yhcQV8ka3Pa3A
+  udp: true
+- name: Global 🌐 | @Raydikalx | 317
   server: 82.38.31.35
   port: 8080
   type: ss
   cipher: chacha20-ietf-poly1305
   password: oZIoA69Q8yhcQV8ka3Pa3A
   udp: true
-- name: Global 🌐 | @Raydikalx | 316
+- name: Global 🌐 | @Raydikalx | 318
   server: 82.38.31.214
   port: 8080
   type: ss
@@ -4012,6 +4027,8 @@ proxy-groups:
   - Global 🌐 | @Raydikalx | 314
   - Global 🌐 | @Raydikalx | 315
   - Global 🌐 | @Raydikalx | 316
+  - Global 🌐 | @Raydikalx | 317
+  - Global 🌐 | @Raydikalx | 318
 - name: ♻️ Auto
   type: url-test
   url: http://www.gstatic.com/generate_204
@@ -4328,6 +4345,8 @@ proxy-groups:
   - Global 🌐 | @Raydikalx | 314
   - Global 🌐 | @Raydikalx | 315
   - Global 🌐 | @Raydikalx | 316
+  - Global 🌐 | @Raydikalx | 317
+  - Global 🌐 | @Raydikalx | 318
 - name: 🔯 Fallback
   type: fallback
   url: http://www.gstatic.com/generate_204
