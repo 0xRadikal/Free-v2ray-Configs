@@ -4532,15 +4532,19 @@ proxies:
   password: telegram-id-privatevpns
   udp: true
   sni: trojan.burgerip.co.uk
-- name: DE 🇩🇪 | @Raydikalx | 406
-  server: 45.130.125.239
-  port: 443
+- name: Global 🌐 | @Raydikalx | 406
+  server: 151.101.27.151
+  port: 80
   type: vless
-  uuid: bbab81f3-87a0-4e63-8b3b-010c645d8da7
+  uuid: 0058c215-ab1e-400c-a403-b5b2fda7e846
   udp: true
-  network: xhttp
-  tls: true
-  servername: mAJiD-SmArT.NEwAPpdOMiNFaStLOGiN4.cOM
+  network: ws
+  tls: false
+  servername: max-gb1.global.ssl.fastly.net
+  ws-opts:
+    path: /?ed=2560&https://t.me/WangCai2🇨🇳
+    headers:
+      Host: max-gb1.global.ssl.fastly.net
 - name: NL 🇳🇱 | @Raydikalx | 407
   server: 82.38.31.16
   port: 8080
@@ -4570,20 +4574,7 @@ proxies:
   cipher: chacha20-ietf-poly1305
   password: k1dBOmOB4oqi7Ump37a1bQ
   udp: true
-- name: Global 🌐 | @Raydikalx | 410
-  server: 151.101.27.151
-  port: 80
-  type: vless
-  uuid: 0058c215-ab1e-400c-a403-b5b2fda7e846
-  udp: true
-  network: ws
-  tls: false
-  servername: max-gb1.global.ssl.fastly.net
-  ws-opts:
-    path: /?ed=2560&https://t.me/WangCai2🇨🇳
-    headers:
-      Host: max-gb1.global.ssl.fastly.net
-- name: US 🇺🇸 | @Raydikalx | 411
+- name: US 🇺🇸 | @Raydikalx | 410
   server: 57.151.100.27
   port: 10086
   type: vmess
@@ -4593,7 +4584,7 @@ proxies:
   udp: true
   network: tcp
   tls: false
-- name: Global 🌐 | @Raydikalx | 412
+- name: Global 🌐 | @Raydikalx | 411
   server: sca10.myfymain.com
   port: 8880
   type: vless
@@ -4601,7 +4592,7 @@ proxies:
   udp: true
   network: grpc
   tls: false
-- name: Global 🌐 | @Raydikalx | 413
+- name: Global 🌐 | @Raydikalx | 412
   server: 144.31.131.33
   port: 443
   type: vless
@@ -4615,7 +4606,7 @@ proxies:
     public-key: djH9iD2QV748ocK-wPH7HvDd03lu88zHhS4G-61w6Dc
     short-id: a120
   client-fingerprint: chrome
-- name: Global 🌐 | @Raydikalx | 414
+- name: Global 🌐 | @Raydikalx | 413
   server: 82.38.31.35
   port: 8080
   type: ss
@@ -5020,15 +5011,14 @@ proxy-groups:
   - US 🇺🇸 | @Raydikalx | 390
   - FR 🇫🇷 | @Raydikalx | 391
   - FR 🇫🇷 | @Raydikalx | 392
-  - DE 🇩🇪 | @Raydikalx | 406
+  - Global 🌐 | @Raydikalx | 406
   - NL 🇳🇱 | @Raydikalx | 407
   - CA 🇨🇦 | @Raydikalx | 408
   - Global 🌐 | @Raydikalx | 409
-  - Global 🌐 | @Raydikalx | 410
-  - US 🇺🇸 | @Raydikalx | 411
+  - US 🇺🇸 | @Raydikalx | 410
+  - Global 🌐 | @Raydikalx | 411
   - Global 🌐 | @Raydikalx | 412
   - Global 🌐 | @Raydikalx | 413
-  - Global 🌐 | @Raydikalx | 414
 - name: ♻️ Auto
   type: url-test
   url: http://www.gstatic.com/generate_204
@@ -5427,15 +5417,14 @@ proxy-groups:
   - US 🇺🇸 | @Raydikalx | 390
   - FR 🇫🇷 | @Raydikalx | 391
   - FR 🇫🇷 | @Raydikalx | 392
-  - DE 🇩🇪 | @Raydikalx | 406
+  - Global 🌐 | @Raydikalx | 406
   - NL 🇳🇱 | @Raydikalx | 407
   - CA 🇨🇦 | @Raydikalx | 408
   - Global 🌐 | @Raydikalx | 409
-  - Global 🌐 | @Raydikalx | 410
-  - US 🇺🇸 | @Raydikalx | 411
+  - US 🇺🇸 | @Raydikalx | 410
+  - Global 🌐 | @Raydikalx | 411
   - Global 🌐 | @Raydikalx | 412
   - Global 🌐 | @Raydikalx | 413
-  - Global 🌐 | @Raydikalx | 414
 - name: 🔯 Fallback
   type: fallback
   url: http://www.gstatic.com/generate_204
