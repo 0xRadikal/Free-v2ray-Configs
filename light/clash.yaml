@@ -4587,6 +4587,13 @@ proxies:
   udp: true
   network: tcp
   tls: false
+- name: Global 🌐 | @Raydikalx | 404
+  server: 82.38.31.176
+  port: 8080
+  type: ss
+  cipher: chacha20-ietf-poly1305
+  password: k1dBOmOB4oqi7Ump37a1bQ
+  udp: true
 proxy-groups:
 - name: 🚀 @Raydikalx
   type: select
@@ -4988,6 +4995,7 @@ proxy-groups:
   - CA 🇨🇦 | @Raydikalx | 401
   - Global 🌐 | @Raydikalx | 402
   - Global 🌐 | @Raydikalx | 403
+  - Global 🌐 | @Raydikalx | 404
 - name: ♻️ Auto
   type: url-test
   url: http://www.gstatic.com/generate_204
@@ -5389,6 +5397,7 @@ proxy-groups:
   - CA 🇨🇦 | @Raydikalx | 401
   - Global 🌐 | @Raydikalx | 402
   - Global 🌐 | @Raydikalx | 403
+  - Global 🌐 | @Raydikalx | 404
 - name: 🔯 Fallback
   type: fallback
   url: http://www.gstatic.com/generate_204
