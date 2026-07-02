@@ -401,9 +401,10 @@
         "SE 🇸🇪 | @Raydikalx | 400",
         "CA 🇨🇦 | @Raydikalx | 401",
         "Global 🌐 | @Raydikalx | 402",
-        "RU 🇷🇺 | @Raydikalx | 403",
-        "US 🇺🇸 | @Raydikalx | 404",
-        "Global 🌐 | @Raydikalx | 405"
+        "Global 🌐 | @Raydikalx | 403",
+        "RU 🇷🇺 | @Raydikalx | 404",
+        "US 🇺🇸 | @Raydikalx | 405",
+        "Global 🌐 | @Raydikalx | 406"
       ],
       "default": "♻️ Auto"
     },
@@ -804,9 +805,10 @@
         "SE 🇸🇪 | @Raydikalx | 400",
         "CA 🇨🇦 | @Raydikalx | 401",
         "Global 🌐 | @Raydikalx | 402",
-        "RU 🇷🇺 | @Raydikalx | 403",
-        "US 🇺🇸 | @Raydikalx | 404",
-        "Global 🌐 | @Raydikalx | 405"
+        "Global 🌐 | @Raydikalx | 403",
+        "RU 🇷🇺 | @Raydikalx | 404",
+        "US 🇺🇸 | @Raydikalx | 405",
+        "Global 🌐 | @Raydikalx | 406"
       ],
       "url": "http://www.gstatic.com/generate_204",
       "interval": "5m"
@@ -7385,8 +7387,29 @@
       }
     },
     {
-      "type": "shadowsocks",
+      "type": "vless",
       "tag": "Global 🌐 | @Raydikalx | 402",
+      "server": "159.195.45.129",
+      "server_port": 443,
+      "uuid": "859a537b-09cf-4bce-8da4-ecbb72950e3a",
+      "flow": "xtls-rprx-vision",
+      "tls": {
+        "enabled": true,
+        "server_name": "3.oncloudnineservicestreang.com",
+        "reality": {
+          "enabled": true,
+          "public_key": "dp-ncBuRHgZl5O80eHBYhSKo1i9qbt-J7MJ1alyWXmM",
+          "short_id": "1991780b928b292d"
+        },
+        "utls": {
+          "enabled": true,
+          "fingerprint": "firefox"
+        }
+      }
+    },
+    {
+      "type": "shadowsocks",
+      "tag": "Global 🌐 | @Raydikalx | 403",
       "server": "82.38.31.204",
       "server_port": 8080,
       "method": "chacha20-ietf-poly1305",
@@ -7394,7 +7417,7 @@
     },
     {
       "type": "vless",
-      "tag": "RU 🇷🇺 | @Raydikalx | 403",
+      "tag": "RU 🇷🇺 | @Raydikalx | 404",
       "server": "85.234.114.53",
       "server_port": 22231,
       "uuid": "afcac633-0e1a-46c3-bef2-cc01cc0097c8",
@@ -7410,7 +7433,7 @@
     },
     {
       "type": "vmess",
-      "tag": "US 🇺🇸 | @Raydikalx | 404",
+      "tag": "US 🇺🇸 | @Raydikalx | 405",
       "server": "57.151.100.27",
       "server_port": 10086,
       "uuid": "550e8400-e29b-41d4-a716-446655440000",
@@ -7419,7 +7442,7 @@
     },
     {
       "type": "shadowsocks",
-      "tag": "Global 🌐 | @Raydikalx | 405",
+      "tag": "Global 🌐 | @Raydikalx | 406",
       "server": "82.38.31.176",
       "server_port": 8080,
       "method": "chacha20-ietf-poly1305",
