@@ -4587,20 +4587,34 @@ proxies:
     headers:
       Host: seribus.org
 - name: Global 🌐 | @Raydikalx | 413
+  server: 159.195.45.129
+  port: 443
+  type: vless
+  uuid: 859a537b-09cf-4bce-8da4-ecbb72950e3a
+  udp: true
+  network: tcp
+  tls: true
+  flow: xtls-rprx-vision
+  servername: 3.oncloudnineservicestreang.com
+  reality-opts:
+    public-key: dp-ncBuRHgZl5O80eHBYhSKo1i9qbt-J7MJ1alyWXmM
+    short-id: 1991780b928b292d
+  client-fingerprint: firefox
+- name: Global 🌐 | @Raydikalx | 414
   server: 82.38.31.203
   port: 8080
   type: ss
   cipher: chacha20-ietf-poly1305
   password: k1dBOmOB4oqi7Ump37a1bQ
   udp: true
-- name: Global 🌐 | @Raydikalx | 414
+- name: Global 🌐 | @Raydikalx | 415
   server: 82.38.31.204
   port: 8080
   type: ss
   cipher: chacha20-ietf-poly1305
   password: k1dBOmOB4oqi7Ump37a1bQ
   udp: true
-- name: Global 🌐 | @Raydikalx | 415
+- name: Global 🌐 | @Raydikalx | 416
   server: 57.151.100.27
   port: 10086
   type: vmess
@@ -4610,14 +4624,26 @@ proxies:
   udp: true
   network: tcp
   tls: false
-- name: Global 🌐 | @Raydikalx | 416
+- name: Global 🌐 | @Raydikalx | 417
   server: 82.38.31.155
   port: 8080
   type: ss
   cipher: chacha20-ietf-poly1305
   password: oZIoA69Q8yhcQV8ka3Pa3A
   udp: true
-- name: Global 🌐 | @Raydikalx | 417
+- name: Global 🌐 | @Raydikalx | 418
+  server: 188.114.96.3
+  port: 443
+  type: trojan
+  password: humanity
+  udp: true
+  sni: www.creationlong.org
+  network: ws
+  ws-opts:
+    path: '%2Fassignment'
+    headers:
+      Host: www.creationlong.org
+- name: Global 🌐 | @Raydikalx | 419
   server: 82.38.31.176
   port: 8080
   type: ss
@@ -5037,6 +5063,8 @@ proxy-groups:
   - Global 🌐 | @Raydikalx | 415
   - Global 🌐 | @Raydikalx | 416
   - Global 🌐 | @Raydikalx | 417
+  - Global 🌐 | @Raydikalx | 418
+  - Global 🌐 | @Raydikalx | 419
 - name: ♻️ Auto
   type: url-test
   url: http://www.gstatic.com/generate_204
@@ -5450,6 +5478,8 @@ proxy-groups:
   - Global 🌐 | @Raydikalx | 415
   - Global 🌐 | @Raydikalx | 416
   - Global 🌐 | @Raydikalx | 417
+  - Global 🌐 | @Raydikalx | 418
+  - Global 🌐 | @Raydikalx | 419
 - name: 🔯 Fallback
   type: fallback
   url: http://www.gstatic.com/generate_204
