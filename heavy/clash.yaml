@@ -6,6 +6,56 @@ mode: rule
 log-level: info
 proxies:
 - name: DE 🇩🇪 | @Raydikalx | 1
+  server: general.uptalk.ir
+  port: 443
+  type: vless
+  uuid: 31ccd5d1-159f-4024-9f58-657eebe6833d
+  udp: true
+  network: tcp
+  tls: true
+  servername: image.led.samsung.com
+  reality-opts:
+    public-key: JuEceZjb8XT-nhl5p2qRasbF3250cxgBRw8Q8HyaTEY
+    short-id: 8cf90532de323c
+  client-fingerprint: chrome
+- name: GB 🇬🇧 | @Raydikalx | 2
+  server: 104.17.108.69
+  port: 443
+  type: vless
+  uuid: fd6fb48f-b324-4a82-9dcd-f8bdb1bd5301
+  udp: true
+  network: ws
+  tls: true
+  servername: LIvE-uK-k643Wcl7-Ue2tiZ45.NeTRiNOvpN.Com
+  ws-opts:
+    path: /ws-vlees
+    headers:
+      Host: LIvE-uK-k643Wcl7-Ue2tiZ45.NeTRiNOvpN.Com
+- name: US 🇺🇸 | @Raydikalx | 3
+  server: 165.140.216.142
+  port: 443
+  type: vmess
+  uuid: b65a2d69-5634-42a2-e4be-54e8a6176900
+  alterId: 0
+  cipher: auto
+  udp: true
+  network: tcp
+  tls: false
+- name: GB 🇬🇧 | @Raydikalx | 4
+  server: 104.245.242.4
+  port: 993
+  type: vless
+  uuid: 526d2855-c7d1-ecf3-e4f8-5a75f77d5bb3
+  udp: true
+  network: tcp
+  tls: true
+  flow: xtls-rprx-vision
+  servername: download.nvidia.com
+  reality-opts:
+    public-key: mdN58_sSqP17lYoc-cWvIgtHjzb8vlqJv5t24Y9Bnic
+    short-id: ''
+  client-fingerprint: firefox
+- name: DE 🇩🇪 | @Raydikalx | 5
   server: tun.temas-bor.ir
   port: 2087
   type: vless
@@ -14,7 +64,7 @@ proxies:
   network: tcp
   tls: false
   servername: play.google.com
-- name: NL 🇳🇱 | @Raydikalx | 2
+- name: NL 🇳🇱 | @Raydikalx | 6
   server: dl.onetimeok.com
   port: 443
   type: vless
@@ -29,7 +79,7 @@ proxies:
   client-fingerprint: chrome
   grpc-opts:
     grpc-service-name: api.v2.PushService
-- name: NL 🇳🇱 | @Raydikalx | 3
+- name: NL 🇳🇱 | @Raydikalx | 7
   server: jush.sukario.ir
   port: 443
   type: vless
@@ -42,7 +92,7 @@ proxies:
     path: /mashdi
     headers:
       Host: mesh1.mashadiebod.org
-- name: SG 🇸🇬 | @Raydikalx | 4
+- name: SG 🇸🇬 | @Raydikalx | 8
   server: 159.65.7.154
   port: 443
   type: vless
@@ -50,7 +100,7 @@ proxies:
   udp: true
   network: tcp
   tls: true
-- name: NL 🇳🇱 | @Raydikalx | 5
+- name: NL 🇳🇱 | @Raydikalx | 9
   server: gateway.onetimeok.com
   port: 443
   type: vless
@@ -58,7 +108,7 @@ proxies:
   udp: true
   network: tcp
   tls: false
-- name: SE 🇸🇪 | @Raydikalx | 6
+- name: SE 🇸🇪 | @Raydikalx | 10
   server: net.oneoneok.com
   port: 443
   type: vless
@@ -66,70 +116,70 @@ proxies:
   udp: true
   network: tcp
   tls: true
-- name: DE 🇩🇪 | @Raydikalx | 7
+- name: DE 🇩🇪 | @Raydikalx | 11
   server: 178.128.195.253
   port: 10070
   type: ss
   cipher: chacha20-ietf-poly1305
   password: sarbazanshahid
   udp: true
-- name: JP 🇯🇵 | @Raydikalx | 8
+- name: JP 🇯🇵 | @Raydikalx | 12
   server: saved-mantis.rooster465.autos
   port: 443
   type: trojan
   password: HW85960347
   udp: true
   sni: saved-mantis.rooster465.autos
-- name: JP 🇯🇵 | @Raydikalx | 9
+- name: JP 🇯🇵 | @Raydikalx | 13
   server: bursting-baboon.rooster465.autos
   port: 443
   type: trojan
   password: JA96378052
   udp: true
   sni: bursting-baboon.rooster465.autos
-- name: SG 🇸🇬 | @Raydikalx | 10
+- name: SG 🇸🇬 | @Raydikalx | 14
   server: quality-sheepdog.rooster465.autos
   port: 443
   type: trojan
   password: HW85960347
   udp: true
   sni: quality-sheepdog.rooster465.autos
-- name: JP 🇯🇵 | @Raydikalx | 11
+- name: JP 🇯🇵 | @Raydikalx | 15
   server: lucky-primate.rooster465.autos
   port: 443
   type: trojan
   password: HW85960347
   udp: true
   sni: lucky-primate.rooster465.autos
-- name: SG 🇸🇬 | @Raydikalx | 12
+- name: SG 🇸🇬 | @Raydikalx | 16
   server: modest-coral.rooster465.autos
   port: 443
   type: trojan
   password: JA96378052
   udp: true
   sni: modest-coral.rooster465.autos
-- name: JP 🇯🇵 | @Raydikalx | 13
+- name: JP 🇯🇵 | @Raydikalx | 17
   server: sharing-fawn.rooster465.autos
   port: 443
   type: trojan
   password: HW85960347
   udp: true
   sni: sharing-fawn.rooster465.autos
-- name: SG 🇸🇬 | @Raydikalx | 14
+- name: SG 🇸🇬 | @Raydikalx | 18
   server: major-cobra.rooster465.autos
   port: 443
   type: trojan
   password: HW85960347
   udp: true
   sni: major-cobra.rooster465.autos
-- name: JP 🇯🇵 | @Raydikalx | 15
+- name: JP 🇯🇵 | @Raydikalx | 19
   server: exciting-turtle.rooster465.autos
   port: 443
   type: trojan
   password: HW85960347
   udp: true
   sni: exciting-turtle.rooster465.autos
-- name: US 🇺🇸 | @Raydikalx | 16
+- name: US 🇺🇸 | @Raydikalx | 20
   server: 104.18.42.163
   port: 2095
   type: vless
@@ -142,31 +192,7 @@ proxies:
     path: /
     headers:
       Host: download.pusytroller.gq
-- name: US 🇺🇸 | @Raydikalx | 17
-  server: 165.140.216.142
-  port: 443
-  type: vmess
-  uuid: b65a2d69-5634-42a2-e4be-54e8a6176900
-  alterId: 0
-  cipher: auto
-  udp: true
-  network: tcp
-  tls: false
-- name: AT 🇦🇹 | @Raydikalx | 18
-  server: 144.31.129.77
-  port: 443
-  type: vless
-  uuid: 8f0560ec-ba22-4431-a6a7-318dc59d5233
-  udp: true
-  network: tcp
-  tls: true
-  flow: xtls-rprx-vision
-  servername: coinjoin-video-stri.ru
-  reality-opts:
-    public-key: CxMPFpwhcR9Ocp-Xy_1J08mo-atdHKUf58WLOy_XlgM
-    short-id: 5e3ab3ab228625
-  client-fingerprint: firefox
-- name: DE 🇩🇪 | @Raydikalx | 19
+- name: DE 🇩🇪 | @Raydikalx | 21
   server: gr1.fifapes.monster
   port: 8882
   type: vless
@@ -174,7 +200,8 @@ proxies:
   udp: true
   network: tcp
   tls: false
-- name: FR 🇫🇷 | @Raydikalx | 20
+  servername: /?BIA_TELEGRAM@MARAMBASHI_MARAMBASHI_MARAMBASHI_MARAMBASHI
+- name: FR 🇫🇷 | @Raydikalx | 22
   server: tg.hrmp.kdns.fr
   port: 8443
   type: vmess
@@ -189,31 +216,37 @@ proxies:
     path: /tirexvmess
     headers:
       Host: tg.hrmp.kdns.fr
-- name: FI 🇫🇮 | @Raydikalx | 21
+- name: FI 🇫🇮 | @Raydikalx | 23
   server: 65.109.219.124
-  port: 52525
-  type: vmess
+  port: 10485
+  type: vless
   uuid: 358f44f0-2686-46c8-9cc6-ec52abd66df4
-  alterId: 0
-  cipher: auto
   udp: true
   network: tcp
   tls: false
-- name: ES 🇪🇸 | @Raydikalx | 22
+- name: ES 🇪🇸 | @Raydikalx | 24
   server: 193.148.19.213
   port: 52794
   type: trojan
   password: 2eutknankxtbgkwcajzt
   udp: true
   sni: 193.148.19.213
-- name: NL 🇳🇱 | @Raydikalx | 23
+- name: NL 🇳🇱 | @Raydikalx | 25
   server: renewed-phoenix.rooster465.autos
   port: 443
   type: trojan
   password: NQ26071394
   udp: true
   sni: renewed-phoenix.rooster465.autos
-- name: FI 🇫🇮 | @Raydikalx | 24
+- name: SE 🇸🇪 | @Raydikalx | 26
+  server: 185.231.101.88
+  port: 443
+  type: vless
+  uuid: ecad47b0-249e-4f6f-adff-e3c8f02b1897
+  udp: true
+  network: tcp
+  tls: false
+- name: FI 🇫🇮 | @Raydikalx | 27
   server: 104.16.75.99
   port: 443
   type: vless
@@ -226,7 +259,7 @@ proxies:
     path: /
     headers:
       Host: fn-2.ariyuz.org
-- name: TR 🇹🇷 | @Raydikalx | 25
+- name: TR 🇹🇷 | @Raydikalx | 28
   server: family.bucket.x9.kfc-520.com
   port: 10048
   type: vmess
@@ -237,7 +270,15 @@ proxies:
   network: tcp
   tls: false
   servername: family.bucket.x9.kfc-520.com
-- name: DE 🇩🇪 | @Raydikalx | 26
+- name: DE 🇩🇪 | @Raydikalx | 29
+  server: 45.63.116.184
+  port: 23231
+  type: vless
+  uuid: d67f37da-8a7d-416e-a386-ea0a82317257
+  udp: true
+  network: tcp
+  tls: false
+- name: DE 🇩🇪 | @Raydikalx | 30
   server: 45.12.114.157
   port: 443
   type: vless
@@ -245,7 +286,7 @@ proxies:
   udp: true
   network: tcp
   tls: false
-- name: DE 🇩🇪 | @Raydikalx | 27
+- name: DE 🇩🇪 | @Raydikalx | 31
   server: 89.167.16.234
   port: 8526
   type: vless
@@ -253,7 +294,12 @@ proxies:
   udp: true
   network: tcp
   tls: true
-- name: FR 🇫🇷 | @Raydikalx | 28
+  servername: www.yahoo.com
+  reality-opts:
+    public-key: -zNDEqKkScKvMWB7spEper78GE_u-nR4jDHZ3DpOoxM
+    short-id: 62ad184af31fc8cf
+  client-fingerprint: firefox
+- name: FR 🇫🇷 | @Raydikalx | 32
   server: 13.39.56.66
   port: 22222
   type: vless
@@ -261,7 +307,7 @@ proxies:
   udp: true
   network: tcp
   tls: false
-- name: FR 🇫🇷 | @Raydikalx | 29
+- name: FR 🇫🇷 | @Raydikalx | 33
   server: 52.47.123.79
   port: 22222
   type: vless
@@ -269,55 +315,55 @@ proxies:
   udp: true
   network: tcp
   tls: false
-- name: UA 🇺🇦 | @Raydikalx | 30
+- name: UA 🇺🇦 | @Raydikalx | 34
   server: 194.54.80.37
   port: 1080
   type: ss
   cipher: chacha20-ietf-poly1305
   password: Vr06rU_v1vFPYeXq9zbsAA
   udp: true
-- name: RO 🇷🇴 | @Raydikalx | 31
+- name: RO 🇷🇴 | @Raydikalx | 35
   server: 146.70.254.238
   port: 1080
   type: ss
   cipher: chacha20-ietf-poly1305
   password: Vr06rU_v1vFPYeXq9zbsAA
   udp: true
-- name: JP 🇯🇵 | @Raydikalx | 32
+- name: JP 🇯🇵 | @Raydikalx | 36
   server: optimal-penguin.rooster465.autos
   port: 443
   type: trojan
   password: NQ26071394
   udp: true
   sni: optimal-penguin.rooster465.autos
-- name: JP 🇯🇵 | @Raydikalx | 33
+- name: JP 🇯🇵 | @Raydikalx | 37
   server: adapting-spider.rooster465.autos
   port: 443
   type: trojan
   password: NQ26071394
   udp: true
   sni: adapting-spider.rooster465.autos
-- name: KR 🇰🇷 | @Raydikalx | 34
+- name: KR 🇰🇷 | @Raydikalx | 38
   server: sensible-mongrel.rooster465.autos
   port: 443
   type: trojan
   password: NQ26071394
   udp: true
   sni: sensible-mongrel.rooster465.autos
-- name: PL 🇵🇱 | @Raydikalx | 35
+- name: PL 🇵🇱 | @Raydikalx | 39
   server: kind-unicorn.rooster465.autos
   port: 443
   type: trojan
   password: NQ26071394
   udp: true
   sni: kind-unicorn.rooster465.autos
-- name: JP 🇯🇵 | @Raydikalx | 36
+- name: JP 🇯🇵 | @Raydikalx | 40
   server: star-cheetah.rooster465.autos
   port: 443
   type: trojan
   password: CF68213490
   udp: true
-- name: NL 🇳🇱 | @Raydikalx | 37
+- name: NL 🇳🇱 | @Raydikalx | 41
   server: eu.oneokgames.com
   port: 443
   type: vless
@@ -329,17 +375,17 @@ proxies:
   reality-opts:
     public-key: 0ffnN7CdnOgEEFJ3AY1lnuTtsOPDL059UaTTxGxDjTA
     short-id: 66ffd800ba2ec7c3
-  client-fingerprint: chrome
+  client-fingerprint: firefox
   grpc-opts:
     grpc-service-name: home.v1.ApiService
-- name: FR 🇫🇷 | @Raydikalx | 38
+- name: FR 🇫🇷 | @Raydikalx | 42
   server: 195.154.29.29
   port: 1080
   type: ss
   cipher: chacha20-ietf-poly1305
   password: Vr06rU_v1vFPYeXq9zbsAA
   udp: true
-- name: SE 🇸🇪 | @Raydikalx | 39
+- name: SE 🇸🇪 | @Raydikalx | 43
   server: 46.246.92.109
   port: 443
   type: vless
@@ -353,14 +399,14 @@ proxies:
     public-key: JwL5KoiWkCJI2vMJxyTEplfv-zBAtwxOH8SMbw6QHzY
     short-id: cd40c992fe4b10c2
   client-fingerprint: chrome
-- name: IE 🇮🇪 | @Raydikalx | 40
+- name: IE 🇮🇪 | @Raydikalx | 44
   server: 84.247.48.78
   port: 1080
   type: ss
   cipher: chacha20-ietf-poly1305
   password: Vr06rU_v1vFPYeXq9zbsAA
   udp: true
-- name: DE 🇩🇪 | @Raydikalx | 41
+- name: DE 🇩🇪 | @Raydikalx | 45
   server: osnl4.ghast.sbs
   port: 443
   type: vless
@@ -371,7 +417,14 @@ proxies:
   servername: osnl4.ghast.sbs
   grpc-opts:
     grpc-service-name: grpc-api
-- name: NL 🇳🇱 | @Raydikalx | 42
+- name: US 🇺🇸 | @Raydikalx | 46
+  server: jp1.8b1c7c70-ecf1-6891-9fa7-68a86662f902.cheathub.net
+  port: 443
+  type: trojan
+  password: eb6fb64d-18c0-44d0-9ee5-f29c29194083
+  udp: true
+  sni: 8b1c7c70-ecf1-6891-9fa7-68a86662f902.cheathub.net
+- name: NL 🇳🇱 | @Raydikalx | 47
   server: 46.8.69.162
   port: 443
   type: vless
@@ -382,16 +435,16 @@ proxies:
   servername: www.yahoo.com
   reality-opts:
     public-key: 0xPKGAAK5GSdktEfUgCdtMdeo9wuZFLvr-GVD35m2VU
-    short-id: 0f58c9be51e38a
+    short-id: '17'
   client-fingerprint: chrome
-- name: NL 🇳🇱 | @Raydikalx | 43
+- name: NL 🇳🇱 | @Raydikalx | 48
   server: 158.173.20.208
   port: 443
   type: ss
   cipher: aes-128-gcm
   password: shadowsocks
   udp: true
-- name: RU 🇷🇺 | @Raydikalx | 44
+- name: RU 🇷🇺 | @Raydikalx | 49
   server: ru.themesh.site
   port: 443
   type: vless
@@ -405,7 +458,7 @@ proxies:
     public-key: zA-R_HtKJR1Hb0c1KXA3Yxh1TH_SPi1oV6cDfWURdQs
     short-id: d4f1c403150d9964
   client-fingerprint: chrome
-- name: TR 🇹🇷 | @Raydikalx | 45
+- name: TR 🇹🇷 | @Raydikalx | 50
   server: 45.196.201.228
   port: 443
   type: vless
@@ -418,8 +471,8 @@ proxies:
   reality-opts:
     public-key: zii4nGNapnFKL6SN8GzWNqFlElBvUCUFUThEP0kFH04
     short-id: c6ef72e4635d15a5
-  client-fingerprint: chrome
-- name: FR 🇫🇷 | @Raydikalx | 46
+  client-fingerprint: firefox
+- name: FR 🇫🇷 | @Raydikalx | 51
   server: 104.17.147.22
   port: 443
   type: vless
@@ -432,77 +485,77 @@ proxies:
     path: /odiyfws
     headers:
       Host: octopusss.net
-- name: SG 🇸🇬 | @Raydikalx | 47
+- name: SG 🇸🇬 | @Raydikalx | 52
   server: promoted-rattler.rooster465.autos
   port: 443
   type: trojan
   password: NQ26071394
   udp: true
   sni: promoted-rattler.rooster465.autos
-- name: KR 🇰🇷 | @Raydikalx | 48
+- name: KR 🇰🇷 | @Raydikalx | 53
   server: flexible-titmouse.rooster465.autos
   port: 443
   type: trojan
   password: NQ26071394
   udp: true
   sni: flexible-titmouse.rooster465.autos
-- name: SG 🇸🇬 | @Raydikalx | 49
+- name: SG 🇸🇬 | @Raydikalx | 54
   server: evident-ant.rooster465.autos
   port: 443
   type: trojan
   password: NQ26071394
   udp: true
   sni: evident-ant.rooster465.autos
-- name: SG 🇸🇬 | @Raydikalx | 50
+- name: SG 🇸🇬 | @Raydikalx | 55
   server: square-gnat.rooster465.autos
   port: 443
   type: trojan
   password: NQ26071394
   udp: true
   sni: square-gnat.rooster465.autos
-- name: SG 🇸🇬 | @Raydikalx | 51
+- name: SG 🇸🇬 | @Raydikalx | 56
   server: emerging-baboon.rooster465.autos
   port: 443
   type: trojan
   password: NQ26071394
   udp: true
   sni: emerging-baboon.rooster465.autos
-- name: KR 🇰🇷 | @Raydikalx | 52
+- name: KR 🇰🇷 | @Raydikalx | 57
   server: massive-ocelot.rooster465.autos
   port: 443
   type: trojan
   password: NQ26071394
   udp: true
   sni: massive-ocelot.rooster465.autos
-- name: KR 🇰🇷 | @Raydikalx | 53
+- name: KR 🇰🇷 | @Raydikalx | 58
   server: polished-shrew.rooster465.autos
   port: 443
   type: trojan
   password: NQ26071394
   udp: true
   sni: polished-shrew.rooster465.autos
-- name: JP 🇯🇵 | @Raydikalx | 54
+- name: JP 🇯🇵 | @Raydikalx | 59
   server: grateful-crawdad.rooster465.autos
   port: 443
   type: trojan
   password: NQ26071394
   udp: true
   sni: grateful-crawdad.rooster465.autos
-- name: JP 🇯🇵 | @Raydikalx | 55
+- name: JP 🇯🇵 | @Raydikalx | 60
   server: elegant-marten.rooster465.autos
   port: 443
   type: trojan
   password: NQ26071394
   udp: true
   sni: elegant-marten.rooster465.autos
-- name: JP 🇯🇵 | @Raydikalx | 56
+- name: JP 🇯🇵 | @Raydikalx | 61
   server: harmless-pegasus.rooster465.autos
   port: 443
   type: trojan
   password: NQ26071394
   udp: true
   sni: harmless-pegasus.rooster465.autos
-- name: NL 🇳🇱 | @Raydikalx | 57
+- name: NL 🇳🇱 | @Raydikalx | 62
   server: media.oneokgames.com
   port: 443
   type: vless
@@ -514,10 +567,10 @@ proxies:
   reality-opts:
     public-key: aDNsk312UNfOEh0RiyGZdK6opt__mMyKBSglqFKFP38
     short-id: dbdbeaf4aa6e1a5c
-  client-fingerprint: chrome
+  client-fingerprint: firefox
   grpc-opts:
     grpc-service-name: api.v2.ObjectService
-- name: DE 🇩🇪 | @Raydikalx | 58
+- name: DE 🇩🇪 | @Raydikalx | 63
   server: fetch.anotherok.com
   port: 443
   type: vless
@@ -532,7 +585,7 @@ proxies:
   client-fingerprint: firefox
   grpc-opts:
     grpc-service-name: api.v1.StreamService
-- name: NL 🇳🇱 | @Raydikalx | 59
+- name: NL 🇳🇱 | @Raydikalx | 64
   server: 89.105.204.107
   port: 443
   type: vless
@@ -545,8 +598,8 @@ proxies:
   reality-opts:
     public-key: 10rVZPoOUP1TlQviIAsQ_jAROX0fRQxH0C92nq_zGQc
     short-id: 43dcff53849b81e6
-  client-fingerprint: qq
-- name: NL 🇳🇱 | @Raydikalx | 60
+  client-fingerprint: chrome
+- name: NL 🇳🇱 | @Raydikalx | 65
   server: 185.209.15.91
   port: 443
   type: vless
@@ -560,21 +613,21 @@ proxies:
     public-key: tSxNp48AuTUzqggANCWsR6v7bqlguCoVWk_YOUs36Ug
     short-id: 5e3ab3ab228625
   client-fingerprint: firefox
-- name: FR 🇫🇷 | @Raydikalx | 61
+- name: FR 🇫🇷 | @Raydikalx | 66
   server: 163.172.244.41
   port: 1080
   type: ss
   cipher: chacha20-ietf-poly1305
   password: Vr06rU_v1vFPYeXq9zbsAA
   udp: true
-- name: FR 🇫🇷 | @Raydikalx | 62
+- name: FR 🇫🇷 | @Raydikalx | 67
   server: 51.159.19.174
   port: 1080
   type: ss
   cipher: chacha20-ietf-poly1305
   password: Vr06rU_v1vFPYeXq9zbsAA
   udp: true
-- name: GB 🇬🇧 | @Raydikalx | 63
+- name: GB 🇬🇧 | @Raydikalx | 68
   server: main.oneoker.com
   port: 443
   type: vless
@@ -589,7 +642,7 @@ proxies:
   client-fingerprint: firefox
   grpc-opts:
     grpc-service-name: api.v1.StreamService
-- name: NL 🇳🇱 | @Raydikalx | 64
+- name: NL 🇳🇱 | @Raydikalx | 69
   server: link.oneokgames.com
   port: 443
   type: vless
@@ -604,7 +657,7 @@ proxies:
   client-fingerprint: firefox
   grpc-opts:
     grpc-service-name: media.v1.SyncService
-- name: NL 🇳🇱 | @Raydikalx | 65
+- name: NL 🇳🇱 | @Raydikalx | 70
   server: grid.onetimeok.com
   port: 443
   type: vless
@@ -616,10 +669,10 @@ proxies:
   reality-opts:
     public-key: 28oR3ji9c2CneMNkbvcDL8WfvNWHS3GfA3RdtaF-pSg
     short-id: 89e97b6542785ca6
-  client-fingerprint: firefox
+  client-fingerprint: chrome
   grpc-opts:
     grpc-service-name: gw.v1.MetricsService
-- name: NL 🇳🇱 | @Raydikalx | 66
+- name: Global 🌐 | @Raydikalx | 71
   server: api.oneokgames.com
   port: 443
   type: vless
@@ -631,10 +684,10 @@ proxies:
   reality-opts:
     public-key: VTO26jBMVVnEnnHQON7k8lB3ED46_JHshPorJHHXSRU
     short-id: a30b344b5214d62f
-  client-fingerprint: chrome
+  client-fingerprint: firefox
   grpc-opts:
     grpc-service-name: push.v2.FeedService
-- name: GB 🇬🇧 | @Raydikalx | 67
+- name: GB 🇬🇧 | @Raydikalx | 72
   server: add.oneoker.com
   port: 443
   type: vless
@@ -646,10 +699,10 @@ proxies:
   reality-opts:
     public-key: W329R9_hAiG_wGLcIhfbm0AA8Si7DVhz4es2aASZACY
     short-id: 9c478d3655bfa85d
-  client-fingerprint: chrome
+  client-fingerprint: firefox
   grpc-opts:
     grpc-service-name: api.v1.StreamService
-- name: DE 🇩🇪 | @Raydikalx | 68
+- name: DE 🇩🇪 | @Raydikalx | 73
   server: de.vrsvpn.com
   port: 443
   type: vless
@@ -663,7 +716,7 @@ proxies:
     public-key: QocXHwad0mV7WA5jSAcqDac3uuVBEp1WF775-CilniE
     short-id: 45ba18f429ad1f28
   client-fingerprint: chrome
-- name: NO 🇳🇴 | @Raydikalx | 69
+- name: NO 🇳🇴 | @Raydikalx | 74
   server: 185.231.101.85
   port: 8443
   type: vless
@@ -677,22 +730,22 @@ proxies:
     public-key: 10rVZPoOUP1TlQviIAsQ_jAROX0fRQxH0C92nq_zGQc
     short-id: 43dcff53849b81e6
   client-fingerprint: chrome
-- name: IT 🇮🇹 | @Raydikalx | 70
+- name: IT 🇮🇹 | @Raydikalx | 75
   server: 185.128.27.178
   port: 1080
   type: ss
   cipher: chacha20-ietf-poly1305
   password: Vr06rU_v1vFPYeXq9zbsAA
   udp: true
-- name: LV 🇱🇻 | @Raydikalx | 71
+- name: LV 🇱🇻 | @Raydikalx | 76
   server: 195.123.209.159
   port: 1080
   type: ss
   cipher: chacha20-ietf-poly1305
   password: Vr06rU_v1vFPYeXq9zbsAA
   udp: true
-- name: GB 🇬🇧 | @Raydikalx | 72
-  server: 45.130.125.207
+- name: GB 🇬🇧 | @Raydikalx | 77
+  server: 173.245.58.75
   port: 443
   type: vless
   uuid: b2f6aa3a-2550-4a1c-b2c0-1c94b1207217
@@ -704,7 +757,7 @@ proxies:
     path: /hdgrbws
     headers:
       Host: terazhediii.info
-- name: PL 🇵🇱 | @Raydikalx | 73
+- name: PL 🇵🇱 | @Raydikalx | 78
   server: 144.31.113.56
   port: 58427
   type: vless
@@ -713,105 +766,105 @@ proxies:
   network: tcp
   tls: false
   flow: xtls-rprx-vision
-- name: KR 🇰🇷 | @Raydikalx | 74
+- name: KR 🇰🇷 | @Raydikalx | 79
   server: musical-mouse.rooster465.autos
   port: 443
   type: trojan
   password: NQ26071394
   udp: true
   sni: musical-mouse.rooster465.autos
-- name: NL 🇳🇱 | @Raydikalx | 75
+- name: NL 🇳🇱 | @Raydikalx | 80
   server: 82.38.31.46
   port: 8080
   type: ss
   cipher: chacha20-ietf-poly1305
   password: oZIoA69Q8yhcQV8ka3Pa3A
   udp: true
-- name: JP 🇯🇵 | @Raydikalx | 76
+- name: JP 🇯🇵 | @Raydikalx | 81
   server: warm-bass.rooster465.autos
   port: 443
   type: trojan
   password: NQ26071394
   udp: true
   sni: warm-bass.rooster465.autos
-- name: JP 🇯🇵 | @Raydikalx | 77
+- name: JP 🇯🇵 | @Raydikalx | 82
   server: select-ferret.rooster465.autos
   port: 443
   type: trojan
   password: NQ26071394
   udp: true
   sni: select-ferret.rooster465.autos
-- name: JP 🇯🇵 | @Raydikalx | 78
+- name: JP 🇯🇵 | @Raydikalx | 83
   server: golden-kangaroo.rooster465.autos
   port: 443
   type: trojan
   password: NQ26071394
   udp: true
   sni: golden-kangaroo.rooster465.autos
-- name: JP 🇯🇵 | @Raydikalx | 79
+- name: JP 🇯🇵 | @Raydikalx | 84
   server: capable-baboon.rooster465.autos
   port: 443
   type: trojan
   password: NQ26071394
   udp: true
   sni: capable-baboon.rooster465.autos
-- name: JP 🇯🇵 | @Raydikalx | 80
+- name: JP 🇯🇵 | @Raydikalx | 85
   server: allowing-ram.rooster465.autos
   port: 443
   type: trojan
   password: NQ26071394
   udp: true
   sni: allowing-ram.rooster465.autos
-- name: US 🇺🇸 | @Raydikalx | 81
+- name: US 🇺🇸 | @Raydikalx | 86
   server: alert-monster.rooster465.autos
   port: 443
   type: trojan
   password: CF68213490
   udp: true
   sni: alert-monster.rooster465.autos
-- name: JP 🇯🇵 | @Raydikalx | 82
+- name: JP 🇯🇵 | @Raydikalx | 87
   server: prime-quail.rooster465.autos
   port: 443
   type: trojan
   password: NQ26071394
   udp: true
   sni: prime-quail.rooster465.autos
-- name: JP 🇯🇵 | @Raydikalx | 83
+- name: JP 🇯🇵 | @Raydikalx | 88
   server: calm-muskrat.rooster465.autos
   port: 443
   type: trojan
   password: NQ26071394
   udp: true
   sni: calm-muskrat.rooster465.autos
-- name: JP 🇯🇵 | @Raydikalx | 84
+- name: JP 🇯🇵 | @Raydikalx | 89
   server: fit-marten.rooster465.autos
   port: 443
   type: trojan
   password: NQ26071394
   udp: true
   sni: fit-marten.rooster465.autos
-- name: JP 🇯🇵 | @Raydikalx | 85
+- name: JP 🇯🇵 | @Raydikalx | 90
   server: stunning-mastodon.rooster465.autos
   port: 443
   type: trojan
   password: NQ26071394
   udp: true
   sni: stunning-mastodon.rooster465.autos
-- name: IE 🇮🇪 | @Raydikalx | 86
+- name: IE 🇮🇪 | @Raydikalx | 91
   server: fun-labrador.rooster465.autos
   port: 443
   type: trojan
   password: NQ26071394
   udp: true
   sni: fun-labrador.rooster465.autos
-- name: FR 🇫🇷 | @Raydikalx | 87
+- name: FR 🇫🇷 | @Raydikalx | 92
   server: ready-kangaroo.rooster465.autos
   port: 443
   type: trojan
   password: NQ26071394
   udp: true
   sni: ready-kangaroo.rooster465.autos
-- name: EE 🇪🇪 | @Raydikalx | 88
+- name: EE 🇪🇪 | @Raydikalx | 93
   server: 185.93.33.7
   port: 443
   type: vless
@@ -825,7 +878,7 @@ proxies:
     public-key: 10rVZPoOUP1TlQviIAsQ_jAROX0fRQxH0C92nq_zGQc
     short-id: 43dcff53849b81e6
   client-fingerprint: chrome
-- name: NL 🇳🇱 | @Raydikalx | 89
+- name: NL 🇳🇱 | @Raydikalx | 94
   server: nl15.sodahub.online
   port: 443
   type: vless
@@ -833,21 +886,27 @@ proxies:
   udp: true
   network: tcp
   tls: true
-- name: IT 🇮🇹 | @Raydikalx | 90
+  flow: xtls-rprx-vision
+  servername: nl15.sodahub.online
+  reality-opts:
+    public-key: oGgupP3uX0TNyFwuxNYaFj-IQ8EPhCuKfJdaOHiMnV0
+    short-id: c334408a1056aaf8
+  client-fingerprint: firefox
+- name: IT 🇮🇹 | @Raydikalx | 95
   server: 91.193.5.112
   port: 1080
   type: ss
   cipher: chacha20-ietf-poly1305
   password: Vr06rU_v1vFPYeXq9zbsAA
   udp: true
-- name: CA 🇨🇦 | @Raydikalx | 91
+- name: CA 🇨🇦 | @Raydikalx | 96
   server: 184.75.221.134
   port: 1080
   type: ss
   cipher: chacha20-ietf-poly1305
   password: Vr06rU_v1vFPYeXq9zbsAA
   udp: true
-- name: FI 🇫🇮 | @Raydikalx | 92
+- name: FI 🇫🇮 | @Raydikalx | 97
   server: 62.60.228.89
   port: 443
   type: vless
@@ -860,7 +919,7 @@ proxies:
     public-key: ydoxmw5pH_JPRTbjeNKnsF-MfVybjnAYLnhwRj3n3yE
     short-id: cf2d
   client-fingerprint: firefox
-- name: CH 🇨🇭 | @Raydikalx | 93
+- name: CH 🇨🇭 | @Raydikalx | 98
   server: 45.140.205.186
   port: 2443
   type: vless
@@ -868,7 +927,7 @@ proxies:
   udp: true
   network: tcp
   tls: false
-- name: FR 🇫🇷 | @Raydikalx | 94
+- name: FR 🇫🇷 | @Raydikalx | 99
   server: 31.58.76.95
   port: 8443
   type: vless
@@ -876,7 +935,15 @@ proxies:
   udp: true
   network: tcp
   tls: false
-- name: US 🇺🇸 | @Raydikalx | 95
+- name: UA 🇺🇦 | @Raydikalx | 100
+  server: 144.31.218.79
+  port: 10443
+  type: vless
+  uuid: 111841ae-8ee4-4ac7-b750-717d46f17492
+  udp: true
+  network: tcp
+  tls: false
+- name: US 🇺🇸 | @Raydikalx | 101
   server: usa.vrsvpn.com
   port: 444
   type: vless
@@ -891,22 +958,29 @@ proxies:
   client-fingerprint: chrome
   grpc-opts:
     grpc-service-name: web.max.ru
-- name: IT 🇮🇹 | @Raydikalx | 96
+- name: IT 🇮🇹 | @Raydikalx | 102
   server: ronaldo28.fordnsdirect.shop
   port: 8880
   type: vless
   uuid: 8dc7722c-2767-4eea-a28b-2f8daacc07e3
   udp: true
-  network: grpc
+  network: tcp
   tls: false
-- name: GB 🇬🇧 | @Raydikalx | 97
+- name: GB 🇬🇧 | @Raydikalx | 103
   server: 194.164.92.198
   port: 1234
   type: ss
   cipher: chacha20-ietf-poly1305
   password: zz0dHjDfoaSaZuRFLGH-hNfBALSEJUYD
   udp: true
-- name: NO 🇳🇴 | @Raydikalx | 98
+- name: US 🇺🇸 | @Raydikalx | 104
+  server: 37.120.139.234
+  port: 1080
+  type: ss
+  cipher: chacha20-ietf-poly1305
+  password: Vr06rU_v1vFPYeXq9zbsAA
+  udp: true
+- name: NO 🇳🇴 | @Raydikalx | 105
   server: 144.31.128.199
   port: 443
   type: vless
@@ -921,7 +995,7 @@ proxies:
   client-fingerprint: firefox
   grpc-opts:
     grpc-service-name: nexusGrpc
-- name: Global 🌐 | @Raydikalx | 99
+- name: Global 🌐 | @Raydikalx | 106
   server: 144.31.129.42
   port: 443
   type: vless
@@ -936,7 +1010,7 @@ proxies:
   client-fingerprint: firefox
   grpc-opts:
     grpc-service-name: nexusGrpc
-- name: DE 🇩🇪 | @Raydikalx | 100
+- name: DE 🇩🇪 | @Raydikalx | 107
   server: new.akinamo.willbe.sinitk.outforyou.ir
   port: 20580
   type: vless
@@ -949,7 +1023,7 @@ proxies:
     public-key: gqjS9wwxycF16Qf02GDt1UrvdrF_neQgj1Crduo_xB0
     short-id: d5c1b9
   client-fingerprint: chrome
-- name: KR 🇰🇷 | @Raydikalx | 101
+- name: KR 🇰🇷 | @Raydikalx | 108
   server: 150.109.240.179
   port: 8443
   type: vmess
@@ -964,14 +1038,14 @@ proxies:
     path: /wsproxy
     headers:
       Host: www.bing.com
-- name: AT 🇦🇹 | @Raydikalx | 102
+- name: AT 🇦🇹 | @Raydikalx | 109
   server: 146.70.146.222
   port: 1080
   type: ss
   cipher: chacha20-ietf-poly1305
   password: Vr06rU_v1vFPYeXq9zbsAA
   udp: true
-- name: HK 🇭🇰 | @Raydikalx | 103
+- name: HK 🇭🇰 | @Raydikalx | 110
   server: hk1.cyphervpn.pro
   port: 443
   type: vless
@@ -985,14 +1059,14 @@ proxies:
     public-key: USffNprEM08MHiuVy5bj6-kvxugxycuZcgQDFJyz2Wc
     short-id: 8f9d033ad6d2cebf
   client-fingerprint: chrome
-- name: FR 🇫🇷 | @Raydikalx | 104
+- name: FR 🇫🇷 | @Raydikalx | 111
   server: 217.138.207.106
   port: 1080
   type: ss
   cipher: chacha20-ietf-poly1305
   password: Vr06rU_v1vFPYeXq9zbsAA
   udp: true
-- name: IT 🇮🇹 | @Raydikalx | 105
+- name: IT 🇮🇹 | @Raydikalx | 112
   server: ronaldo17.fordnsdirect.shop
   port: 8880
   type: vless
@@ -1000,318 +1074,252 @@ proxies:
   udp: true
   network: grpc
   tls: false
-- name: NL 🇳🇱 | @Raydikalx | 106
+- name: NL 🇳🇱 | @Raydikalx | 113
   server: grateful-bedbug.rooster465.autos
   port: 443
   type: trojan
   password: NQ26071394
   udp: true
   sni: grateful-bedbug.rooster465.autos
-- name: JP 🇯🇵 | @Raydikalx | 107
+- name: JP 🇯🇵 | @Raydikalx | 114
   server: working-tomcat.rooster465.autos
   port: 443
   type: trojan
   password: NQ26071394
   udp: true
   sni: working-tomcat.rooster465.autos
-- name: JP 🇯🇵 | @Raydikalx | 108
+- name: JP 🇯🇵 | @Raydikalx | 115
   server: upright-caribou.rooster465.autos
   port: 443
   type: trojan
   password: NQ26071394
   udp: true
   sni: upright-caribou.rooster465.autos
-- name: JP 🇯🇵 | @Raydikalx | 109
+- name: JP 🇯🇵 | @Raydikalx | 116
   server: one-dove.rooster465.autos
   port: 443
   type: trojan
   password: NQ26071394
   udp: true
   sni: one-dove.rooster465.autos
-- name: JP 🇯🇵 | @Raydikalx | 110
+- name: JP 🇯🇵 | @Raydikalx | 117
   server: new-eagle.rooster465.autos
   port: 443
   type: trojan
   password: NQ26071394
   udp: true
   sni: new-eagle.rooster465.autos
-- name: KR 🇰🇷 | @Raydikalx | 111
+- name: KR 🇰🇷 | @Raydikalx | 118
   server: merry-falcon.rooster465.autos
   port: 443
   type: trojan
   password: NQ26071394
   udp: true
   sni: merry-falcon.rooster465.autos
-- name: JP 🇯🇵 | @Raydikalx | 112
+- name: JP 🇯🇵 | @Raydikalx | 119
   server: infinite-killdeer.rooster465.autos
   port: 443
   type: trojan
   password: NQ26071394
   udp: true
   sni: infinite-killdeer.rooster465.autos
-- name: JP 🇯🇵 | @Raydikalx | 113
+- name: JP 🇯🇵 | @Raydikalx | 120
   server: immune-grackle.rooster465.autos
   port: 443
   type: trojan
   password: NQ26071394
   udp: true
   sni: immune-grackle.rooster465.autos
-- name: JP 🇯🇵 | @Raydikalx | 114
+- name: JP 🇯🇵 | @Raydikalx | 121
   server: helped-jennet.rooster465.autos
   port: 443
   type: trojan
   password: NQ26071394
   udp: true
   sni: helped-jennet.rooster465.autos
-- name: KR 🇰🇷 | @Raydikalx | 115
+- name: KR 🇰🇷 | @Raydikalx | 122
   server: genuine-cougar.rooster465.autos
   port: 443
   type: trojan
   password: NQ26071394
   udp: true
   sni: genuine-cougar.rooster465.autos
-- name: IE 🇮🇪 | @Raydikalx | 116
+- name: IE 🇮🇪 | @Raydikalx | 123
   server: funky-opossum.rooster465.autos
   port: 443
   type: trojan
   password: NQ26071394
   udp: true
   sni: funky-opossum.rooster465.autos
-- name: JP 🇯🇵 | @Raydikalx | 117
+- name: JP 🇯🇵 | @Raydikalx | 124
   server: brief-hare.rooster465.autos
   port: 443
   type: trojan
   password: NQ26071394
   udp: true
   sni: brief-hare.rooster465.autos
-- name: JP 🇯🇵 | @Raydikalx | 118
+- name: JP 🇯🇵 | @Raydikalx | 125
   server: beloved-crow.rooster465.autos
   port: 443
   type: trojan
   password: NQ26071394
   udp: true
   sni: beloved-crow.rooster465.autos
-- name: JP 🇯🇵 | @Raydikalx | 119
+- name: JP 🇯🇵 | @Raydikalx | 126
   server: amusing-grub.rooster465.autos
   port: 443
   type: trojan
   password: NQ26071394
   udp: true
   sni: amusing-grub.rooster465.autos
-- name: JP 🇯🇵 | @Raydikalx | 120
+- name: JP 🇯🇵 | @Raydikalx | 127
   server: alert-wren.rooster465.autos
   port: 443
   type: trojan
   password: NQ26071394
   udp: true
   sni: alert-wren.rooster465.autos
-- name: JP 🇯🇵 | @Raydikalx | 121
+- name: JP 🇯🇵 | @Raydikalx | 128
   server: firm-krill.rooster465.autos
   port: 443
   type: trojan
   password: NQ26071394
   udp: true
   sni: firm-krill.rooster465.autos
-- name: JP 🇯🇵 | @Raydikalx | 122
+- name: JP 🇯🇵 | @Raydikalx | 129
   server: legible-ram.rooster465.autos
   port: 443
   type: trojan
   password: NQ26071394
   udp: true
   sni: legible-ram.rooster465.autos
-- name: JP 🇯🇵 | @Raydikalx | 123
+- name: JP 🇯🇵 | @Raydikalx | 130
   server: expert-muskrat.rooster465.autos
   port: 443
   type: trojan
   password: NQ26071394
   udp: true
   sni: expert-muskrat.rooster465.autos
-- name: IE 🇮🇪 | @Raydikalx | 124
+- name: IE 🇮🇪 | @Raydikalx | 131
   server: thankful-piranha.rooster465.autos
   port: 443
   type: trojan
   password: NQ26071394
   udp: true
   sni: thankful-piranha.rooster465.autos
-- name: KR 🇰🇷 | @Raydikalx | 125
+- name: KR 🇰🇷 | @Raydikalx | 132
   server: modest-amoeba.rooster465.autos
   port: 443
   type: trojan
   password: NQ26071394
   udp: true
   sni: modest-amoeba.rooster465.autos
-- name: JP 🇯🇵 | @Raydikalx | 126
+- name: JP 🇯🇵 | @Raydikalx | 133
   server: hot-tapir.rooster465.autos
   port: 443
   type: trojan
   password: NQ26071394
   udp: true
   sni: hot-tapir.rooster465.autos
-- name: KR 🇰🇷 | @Raydikalx | 127
+- name: KR 🇰🇷 | @Raydikalx | 134
   server: normal-bull.rooster465.autos
   port: 443
   type: trojan
   password: NQ26071394
   udp: true
   sni: normal-bull.rooster465.autos
-- name: SG 🇸🇬 | @Raydikalx | 128
+- name: SG 🇸🇬 | @Raydikalx | 135
   server: usable-dogfish.rooster465.autos
   port: 443
   type: trojan
   password: NQ26071394
   udp: true
   sni: usable-dogfish.rooster465.autos
-- name: SG 🇸🇬 | @Raydikalx | 129
+- name: SG 🇸🇬 | @Raydikalx | 136
   server: proper-marlin.rooster465.autos
   port: 443
   type: trojan
   password: NQ26071394
   udp: true
   sni: proper-marlin.rooster465.autos
-- name: KR 🇰🇷 | @Raydikalx | 130
+- name: KR 🇰🇷 | @Raydikalx | 137
   server: capable-jay.rooster465.autos
   port: 443
   type: trojan
   password: NQ26071394
   udp: true
   sni: capable-jay.rooster465.autos
-- name: KR 🇰🇷 | @Raydikalx | 131
+- name: KR 🇰🇷 | @Raydikalx | 138
   server: mighty-lemming.rooster465.autos
   port: 443
   type: trojan
   password: NQ26071394
   udp: true
   sni: mighty-lemming.rooster465.autos
-- name: KR 🇰🇷 | @Raydikalx | 132
+- name: KR 🇰🇷 | @Raydikalx | 139
   server: inviting-ferret.rooster465.autos
   port: 443
   type: trojan
   password: NQ26071394
   udp: true
   sni: inviting-ferret.rooster465.autos
-- name: KR 🇰🇷 | @Raydikalx | 133
+- name: KR 🇰🇷 | @Raydikalx | 140
   server: accurate-cat.rooster465.autos
   port: 443
   type: trojan
   password: NQ26071394
   udp: true
   sni: accurate-cat.rooster465.autos
-- name: KR 🇰🇷 | @Raydikalx | 134
+- name: KR 🇰🇷 | @Raydikalx | 141
   server: guided-pelican.rooster465.autos
   port: 443
   type: trojan
   password: NQ26071394
   udp: true
   sni: guided-pelican.rooster465.autos
-- name: JP 🇯🇵 | @Raydikalx | 135
+- name: JP 🇯🇵 | @Raydikalx | 142
   server: picked-guinea.rooster465.autos
   port: 443
   type: trojan
   password: NQ26071394
   udp: true
   sni: picked-guinea.rooster465.autos
-- name: JP 🇯🇵 | @Raydikalx | 136
+- name: JP 🇯🇵 | @Raydikalx | 143
   server: real-ewe.rooster465.autos
   port: 443
   type: trojan
   password: NQ26071394
   udp: true
   sni: real-ewe.rooster465.autos
-- name: JP 🇯🇵 | @Raydikalx | 137
+- name: JP 🇯🇵 | @Raydikalx | 144
   server: magical-prawn.rooster465.autos
   port: 443
   type: trojan
   password: NQ26071394
   udp: true
   sni: magical-prawn.rooster465.autos
-- name: JP 🇯🇵 | @Raydikalx | 138
+- name: JP 🇯🇵 | @Raydikalx | 145
   server: joint-ewe.rooster465.autos
   port: 443
   type: trojan
   password: NQ26071394
   udp: true
   sni: joint-ewe.rooster465.autos
-- name: JP 🇯🇵 | @Raydikalx | 139
+- name: JP 🇯🇵 | @Raydikalx | 146
   server: saving-drake.rooster465.autos
   port: 443
   type: trojan
   password: NQ26071394
   udp: true
   sni: saving-drake.rooster465.autos
-- name: JP 🇯🇵 | @Raydikalx | 140
+- name: JP 🇯🇵 | @Raydikalx | 147
   server: better-molly.rooster465.autos
   port: 443
   type: trojan
   password: NQ26071394
   udp: true
   sni: better-molly.rooster465.autos
-- name: JP 🇯🇵 | @Raydikalx | 141
-  server: flexible-gannet.rooster465.autos
-  port: 443
-  type: trojan
-  password: NQ26071394
-  udp: true
-  sni: flexible-gannet.rooster465.autos
-- name: IE 🇮🇪 | @Raydikalx | 142
-  server: correct-starfish.rooster465.autos
-  port: 443
-  type: trojan
-  password: NQ26071394
-  udp: true
-  sni: correct-starfish.rooster465.autos
-- name: IT 🇮🇹 | @Raydikalx | 143
-  server: ronaldo27.fordnsdirect.shop
-  port: 8880
-  type: vless
-  uuid: 8dc7722c-2767-4eea-a28b-2f8daacc07e3
-  udp: true
-  network: grpc
-  tls: false
-- name: IT 🇮🇹 | @Raydikalx | 144
-  server: ronaldo13.fordnsdirect.shop
-  port: 8880
-  type: vless
-  uuid: 8dc7722c-2767-4eea-a28b-2f8daacc07e3
-  udp: true
-  network: grpc
-  tls: false
-- name: SE 🇸🇪 | @Raydikalx | 145
-  server: 195.242.213.238
-  port: 1080
-  type: ss
-  cipher: chacha20-ietf-poly1305
-  password: Vr06rU_v1vFPYeXq9zbsAA
-  udp: true
-- name: FR 🇫🇷 | @Raydikalx | 146
-  server: 185.128.25.44
-  port: 1080
-  type: ss
-  cipher: chacha20-ietf-poly1305
-  password: Vr06rU_v1vFPYeXq9zbsAA
-  udp: true
-- name: NL 🇳🇱 | @Raydikalx | 147
-  server: family.bucket.x9.kfc-520.com
-  port: 10049
-  type: vmess
-  uuid: 1dc73529-f030-3ac5-ad64-f7666b9a51bc
-  alterId: 0
-  cipher: auto
-  udp: true
-  network: tcp
-  tls: false
-  servername: family.bucket.x9.kfc-520.com
-- name: IN 🇮🇳 | @Raydikalx | 148
-  server: family.bucket.x9.kfc-520.com
-  port: 10039
-  type: vmess
-  uuid: 1dc73529-f030-3ac5-ad64-f7666b9a51bc
-  alterId: 0
-  cipher: auto
-  udp: true
-  network: tcp
-  tls: false
-  servername: family.bucket.x9.kfc-520.com
-- name: Global 🌐 | @Raydikalx | 149
+- name: Global 🌐 | @Raydikalx | 148
   server: 104.16.72.50
   port: 443
   type: vless
@@ -1324,14 +1332,14 @@ proxies:
     path: /fp
     headers:
       Host: t1s1.rittbo.kdns.fr
-- name: Global 🌐 | @Raydikalx | 150
+- name: Global 🌐 | @Raydikalx | 149
   server: 82.38.31.203
   port: 8080
   type: ss
   cipher: chacha20-ietf-poly1305
   password: k1dBOmOB4oqi7Ump37a1bQ
   udp: true
-- name: Global 🌐 | @Raydikalx | 151
+- name: Global 🌐 | @Raydikalx | 150
   server: 57.151.100.27
   port: 10086
   type: vmess
@@ -1341,407 +1349,414 @@ proxies:
   udp: true
   network: tcp
   tls: false
-- name: Global 🌐 | @Raydikalx | 152
+- name: Global 🌐 | @Raydikalx | 151
   server: 82.38.31.155
   port: 8080
   type: ss
   cipher: chacha20-ietf-poly1305
   password: oZIoA69Q8yhcQV8ka3Pa3A
   udp: true
-- name: Global 🌐 | @Raydikalx | 153
+- name: Global 🌐 | @Raydikalx | 152
   server: 82.38.31.176
   port: 8080
   type: ss
   cipher: chacha20-ietf-poly1305
   password: k1dBOmOB4oqi7Ump37a1bQ
   udp: true
-- name: Global 🌐 | @Raydikalx | 191
+- name: Global 🌐 | @Raydikalx | 190
   server: 8.35.211.186
   port: 2053
   type: ss
   cipher: aes-256-gcm
   password: ''
   udp: true
-- name: IR 🇮🇷 | @Raydikalx | 193
+- name: IR 🇮🇷 | @Raydikalx | 192
   server: gr-2.tiptop-1.top
   port: 443
   type: ss
   cipher: 2022-blake3-aes-128-gcm
   password: YyO3pfhWyveU+LJmfKmLnw==:2uNjCTzeahJjHMzqOz0yQQ==
   udp: true
-- name: Global 🌐 | @Raydikalx | 194
+- name: Global 🌐 | @Raydikalx | 193
   server: 139.199.185.190
   port: 55502
   type: ss
   cipher: 2022-blake3-aes-128-gcm
   password: ZqT32TsUo1A4MU8N17kAPQ==
   udp: true
-- name: Global 🌐 | @Raydikalx | 195
+- name: Global 🌐 | @Raydikalx | 194
   server: 80.91.86.179
   port: 1070
   type: ss
   cipher: 2022-blake3-aes-256-gcm
   password: 5MnYSugw6Dp/r4HIhoRkoQI6jM3SwL9+i7GNRLxBWHo=:lEEhmaPyJCFJSc7IlF120c+toWUlQNtegmzSwS/L//s=
   udp: true
-- name: Global 🌐 | @Raydikalx | 196
+- name: Global 🌐 | @Raydikalx | 195
   server: 49.13.3.249
   port: 23997
   type: ss
   cipher: 2022-blake3-aes-256-gcm
   password: dyL+KqX8hIMn+UyADwSJOPm72A0A83TsDOFXBn6I2mA=
   udp: true
-- name: Global 🌐 | @Raydikalx | 197
+- name: Global 🌐 | @Raydikalx | 196
   server: 65.109.219.124
   port: 18269
   type: ss
   cipher: 2022-blake3-aes-256-gcm
   password: uXSgW2m4sbfoYckTbFiGnaVnP1ygIULi12LPQvUZNjM=:FNWzI4OwPTNgAFZUUUFjx19m5YfLo3qNXt07tCQ3lZw=
   udp: true
-- name: DE 🇩🇪 | @Raydikalx | 198
+- name: DE 🇩🇪 | @Raydikalx | 197
   server: m-iri.onlinevip1.ir
   port: 2095
   type: ss
   cipher: chacha20-ietf-poly1305
   password: 46fe359c8ced485792afc79a689b7aff
   udp: true
-- name: DE 🇩🇪 | @Raydikalx | 199
+- name: DE 🇩🇪 | @Raydikalx | 198
   server: m-iri.onlinevip1.ir
   port: 2095
   type: ss
   cipher: chacha20-ietf-poly1305
   password: 4a1abae156b647c18f4fc169feb95d48
   udp: true
-- name: Global 🌐 | @Raydikalx | 200
+- name: Global 🌐 | @Raydikalx | 199
   server: 23.100.50.48
   port: 443
   type: ss
   cipher: chacha20-ietf-poly1305
   password: 6ZhroVa0UjRSUl06
   udp: true
-- name: Global 🌐 | @Raydikalx | 202
+- name: Global 🌐 | @Raydikalx | 201
   server: 61.231.25.172
   port: 50099
   type: ss
   cipher: chacha20-ietf-poly1305
   password: 7e731ec3-f8e1-43f6-92cf-3978d14705c4
   udp: true
-- name: TW 🇹🇼 | @Raydikalx | 203
+- name: TW 🇹🇼 | @Raydikalx | 202
   server: r3mrcg001286ek2.cybervena.com
   port: 50099
   type: ss
   cipher: chacha20-ietf-poly1305
   password: 7e731ec3-f8e1-43f6-92cf-3978d14705c4
   udp: true
-- name: TW 🇹🇼 | @Raydikalx | 204
+- name: TW 🇹🇼 | @Raydikalx | 203
   server: r3mrcg00129437x.cybervena.com
   port: 50099
   type: ss
   cipher: chacha20-ietf-poly1305
   password: 7e731ec3-f8e1-43f6-92cf-3978d14705c4
   udp: true
-- name: Global 🌐 | @Raydikalx | 205
+- name: Global 🌐 | @Raydikalx | 204
   server: switcher-nick-croquet.freesocks.work
   port: 443
   type: ss
   cipher: chacha20-ietf-poly1305
   password: 9tqhMdIrTkgQ46PvhyAtMH
   udp: true
-- name: Global 🌐 | @Raydikalx | 206
+- name: Global 🌐 | @Raydikalx | 205
   server: 178.162.165.202
   port: 21114
   type: ss
   cipher: chacha20-ietf-poly1305
   password: 0lirUrGQIf6s
   udp: true
-- name: IR 🇮🇷 | @Raydikalx | 207
+- name: IR 🇮🇷 | @Raydikalx | 206
   server: coco1.farajet.net
   port: 1010
   type: ss
   cipher: chacha20-ietf-poly1305
   password: 0u47xJvp2_pGbA5c13ASHK87DxDwk5zm
   udp: true
-- name: IR 🇮🇷 | @Raydikalx | 208
+- name: IR 🇮🇷 | @Raydikalx | 207
   server: coco2.farajet.net
   port: 2020
   type: ss
   cipher: chacha20-ietf-poly1305
   password: 0u47xJvp2_pGbA5c13ASHK87DxDwk5zm
   udp: true
-- name: IR 🇮🇷 | @Raydikalx | 209
+- name: IR 🇮🇷 | @Raydikalx | 208
   server: soskeynets.farajet.net
   port: 1010
   type: ss
   cipher: chacha20-ietf-poly1305
   password: 0u47xJvp2_pGbA5c13ASHK87DxDwk5zm
   udp: true
-- name: IR 🇮🇷 | @Raydikalx | 210
+- name: IR 🇮🇷 | @Raydikalx | 209
   server: soskeynets.farajet.net
   port: 2020
   type: ss
   cipher: chacha20-ietf-poly1305
   password: 0u47xJvp2_pGbA5c13ASHK87DxDwk5zm
   udp: true
-- name: Global 🌐 | @Raydikalx | 211
+- name: Global 🌐 | @Raydikalx | 210
   server: 51.89.119.213
   port: 11201
   type: ss
   cipher: chacha20-ietf-poly1305
   password: 15b0573830081d01
   udp: true
-- name: Global 🌐 | @Raydikalx | 212
+- name: Global 🌐 | @Raydikalx | 211
   server: 45.87.175.178
   port: 8080
   type: ss
   cipher: chacha20-ietf-poly1305
   password: 1RWwXhwfAB5gAEozU4G2Pg
   udp: true
-- name: Global 🌐 | @Raydikalx | 213
+- name: Global 🌐 | @Raydikalx | 212
   server: 45.87.175.199
   port: 8080
   type: ss
   cipher: chacha20-ietf-poly1305
   password: 1RWwXhwfAB5gAEozU4G2Pg
   udp: true
-- name: Global 🌐 | @Raydikalx | 214
+- name: Global 🌐 | @Raydikalx | 213
   server: 20.166.91.10
   port: 443
   type: ss
   cipher: chacha20-ietf-poly1305
   password: 1hVGiu6pyngcQQdU
   udp: true
-- name: FI 🇫🇮 | @Raydikalx | 215
+- name: FI 🇫🇮 | @Raydikalx | 214
   server: 185.5.38.89
   port: 57327
   type: ss
   cipher: chacha20-ietf-poly1305
   password: 2KAu9eMmGwShWTWcuyynmLE81PVkoKDvQ3fb29dPScc1bMUW5y6hpprXqVWqSqjTi234hFGdDf3ArCuWtBw5FA6zV5wBgWTP
   udp: true
-- name: Global 🌐 | @Raydikalx | 216
+- name: Global 🌐 | @Raydikalx | 215
   server: 80.242.58.174
   port: 14249
   type: ss
   cipher: chacha20-ietf-poly1305
   password: 3GNhODxPaSK9z2E82pzI1b
   udp: true
-- name: Global 🌐 | @Raydikalx | 217
+- name: Global 🌐 | @Raydikalx | 216
   server: 128.251.12.23
   port: 443
   type: ss
   cipher: chacha20-ietf-poly1305
   password: u7MBhnD1kM8GhweY
   udp: true
-- name: Global 🌐 | @Raydikalx | 219
+- name: Global 🌐 | @Raydikalx | 218
   server: 20.166.91.10
   port: 443
   type: ss
   cipher: chacha20-ietf-poly1305
   password: uJFknobQotFFYaFW
   udp: true
-- name: IR 🇮🇷 | @Raydikalx | 220
+- name: IR 🇮🇷 | @Raydikalx | 219
   server: 57.129.121.230
   port: 10443
   type: ss
   cipher: chacha20-ietf-poly1305
   password: uROuEqsL8IUMMVb4wDwnGU
   udp: true
-- name: Global 🌐 | @Raydikalx | 221
+- name: Global 🌐 | @Raydikalx | 220
   server: 103.174.86.113
   port: 51348
   type: ss
   cipher: chacha20-ietf-poly1305
   password: vZr8MlUXUihNEndqIpjDxQdSeqi37FbgoHBmQ1syy6ZjkbBn
   udp: true
-- name: Global 🌐 | @Raydikalx | 222
+- name: Global 🌐 | @Raydikalx | 221
   server: 185.185.142.60
   port: 1080
   type: ss
   cipher: chacha20-ietf-poly1305
   password: vwc9nGgP8O5KeWbyrwiUow
   udp: true
-- name: Global 🌐 | @Raydikalx | 223
+- name: Global 🌐 | @Raydikalx | 222
   server: 185.117.0.38
   port: 54753
   type: ss
   cipher: chacha20-ietf-poly1305
   password: wtnt2yuxwlveksz5
   udp: true
-- name: NL 🇳🇱 | @Raydikalx | 224
+- name: NL 🇳🇱 | @Raydikalx | 223
   server: 5.253.59.156
   port: 32140
   type: ss
   cipher: chacha20-ietf-poly1305
   password: xyRuC8oOc5jrhMMBQHGexd
   udp: true
-- name: Global 🌐 | @Raydikalx | 225
+- name: Global 🌐 | @Raydikalx | 224
   server: 46.29.238.83
   port: 28768
   type: ss
   cipher: chacha20-ietf-poly1305
   password: B4Nokj3Yqfta6tWqum6r8k
   udp: true
-- name: Global 🌐 | @Raydikalx | 226
+- name: Global 🌐 | @Raydikalx | 225
   server: 108.181.58.239
   port: 8388
   type: ss
   cipher: chacha20-ietf-poly1305
   password: CJmTCCx7Ltud
   udp: true
-- name: Global 🌐 | @Raydikalx | 227
+- name: Global 🌐 | @Raydikalx | 226
   server: 40.112.71.34
   port: 443
   type: ss
   cipher: chacha20-ietf-poly1305
   password: F9EvaK52fwKbQ8Lf
   udp: true
-- name: US 🇺🇸 | @Raydikalx | 228
+- name: US 🇺🇸 | @Raydikalx | 227
   server: 108.181.0.177
   port: 8388
   type: ss
   cipher: chacha20-ietf-poly1305
   password: G5p6ww4o67HB
   udp: true
-- name: Global 🌐 | @Raydikalx | 229
+- name: Global 🌐 | @Raydikalx | 228
   server: 98.71.82.228
   port: 443
   type: ss
   cipher: chacha20-ietf-poly1305
   password: GEpb25xjy9syNpEq
   udp: true
-- name: Global 🌐 | @Raydikalx | 230
+- name: Global 🌐 | @Raydikalx | 229
   server: 178.162.164.142
   port: 31558
   type: ss
   cipher: chacha20-ietf-poly1305
   password: GJtJKYlAAuva
   udp: true
-- name: Global 🌐 | @Raydikalx | 231
+- name: Global 🌐 | @Raydikalx | 230
   server: 20.164.116.218
   port: 443
   type: ss
   cipher: chacha20-ietf-poly1305
   password: GTSymW4ysHcaqH70
   udp: true
-- name: Global 🌐 | @Raydikalx | 232
+- name: Global 🌐 | @Raydikalx | 231
   server: 20.223.136.202
   port: 443
   type: ss
   cipher: chacha20-ietf-poly1305
   password: HeC2HzINHb4SUY8S
   udp: true
-- name: Global 🌐 | @Raydikalx | 233
+- name: Global 🌐 | @Raydikalx | 232
   server: 168.119.57.171
   port: 51348
   type: ss
   cipher: chacha20-ietf-poly1305
   password: I53uJsZc6dzTBYDEqg1a30Bh1hAd4HQzgpwCVdpzKwfF2ZUh
   udp: true
-- name: Global 🌐 | @Raydikalx | 234
+- name: Global 🌐 | @Raydikalx | 233
   server: 20.223.152.73
   port: 443
   type: ss
   cipher: chacha20-ietf-poly1305
   password: I6RsSUIYrKHpI26J
   udp: true
-- name: Global 🌐 | @Raydikalx | 235
+- name: Global 🌐 | @Raydikalx | 234
   server: 212.113.106.76
   port: 61992
   type: ss
   cipher: chacha20-ietf-poly1305
   password: IJY8gXZ8KqYRva7HGr0MZJ
   udp: true
-- name: Global 🌐 | @Raydikalx | 236
+- name: Global 🌐 | @Raydikalx | 235
   server: 40.112.71.34
   port: 443
   type: ss
   cipher: chacha20-ietf-poly1305
   password: IqPK5nfgggr3Pfa8
   udp: true
-- name: Global 🌐 | @Raydikalx | 237
+- name: Global 🌐 | @Raydikalx | 236
   server: 62.133.63.169
   port: 37096
   type: ss
   cipher: chacha20-ietf-poly1305
   password: KP6FQVmJhlXPgvPhrw2gnI
   udp: true
-- name: NL 🇳🇱 | @Raydikalx | 238
+- name: NL 🇳🇱 | @Raydikalx | 237
   server: oommmnnn.belamona.ir
   port: 1080
   type: ss
   cipher: chacha20-ietf-poly1305
   password: K_mwVrEf_4oajxDgvhCweugCj6EBHhMM
   udp: true
-- name: Global 🌐 | @Raydikalx | 239
+- name: Global 🌐 | @Raydikalx | 238
   server: 168.63.68.5
   port: 443
   type: ss
   cipher: chacha20-ietf-poly1305
   password: MfUPdkoEXSwf6JuM
   udp: true
-- name: Global 🌐 | @Raydikalx | 242
+- name: Global 🌐 | @Raydikalx | 241
   server: 5.188.168.230
   port: 51348
   type: ss
   cipher: chacha20-ietf-poly1305
   password: OGKNzzOLNYCmjA03zWXRyIERaxDT93HiN0RGvYbJbaBcwjIn
   udp: true
-- name: Global 🌐 | @Raydikalx | 243
+- name: Global 🌐 | @Raydikalx | 242
   server: 167.235.139.105
   port: 51348
   type: ss
   cipher: chacha20-ietf-poly1305
   password: P0VmjYa00wNNEDBoDuWKfIdWKIxycJQuq1eIwXMCRi2T650R
   udp: true
-- name: NL 🇳🇱 | @Raydikalx | 245
+- name: NL 🇳🇱 | @Raydikalx | 244
   server: switcher-nick-croquet.freesocks.work
   port: 443
   type: ss
   cipher: chacha20-ietf-poly1305
   password: RFK38Cg7APneSB5cWDcpbm
   udp: true
-- name: Global 🌐 | @Raydikalx | 246
+- name: Global 🌐 | @Raydikalx | 245
   server: 20.223.208.167
   port: 443
   type: ss
   cipher: chacha20-ietf-poly1305
   password: ScZd18TGj83TS1Wo
   udp: true
-- name: Global 🌐 | @Raydikalx | 247
+- name: Global 🌐 | @Raydikalx | 246
   server: 103.174.86.114
   port: 51348
   type: ss
   cipher: chacha20-ietf-poly1305
   password: US4tskJaYStBPUKvcNVkf0PVhXbsAGCNvrhbfZybtOx9u2cF
   udp: true
-- name: Global 🌐 | @Raydikalx | 248
+- name: Global 🌐 | @Raydikalx | 247
   server: 213.109.147.242
   port: 62685
   type: ss
   cipher: chacha20-ietf-poly1305
   password: VpKABcOpNNA0l5G2AVOmw8
   udp: true
-- name: Global 🌐 | @Raydikalx | 249
+- name: Global 🌐 | @Raydikalx | 248
   server: 146.70.222.126
   port: 1080
   type: ss
   cipher: chacha20-ietf-poly1305
   password: Vr06rU_v1vFPYeXq9zbsAA
   udp: true
-- name: CH 🇨🇭 | @Raydikalx | 250
+- name: CH 🇨🇭 | @Raydikalx | 249
   server: 146.70.26.156
   port: 1080
   type: ss
   cipher: chacha20-ietf-poly1305
   password: Vr06rU_v1vFPYeXq9zbsAA
   udp: true
-- name: Global 🌐 | @Raydikalx | 251
+- name: Global 🌐 | @Raydikalx | 250
   server: 185.117.88.9
   port: 1080
   type: ss
   cipher: chacha20-ietf-poly1305
   password: Vr06rU_v1vFPYeXq9zbsAA
   udp: true
-- name: FR 🇫🇷 | @Raydikalx | 252
+- name: FR 🇫🇷 | @Raydikalx | 251
   server: 185.128.25.36
+  port: 1080
+  type: ss
+  cipher: chacha20-ietf-poly1305
+  password: Vr06rU_v1vFPYeXq9zbsAA
+  udp: true
+- name: FR 🇫🇷 | @Raydikalx | 252
+  server: 185.128.25.44
   port: 1080
   type: ss
   cipher: chacha20-ietf-poly1305
@@ -1796,8 +1811,8 @@ proxies:
   cipher: chacha20-ietf-poly1305
   password: Vr06rU_v1vFPYeXq9zbsAA
   udp: true
-- name: Global 🌐 | @Raydikalx | 260
-  server: 37.120.139.234
+- name: SE 🇸🇪 | @Raydikalx | 260
+  server: 195.242.213.238
   port: 1080
   type: ss
   cipher: chacha20-ietf-poly1305
@@ -10141,7 +10156,7 @@ proxies:
   servername: www.yahoo.com
   reality-opts:
     public-key: 0xPKGAAK5GSdktEfUgCdtMdeo9wuZFLvr-GVD35m2VU
-    short-id: '17'
+    short-id: 0f58c9be51e38a
   client-fingerprint: chrome
 - name: Global 🌐 | @Raydikalx | 1095
   server: 31.129.55.210
@@ -15069,7 +15084,6 @@ proxies:
   reality-opts:
     public-key: U7O4wCUNinuk5M-ADV1e4sJ_iA7-JVBEXB8nev6kzzs
     short-id: 335555b164619360
-  client-fingerprint: chrome
   grpc-opts:
     grpc-service-name: api.v1.StreamService
 - name: Global 🌐 | @Raydikalx | 1495
@@ -15769,193 +15783,193 @@ proxy-groups:
   - ♻️ Auto
   - 🔯 Fallback
   - DE 🇩🇪 | @Raydikalx | 1
-  - NL 🇳🇱 | @Raydikalx | 2
-  - NL 🇳🇱 | @Raydikalx | 3
-  - SG 🇸🇬 | @Raydikalx | 4
-  - NL 🇳🇱 | @Raydikalx | 5
-  - SE 🇸🇪 | @Raydikalx | 6
-  - DE 🇩🇪 | @Raydikalx | 7
-  - JP 🇯🇵 | @Raydikalx | 8
-  - JP 🇯🇵 | @Raydikalx | 9
-  - SG 🇸🇬 | @Raydikalx | 10
-  - JP 🇯🇵 | @Raydikalx | 11
-  - SG 🇸🇬 | @Raydikalx | 12
+  - GB 🇬🇧 | @Raydikalx | 2
+  - US 🇺🇸 | @Raydikalx | 3
+  - GB 🇬🇧 | @Raydikalx | 4
+  - DE 🇩🇪 | @Raydikalx | 5
+  - NL 🇳🇱 | @Raydikalx | 6
+  - NL 🇳🇱 | @Raydikalx | 7
+  - SG 🇸🇬 | @Raydikalx | 8
+  - NL 🇳🇱 | @Raydikalx | 9
+  - SE 🇸🇪 | @Raydikalx | 10
+  - DE 🇩🇪 | @Raydikalx | 11
+  - JP 🇯🇵 | @Raydikalx | 12
   - JP 🇯🇵 | @Raydikalx | 13
   - SG 🇸🇬 | @Raydikalx | 14
   - JP 🇯🇵 | @Raydikalx | 15
-  - US 🇺🇸 | @Raydikalx | 16
-  - US 🇺🇸 | @Raydikalx | 17
-  - AT 🇦🇹 | @Raydikalx | 18
-  - DE 🇩🇪 | @Raydikalx | 19
-  - FR 🇫🇷 | @Raydikalx | 20
-  - FI 🇫🇮 | @Raydikalx | 21
-  - ES 🇪🇸 | @Raydikalx | 22
-  - NL 🇳🇱 | @Raydikalx | 23
-  - FI 🇫🇮 | @Raydikalx | 24
-  - TR 🇹🇷 | @Raydikalx | 25
-  - DE 🇩🇪 | @Raydikalx | 26
-  - DE 🇩🇪 | @Raydikalx | 27
-  - FR 🇫🇷 | @Raydikalx | 28
-  - FR 🇫🇷 | @Raydikalx | 29
-  - UA 🇺🇦 | @Raydikalx | 30
-  - RO 🇷🇴 | @Raydikalx | 31
-  - JP 🇯🇵 | @Raydikalx | 32
-  - JP 🇯🇵 | @Raydikalx | 33
-  - KR 🇰🇷 | @Raydikalx | 34
-  - PL 🇵🇱 | @Raydikalx | 35
+  - SG 🇸🇬 | @Raydikalx | 16
+  - JP 🇯🇵 | @Raydikalx | 17
+  - SG 🇸🇬 | @Raydikalx | 18
+  - JP 🇯🇵 | @Raydikalx | 19
+  - US 🇺🇸 | @Raydikalx | 20
+  - DE 🇩🇪 | @Raydikalx | 21
+  - FR 🇫🇷 | @Raydikalx | 22
+  - FI 🇫🇮 | @Raydikalx | 23
+  - ES 🇪🇸 | @Raydikalx | 24
+  - NL 🇳🇱 | @Raydikalx | 25
+  - SE 🇸🇪 | @Raydikalx | 26
+  - FI 🇫🇮 | @Raydikalx | 27
+  - TR 🇹🇷 | @Raydikalx | 28
+  - DE 🇩🇪 | @Raydikalx | 29
+  - DE 🇩🇪 | @Raydikalx | 30
+  - DE 🇩🇪 | @Raydikalx | 31
+  - FR 🇫🇷 | @Raydikalx | 32
+  - FR 🇫🇷 | @Raydikalx | 33
+  - UA 🇺🇦 | @Raydikalx | 34
+  - RO 🇷🇴 | @Raydikalx | 35
   - JP 🇯🇵 | @Raydikalx | 36
-  - NL 🇳🇱 | @Raydikalx | 37
-  - FR 🇫🇷 | @Raydikalx | 38
-  - SE 🇸🇪 | @Raydikalx | 39
-  - IE 🇮🇪 | @Raydikalx | 40
-  - DE 🇩🇪 | @Raydikalx | 41
-  - NL 🇳🇱 | @Raydikalx | 42
-  - NL 🇳🇱 | @Raydikalx | 43
-  - RU 🇷🇺 | @Raydikalx | 44
-  - TR 🇹🇷 | @Raydikalx | 45
-  - FR 🇫🇷 | @Raydikalx | 46
-  - SG 🇸🇬 | @Raydikalx | 47
-  - KR 🇰🇷 | @Raydikalx | 48
-  - SG 🇸🇬 | @Raydikalx | 49
-  - SG 🇸🇬 | @Raydikalx | 50
-  - SG 🇸🇬 | @Raydikalx | 51
-  - KR 🇰🇷 | @Raydikalx | 52
+  - JP 🇯🇵 | @Raydikalx | 37
+  - KR 🇰🇷 | @Raydikalx | 38
+  - PL 🇵🇱 | @Raydikalx | 39
+  - JP 🇯🇵 | @Raydikalx | 40
+  - NL 🇳🇱 | @Raydikalx | 41
+  - FR 🇫🇷 | @Raydikalx | 42
+  - SE 🇸🇪 | @Raydikalx | 43
+  - IE 🇮🇪 | @Raydikalx | 44
+  - DE 🇩🇪 | @Raydikalx | 45
+  - US 🇺🇸 | @Raydikalx | 46
+  - NL 🇳🇱 | @Raydikalx | 47
+  - NL 🇳🇱 | @Raydikalx | 48
+  - RU 🇷🇺 | @Raydikalx | 49
+  - TR 🇹🇷 | @Raydikalx | 50
+  - FR 🇫🇷 | @Raydikalx | 51
+  - SG 🇸🇬 | @Raydikalx | 52
   - KR 🇰🇷 | @Raydikalx | 53
-  - JP 🇯🇵 | @Raydikalx | 54
-  - JP 🇯🇵 | @Raydikalx | 55
-  - JP 🇯🇵 | @Raydikalx | 56
-  - NL 🇳🇱 | @Raydikalx | 57
-  - DE 🇩🇪 | @Raydikalx | 58
-  - NL 🇳🇱 | @Raydikalx | 59
-  - NL 🇳🇱 | @Raydikalx | 60
-  - FR 🇫🇷 | @Raydikalx | 61
-  - FR 🇫🇷 | @Raydikalx | 62
-  - GB 🇬🇧 | @Raydikalx | 63
+  - SG 🇸🇬 | @Raydikalx | 54
+  - SG 🇸🇬 | @Raydikalx | 55
+  - SG 🇸🇬 | @Raydikalx | 56
+  - KR 🇰🇷 | @Raydikalx | 57
+  - KR 🇰🇷 | @Raydikalx | 58
+  - JP 🇯🇵 | @Raydikalx | 59
+  - JP 🇯🇵 | @Raydikalx | 60
+  - JP 🇯🇵 | @Raydikalx | 61
+  - NL 🇳🇱 | @Raydikalx | 62
+  - DE 🇩🇪 | @Raydikalx | 63
   - NL 🇳🇱 | @Raydikalx | 64
   - NL 🇳🇱 | @Raydikalx | 65
-  - NL 🇳🇱 | @Raydikalx | 66
-  - GB 🇬🇧 | @Raydikalx | 67
-  - DE 🇩🇪 | @Raydikalx | 68
-  - NO 🇳🇴 | @Raydikalx | 69
-  - IT 🇮🇹 | @Raydikalx | 70
-  - LV 🇱🇻 | @Raydikalx | 71
+  - FR 🇫🇷 | @Raydikalx | 66
+  - FR 🇫🇷 | @Raydikalx | 67
+  - GB 🇬🇧 | @Raydikalx | 68
+  - NL 🇳🇱 | @Raydikalx | 69
+  - NL 🇳🇱 | @Raydikalx | 70
+  - Global 🌐 | @Raydikalx | 71
   - GB 🇬🇧 | @Raydikalx | 72
-  - PL 🇵🇱 | @Raydikalx | 73
-  - KR 🇰🇷 | @Raydikalx | 74
-  - NL 🇳🇱 | @Raydikalx | 75
-  - JP 🇯🇵 | @Raydikalx | 76
-  - JP 🇯🇵 | @Raydikalx | 77
-  - JP 🇯🇵 | @Raydikalx | 78
-  - JP 🇯🇵 | @Raydikalx | 79
-  - JP 🇯🇵 | @Raydikalx | 80
-  - US 🇺🇸 | @Raydikalx | 81
+  - DE 🇩🇪 | @Raydikalx | 73
+  - NO 🇳🇴 | @Raydikalx | 74
+  - IT 🇮🇹 | @Raydikalx | 75
+  - LV 🇱🇻 | @Raydikalx | 76
+  - GB 🇬🇧 | @Raydikalx | 77
+  - PL 🇵🇱 | @Raydikalx | 78
+  - KR 🇰🇷 | @Raydikalx | 79
+  - NL 🇳🇱 | @Raydikalx | 80
+  - JP 🇯🇵 | @Raydikalx | 81
   - JP 🇯🇵 | @Raydikalx | 82
   - JP 🇯🇵 | @Raydikalx | 83
   - JP 🇯🇵 | @Raydikalx | 84
   - JP 🇯🇵 | @Raydikalx | 85
-  - IE 🇮🇪 | @Raydikalx | 86
-  - FR 🇫🇷 | @Raydikalx | 87
-  - EE 🇪🇪 | @Raydikalx | 88
-  - NL 🇳🇱 | @Raydikalx | 89
-  - IT 🇮🇹 | @Raydikalx | 90
-  - CA 🇨🇦 | @Raydikalx | 91
-  - FI 🇫🇮 | @Raydikalx | 92
-  - CH 🇨🇭 | @Raydikalx | 93
-  - FR 🇫🇷 | @Raydikalx | 94
-  - US 🇺🇸 | @Raydikalx | 95
-  - IT 🇮🇹 | @Raydikalx | 96
-  - GB 🇬🇧 | @Raydikalx | 97
-  - NO 🇳🇴 | @Raydikalx | 98
-  - Global 🌐 | @Raydikalx | 99
-  - DE 🇩🇪 | @Raydikalx | 100
-  - KR 🇰🇷 | @Raydikalx | 101
-  - AT 🇦🇹 | @Raydikalx | 102
-  - HK 🇭🇰 | @Raydikalx | 103
-  - FR 🇫🇷 | @Raydikalx | 104
-  - IT 🇮🇹 | @Raydikalx | 105
-  - NL 🇳🇱 | @Raydikalx | 106
-  - JP 🇯🇵 | @Raydikalx | 107
-  - JP 🇯🇵 | @Raydikalx | 108
-  - JP 🇯🇵 | @Raydikalx | 109
-  - JP 🇯🇵 | @Raydikalx | 110
-  - KR 🇰🇷 | @Raydikalx | 111
-  - JP 🇯🇵 | @Raydikalx | 112
-  - JP 🇯🇵 | @Raydikalx | 113
+  - US 🇺🇸 | @Raydikalx | 86
+  - JP 🇯🇵 | @Raydikalx | 87
+  - JP 🇯🇵 | @Raydikalx | 88
+  - JP 🇯🇵 | @Raydikalx | 89
+  - JP 🇯🇵 | @Raydikalx | 90
+  - IE 🇮🇪 | @Raydikalx | 91
+  - FR 🇫🇷 | @Raydikalx | 92
+  - EE 🇪🇪 | @Raydikalx | 93
+  - NL 🇳🇱 | @Raydikalx | 94
+  - IT 🇮🇹 | @Raydikalx | 95
+  - CA 🇨🇦 | @Raydikalx | 96
+  - FI 🇫🇮 | @Raydikalx | 97
+  - CH 🇨🇭 | @Raydikalx | 98
+  - FR 🇫🇷 | @Raydikalx | 99
+  - UA 🇺🇦 | @Raydikalx | 100
+  - US 🇺🇸 | @Raydikalx | 101
+  - IT 🇮🇹 | @Raydikalx | 102
+  - GB 🇬🇧 | @Raydikalx | 103
+  - US 🇺🇸 | @Raydikalx | 104
+  - NO 🇳🇴 | @Raydikalx | 105
+  - Global 🌐 | @Raydikalx | 106
+  - DE 🇩🇪 | @Raydikalx | 107
+  - KR 🇰🇷 | @Raydikalx | 108
+  - AT 🇦🇹 | @Raydikalx | 109
+  - HK 🇭🇰 | @Raydikalx | 110
+  - FR 🇫🇷 | @Raydikalx | 111
+  - IT 🇮🇹 | @Raydikalx | 112
+  - NL 🇳🇱 | @Raydikalx | 113
   - JP 🇯🇵 | @Raydikalx | 114
-  - KR 🇰🇷 | @Raydikalx | 115
-  - IE 🇮🇪 | @Raydikalx | 116
+  - JP 🇯🇵 | @Raydikalx | 115
+  - JP 🇯🇵 | @Raydikalx | 116
   - JP 🇯🇵 | @Raydikalx | 117
-  - JP 🇯🇵 | @Raydikalx | 118
+  - KR 🇰🇷 | @Raydikalx | 118
   - JP 🇯🇵 | @Raydikalx | 119
   - JP 🇯🇵 | @Raydikalx | 120
   - JP 🇯🇵 | @Raydikalx | 121
-  - JP 🇯🇵 | @Raydikalx | 122
-  - JP 🇯🇵 | @Raydikalx | 123
-  - IE 🇮🇪 | @Raydikalx | 124
-  - KR 🇰🇷 | @Raydikalx | 125
+  - KR 🇰🇷 | @Raydikalx | 122
+  - IE 🇮🇪 | @Raydikalx | 123
+  - JP 🇯🇵 | @Raydikalx | 124
+  - JP 🇯🇵 | @Raydikalx | 125
   - JP 🇯🇵 | @Raydikalx | 126
-  - KR 🇰🇷 | @Raydikalx | 127
-  - SG 🇸🇬 | @Raydikalx | 128
-  - SG 🇸🇬 | @Raydikalx | 129
-  - KR 🇰🇷 | @Raydikalx | 130
-  - KR 🇰🇷 | @Raydikalx | 131
+  - JP 🇯🇵 | @Raydikalx | 127
+  - JP 🇯🇵 | @Raydikalx | 128
+  - JP 🇯🇵 | @Raydikalx | 129
+  - JP 🇯🇵 | @Raydikalx | 130
+  - IE 🇮🇪 | @Raydikalx | 131
   - KR 🇰🇷 | @Raydikalx | 132
-  - KR 🇰🇷 | @Raydikalx | 133
+  - JP 🇯🇵 | @Raydikalx | 133
   - KR 🇰🇷 | @Raydikalx | 134
-  - JP 🇯🇵 | @Raydikalx | 135
-  - JP 🇯🇵 | @Raydikalx | 136
-  - JP 🇯🇵 | @Raydikalx | 137
-  - JP 🇯🇵 | @Raydikalx | 138
-  - JP 🇯🇵 | @Raydikalx | 139
-  - JP 🇯🇵 | @Raydikalx | 140
-  - JP 🇯🇵 | @Raydikalx | 141
-  - IE 🇮🇪 | @Raydikalx | 142
-  - IT 🇮🇹 | @Raydikalx | 143
-  - IT 🇮🇹 | @Raydikalx | 144
-  - SE 🇸🇪 | @Raydikalx | 145
-  - FR 🇫🇷 | @Raydikalx | 146
-  - NL 🇳🇱 | @Raydikalx | 147
-  - IN 🇮🇳 | @Raydikalx | 148
+  - SG 🇸🇬 | @Raydikalx | 135
+  - SG 🇸🇬 | @Raydikalx | 136
+  - KR 🇰🇷 | @Raydikalx | 137
+  - KR 🇰🇷 | @Raydikalx | 138
+  - KR 🇰🇷 | @Raydikalx | 139
+  - KR 🇰🇷 | @Raydikalx | 140
+  - KR 🇰🇷 | @Raydikalx | 141
+  - JP 🇯🇵 | @Raydikalx | 142
+  - JP 🇯🇵 | @Raydikalx | 143
+  - JP 🇯🇵 | @Raydikalx | 144
+  - JP 🇯🇵 | @Raydikalx | 145
+  - JP 🇯🇵 | @Raydikalx | 146
+  - JP 🇯🇵 | @Raydikalx | 147
+  - Global 🌐 | @Raydikalx | 148
   - Global 🌐 | @Raydikalx | 149
   - Global 🌐 | @Raydikalx | 150
   - Global 🌐 | @Raydikalx | 151
   - Global 🌐 | @Raydikalx | 152
-  - Global 🌐 | @Raydikalx | 153
-  - Global 🌐 | @Raydikalx | 191
-  - IR 🇮🇷 | @Raydikalx | 193
+  - Global 🌐 | @Raydikalx | 190
+  - IR 🇮🇷 | @Raydikalx | 192
+  - Global 🌐 | @Raydikalx | 193
   - Global 🌐 | @Raydikalx | 194
   - Global 🌐 | @Raydikalx | 195
   - Global 🌐 | @Raydikalx | 196
-  - Global 🌐 | @Raydikalx | 197
+  - DE 🇩🇪 | @Raydikalx | 197
   - DE 🇩🇪 | @Raydikalx | 198
-  - DE 🇩🇪 | @Raydikalx | 199
-  - Global 🌐 | @Raydikalx | 200
-  - Global 🌐 | @Raydikalx | 202
+  - Global 🌐 | @Raydikalx | 199
+  - Global 🌐 | @Raydikalx | 201
+  - TW 🇹🇼 | @Raydikalx | 202
   - TW 🇹🇼 | @Raydikalx | 203
-  - TW 🇹🇼 | @Raydikalx | 204
+  - Global 🌐 | @Raydikalx | 204
   - Global 🌐 | @Raydikalx | 205
-  - Global 🌐 | @Raydikalx | 206
+  - IR 🇮🇷 | @Raydikalx | 206
   - IR 🇮🇷 | @Raydikalx | 207
   - IR 🇮🇷 | @Raydikalx | 208
   - IR 🇮🇷 | @Raydikalx | 209
-  - IR 🇮🇷 | @Raydikalx | 210
+  - Global 🌐 | @Raydikalx | 210
   - Global 🌐 | @Raydikalx | 211
   - Global 🌐 | @Raydikalx | 212
   - Global 🌐 | @Raydikalx | 213
-  - Global 🌐 | @Raydikalx | 214
-  - FI 🇫🇮 | @Raydikalx | 215
+  - FI 🇫🇮 | @Raydikalx | 214
+  - Global 🌐 | @Raydikalx | 215
   - Global 🌐 | @Raydikalx | 216
-  - Global 🌐 | @Raydikalx | 217
-  - Global 🌐 | @Raydikalx | 219
-  - IR 🇮🇷 | @Raydikalx | 220
+  - Global 🌐 | @Raydikalx | 218
+  - IR 🇮🇷 | @Raydikalx | 219
+  - Global 🌐 | @Raydikalx | 220
   - Global 🌐 | @Raydikalx | 221
   - Global 🌐 | @Raydikalx | 222
-  - Global 🌐 | @Raydikalx | 223
-  - NL 🇳🇱 | @Raydikalx | 224
+  - NL 🇳🇱 | @Raydikalx | 223
+  - Global 🌐 | @Raydikalx | 224
   - Global 🌐 | @Raydikalx | 225
   - Global 🌐 | @Raydikalx | 226
-  - Global 🌐 | @Raydikalx | 227
-  - US 🇺🇸 | @Raydikalx | 228
+  - US 🇺🇸 | @Raydikalx | 227
+  - Global 🌐 | @Raydikalx | 228
   - Global 🌐 | @Raydikalx | 229
   - Global 🌐 | @Raydikalx | 230
   - Global 🌐 | @Raydikalx | 231
@@ -15964,18 +15978,18 @@ proxy-groups:
   - Global 🌐 | @Raydikalx | 234
   - Global 🌐 | @Raydikalx | 235
   - Global 🌐 | @Raydikalx | 236
-  - Global 🌐 | @Raydikalx | 237
-  - NL 🇳🇱 | @Raydikalx | 238
-  - Global 🌐 | @Raydikalx | 239
+  - NL 🇳🇱 | @Raydikalx | 237
+  - Global 🌐 | @Raydikalx | 238
+  - Global 🌐 | @Raydikalx | 241
   - Global 🌐 | @Raydikalx | 242
-  - Global 🌐 | @Raydikalx | 243
-  - NL 🇳🇱 | @Raydikalx | 245
+  - NL 🇳🇱 | @Raydikalx | 244
+  - Global 🌐 | @Raydikalx | 245
   - Global 🌐 | @Raydikalx | 246
   - Global 🌐 | @Raydikalx | 247
   - Global 🌐 | @Raydikalx | 248
-  - Global 🌐 | @Raydikalx | 249
-  - CH 🇨🇭 | @Raydikalx | 250
-  - Global 🌐 | @Raydikalx | 251
+  - CH 🇨🇭 | @Raydikalx | 249
+  - Global 🌐 | @Raydikalx | 250
+  - FR 🇫🇷 | @Raydikalx | 251
   - FR 🇫🇷 | @Raydikalx | 252
   - Global 🌐 | @Raydikalx | 253
   - Global 🌐 | @Raydikalx | 254
@@ -15984,7 +15998,7 @@ proxy-groups:
   - Global 🌐 | @Raydikalx | 257
   - BE 🇧🇪 | @Raydikalx | 258
   - GB 🇬🇧 | @Raydikalx | 259
-  - Global 🌐 | @Raydikalx | 260
+  - SE 🇸🇪 | @Raydikalx | 260
   - DE 🇩🇪 | @Raydikalx | 261
   - FR 🇫🇷 | @Raydikalx | 262
   - Global 🌐 | @Raydikalx | 263
@@ -17275,193 +17289,193 @@ proxy-groups:
   tolerance: 50
   proxies: &id001
   - DE 🇩🇪 | @Raydikalx | 1
-  - NL 🇳🇱 | @Raydikalx | 2
-  - NL 🇳🇱 | @Raydikalx | 3
-  - SG 🇸🇬 | @Raydikalx | 4
-  - NL 🇳🇱 | @Raydikalx | 5
-  - SE 🇸🇪 | @Raydikalx | 6
-  - DE 🇩🇪 | @Raydikalx | 7
-  - JP 🇯🇵 | @Raydikalx | 8
-  - JP 🇯🇵 | @Raydikalx | 9
-  - SG 🇸🇬 | @Raydikalx | 10
-  - JP 🇯🇵 | @Raydikalx | 11
-  - SG 🇸🇬 | @Raydikalx | 12
+  - GB 🇬🇧 | @Raydikalx | 2
+  - US 🇺🇸 | @Raydikalx | 3
+  - GB 🇬🇧 | @Raydikalx | 4
+  - DE 🇩🇪 | @Raydikalx | 5
+  - NL 🇳🇱 | @Raydikalx | 6
+  - NL 🇳🇱 | @Raydikalx | 7
+  - SG 🇸🇬 | @Raydikalx | 8
+  - NL 🇳🇱 | @Raydikalx | 9
+  - SE 🇸🇪 | @Raydikalx | 10
+  - DE 🇩🇪 | @Raydikalx | 11
+  - JP 🇯🇵 | @Raydikalx | 12
   - JP 🇯🇵 | @Raydikalx | 13
   - SG 🇸🇬 | @Raydikalx | 14
   - JP 🇯🇵 | @Raydikalx | 15
-  - US 🇺🇸 | @Raydikalx | 16
-  - US 🇺🇸 | @Raydikalx | 17
-  - AT 🇦🇹 | @Raydikalx | 18
-  - DE 🇩🇪 | @Raydikalx | 19
-  - FR 🇫🇷 | @Raydikalx | 20
-  - FI 🇫🇮 | @Raydikalx | 21
-  - ES 🇪🇸 | @Raydikalx | 22
-  - NL 🇳🇱 | @Raydikalx | 23
-  - FI 🇫🇮 | @Raydikalx | 24
-  - TR 🇹🇷 | @Raydikalx | 25
-  - DE 🇩🇪 | @Raydikalx | 26
-  - DE 🇩🇪 | @Raydikalx | 27
-  - FR 🇫🇷 | @Raydikalx | 28
-  - FR 🇫🇷 | @Raydikalx | 29
-  - UA 🇺🇦 | @Raydikalx | 30
-  - RO 🇷🇴 | @Raydikalx | 31
-  - JP 🇯🇵 | @Raydikalx | 32
-  - JP 🇯🇵 | @Raydikalx | 33
-  - KR 🇰🇷 | @Raydikalx | 34
-  - PL 🇵🇱 | @Raydikalx | 35
+  - SG 🇸🇬 | @Raydikalx | 16
+  - JP 🇯🇵 | @Raydikalx | 17
+  - SG 🇸🇬 | @Raydikalx | 18
+  - JP 🇯🇵 | @Raydikalx | 19
+  - US 🇺🇸 | @Raydikalx | 20
+  - DE 🇩🇪 | @Raydikalx | 21
+  - FR 🇫🇷 | @Raydikalx | 22
+  - FI 🇫🇮 | @Raydikalx | 23
+  - ES 🇪🇸 | @Raydikalx | 24
+  - NL 🇳🇱 | @Raydikalx | 25
+  - SE 🇸🇪 | @Raydikalx | 26
+  - FI 🇫🇮 | @Raydikalx | 27
+  - TR 🇹🇷 | @Raydikalx | 28
+  - DE 🇩🇪 | @Raydikalx | 29
+  - DE 🇩🇪 | @Raydikalx | 30
+  - DE 🇩🇪 | @Raydikalx | 31
+  - FR 🇫🇷 | @Raydikalx | 32
+  - FR 🇫🇷 | @Raydikalx | 33
+  - UA 🇺🇦 | @Raydikalx | 34
+  - RO 🇷🇴 | @Raydikalx | 35
   - JP 🇯🇵 | @Raydikalx | 36
-  - NL 🇳🇱 | @Raydikalx | 37
-  - FR 🇫🇷 | @Raydikalx | 38
-  - SE 🇸🇪 | @Raydikalx | 39
-  - IE 🇮🇪 | @Raydikalx | 40
-  - DE 🇩🇪 | @Raydikalx | 41
-  - NL 🇳🇱 | @Raydikalx | 42
-  - NL 🇳🇱 | @Raydikalx | 43
-  - RU 🇷🇺 | @Raydikalx | 44
-  - TR 🇹🇷 | @Raydikalx | 45
-  - FR 🇫🇷 | @Raydikalx | 46
-  - SG 🇸🇬 | @Raydikalx | 47
-  - KR 🇰🇷 | @Raydikalx | 48
-  - SG 🇸🇬 | @Raydikalx | 49
-  - SG 🇸🇬 | @Raydikalx | 50
-  - SG 🇸🇬 | @Raydikalx | 51
-  - KR 🇰🇷 | @Raydikalx | 52
+  - JP 🇯🇵 | @Raydikalx | 37
+  - KR 🇰🇷 | @Raydikalx | 38
+  - PL 🇵🇱 | @Raydikalx | 39
+  - JP 🇯🇵 | @Raydikalx | 40
+  - NL 🇳🇱 | @Raydikalx | 41
+  - FR 🇫🇷 | @Raydikalx | 42
+  - SE 🇸🇪 | @Raydikalx | 43
+  - IE 🇮🇪 | @Raydikalx | 44
+  - DE 🇩🇪 | @Raydikalx | 45
+  - US 🇺🇸 | @Raydikalx | 46
+  - NL 🇳🇱 | @Raydikalx | 47
+  - NL 🇳🇱 | @Raydikalx | 48
+  - RU 🇷🇺 | @Raydikalx | 49
+  - TR 🇹🇷 | @Raydikalx | 50
+  - FR 🇫🇷 | @Raydikalx | 51
+  - SG 🇸🇬 | @Raydikalx | 52
   - KR 🇰🇷 | @Raydikalx | 53
-  - JP 🇯🇵 | @Raydikalx | 54
-  - JP 🇯🇵 | @Raydikalx | 55
-  - JP 🇯🇵 | @Raydikalx | 56
-  - NL 🇳🇱 | @Raydikalx | 57
-  - DE 🇩🇪 | @Raydikalx | 58
-  - NL 🇳🇱 | @Raydikalx | 59
-  - NL 🇳🇱 | @Raydikalx | 60
-  - FR 🇫🇷 | @Raydikalx | 61
-  - FR 🇫🇷 | @Raydikalx | 62
-  - GB 🇬🇧 | @Raydikalx | 63
+  - SG 🇸🇬 | @Raydikalx | 54
+  - SG 🇸🇬 | @Raydikalx | 55
+  - SG 🇸🇬 | @Raydikalx | 56
+  - KR 🇰🇷 | @Raydikalx | 57
+  - KR 🇰🇷 | @Raydikalx | 58
+  - JP 🇯🇵 | @Raydikalx | 59
+  - JP 🇯🇵 | @Raydikalx | 60
+  - JP 🇯🇵 | @Raydikalx | 61
+  - NL 🇳🇱 | @Raydikalx | 62
+  - DE 🇩🇪 | @Raydikalx | 63
   - NL 🇳🇱 | @Raydikalx | 64
   - NL 🇳🇱 | @Raydikalx | 65
-  - NL 🇳🇱 | @Raydikalx | 66
-  - GB 🇬🇧 | @Raydikalx | 67
-  - DE 🇩🇪 | @Raydikalx | 68
-  - NO 🇳🇴 | @Raydikalx | 69
-  - IT 🇮🇹 | @Raydikalx | 70
-  - LV 🇱🇻 | @Raydikalx | 71
+  - FR 🇫🇷 | @Raydikalx | 66
+  - FR 🇫🇷 | @Raydikalx | 67
+  - GB 🇬🇧 | @Raydikalx | 68
+  - NL 🇳🇱 | @Raydikalx | 69
+  - NL 🇳🇱 | @Raydikalx | 70
+  - Global 🌐 | @Raydikalx | 71
   - GB 🇬🇧 | @Raydikalx | 72
-  - PL 🇵🇱 | @Raydikalx | 73
-  - KR 🇰🇷 | @Raydikalx | 74
-  - NL 🇳🇱 | @Raydikalx | 75
-  - JP 🇯🇵 | @Raydikalx | 76
-  - JP 🇯🇵 | @Raydikalx | 77
-  - JP 🇯🇵 | @Raydikalx | 78
-  - JP 🇯🇵 | @Raydikalx | 79
-  - JP 🇯🇵 | @Raydikalx | 80
-  - US 🇺🇸 | @Raydikalx | 81
+  - DE 🇩🇪 | @Raydikalx | 73
+  - NO 🇳🇴 | @Raydikalx | 74
+  - IT 🇮🇹 | @Raydikalx | 75
+  - LV 🇱🇻 | @Raydikalx | 76
+  - GB 🇬🇧 | @Raydikalx | 77
+  - PL 🇵🇱 | @Raydikalx | 78
+  - KR 🇰🇷 | @Raydikalx | 79
+  - NL 🇳🇱 | @Raydikalx | 80
+  - JP 🇯🇵 | @Raydikalx | 81
   - JP 🇯🇵 | @Raydikalx | 82
   - JP 🇯🇵 | @Raydikalx | 83
   - JP 🇯🇵 | @Raydikalx | 84
   - JP 🇯🇵 | @Raydikalx | 85
-  - IE 🇮🇪 | @Raydikalx | 86
-  - FR 🇫🇷 | @Raydikalx | 87
-  - EE 🇪🇪 | @Raydikalx | 88
-  - NL 🇳🇱 | @Raydikalx | 89
-  - IT 🇮🇹 | @Raydikalx | 90
-  - CA 🇨🇦 | @Raydikalx | 91
-  - FI 🇫🇮 | @Raydikalx | 92
-  - CH 🇨🇭 | @Raydikalx | 93
-  - FR 🇫🇷 | @Raydikalx | 94
-  - US 🇺🇸 | @Raydikalx | 95
-  - IT 🇮🇹 | @Raydikalx | 96
-  - GB 🇬🇧 | @Raydikalx | 97
-  - NO 🇳🇴 | @Raydikalx | 98
-  - Global 🌐 | @Raydikalx | 99
-  - DE 🇩🇪 | @Raydikalx | 100
-  - KR 🇰🇷 | @Raydikalx | 101
-  - AT 🇦🇹 | @Raydikalx | 102
-  - HK 🇭🇰 | @Raydikalx | 103
-  - FR 🇫🇷 | @Raydikalx | 104
-  - IT 🇮🇹 | @Raydikalx | 105
-  - NL 🇳🇱 | @Raydikalx | 106
-  - JP 🇯🇵 | @Raydikalx | 107
-  - JP 🇯🇵 | @Raydikalx | 108
-  - JP 🇯🇵 | @Raydikalx | 109
-  - JP 🇯🇵 | @Raydikalx | 110
-  - KR 🇰🇷 | @Raydikalx | 111
-  - JP 🇯🇵 | @Raydikalx | 112
-  - JP 🇯🇵 | @Raydikalx | 113
+  - US 🇺🇸 | @Raydikalx | 86
+  - JP 🇯🇵 | @Raydikalx | 87
+  - JP 🇯🇵 | @Raydikalx | 88
+  - JP 🇯🇵 | @Raydikalx | 89
+  - JP 🇯🇵 | @Raydikalx | 90
+  - IE 🇮🇪 | @Raydikalx | 91
+  - FR 🇫🇷 | @Raydikalx | 92
+  - EE 🇪🇪 | @Raydikalx | 93
+  - NL 🇳🇱 | @Raydikalx | 94
+  - IT 🇮🇹 | @Raydikalx | 95
+  - CA 🇨🇦 | @Raydikalx | 96
+  - FI 🇫🇮 | @Raydikalx | 97
+  - CH 🇨🇭 | @Raydikalx | 98
+  - FR 🇫🇷 | @Raydikalx | 99
+  - UA 🇺🇦 | @Raydikalx | 100
+  - US 🇺🇸 | @Raydikalx | 101
+  - IT 🇮🇹 | @Raydikalx | 102
+  - GB 🇬🇧 | @Raydikalx | 103
+  - US 🇺🇸 | @Raydikalx | 104
+  - NO 🇳🇴 | @Raydikalx | 105
+  - Global 🌐 | @Raydikalx | 106
+  - DE 🇩🇪 | @Raydikalx | 107
+  - KR 🇰🇷 | @Raydikalx | 108
+  - AT 🇦🇹 | @Raydikalx | 109
+  - HK 🇭🇰 | @Raydikalx | 110
+  - FR 🇫🇷 | @Raydikalx | 111
+  - IT 🇮🇹 | @Raydikalx | 112
+  - NL 🇳🇱 | @Raydikalx | 113
   - JP 🇯🇵 | @Raydikalx | 114
-  - KR 🇰🇷 | @Raydikalx | 115
-  - IE 🇮🇪 | @Raydikalx | 116
+  - JP 🇯🇵 | @Raydikalx | 115
+  - JP 🇯🇵 | @Raydikalx | 116
   - JP 🇯🇵 | @Raydikalx | 117
-  - JP 🇯🇵 | @Raydikalx | 118
+  - KR 🇰🇷 | @Raydikalx | 118
   - JP 🇯🇵 | @Raydikalx | 119
   - JP 🇯🇵 | @Raydikalx | 120
   - JP 🇯🇵 | @Raydikalx | 121
-  - JP 🇯🇵 | @Raydikalx | 122
-  - JP 🇯🇵 | @Raydikalx | 123
-  - IE 🇮🇪 | @Raydikalx | 124
-  - KR 🇰🇷 | @Raydikalx | 125
+  - KR 🇰🇷 | @Raydikalx | 122
+  - IE 🇮🇪 | @Raydikalx | 123
+  - JP 🇯🇵 | @Raydikalx | 124
+  - JP 🇯🇵 | @Raydikalx | 125
   - JP 🇯🇵 | @Raydikalx | 126
-  - KR 🇰🇷 | @Raydikalx | 127
-  - SG 🇸🇬 | @Raydikalx | 128
-  - SG 🇸🇬 | @Raydikalx | 129
-  - KR 🇰🇷 | @Raydikalx | 130
-  - KR 🇰🇷 | @Raydikalx | 131
+  - JP 🇯🇵 | @Raydikalx | 127
+  - JP 🇯🇵 | @Raydikalx | 128
+  - JP 🇯🇵 | @Raydikalx | 129
+  - JP 🇯🇵 | @Raydikalx | 130
+  - IE 🇮🇪 | @Raydikalx | 131
   - KR 🇰🇷 | @Raydikalx | 132
-  - KR 🇰🇷 | @Raydikalx | 133
+  - JP 🇯🇵 | @Raydikalx | 133
   - KR 🇰🇷 | @Raydikalx | 134
-  - JP 🇯🇵 | @Raydikalx | 135
-  - JP 🇯🇵 | @Raydikalx | 136
-  - JP 🇯🇵 | @Raydikalx | 137
-  - JP 🇯🇵 | @Raydikalx | 138
-  - JP 🇯🇵 | @Raydikalx | 139
-  - JP 🇯🇵 | @Raydikalx | 140
-  - JP 🇯🇵 | @Raydikalx | 141
-  - IE 🇮🇪 | @Raydikalx | 142
-  - IT 🇮🇹 | @Raydikalx | 143
-  - IT 🇮🇹 | @Raydikalx | 144
-  - SE 🇸🇪 | @Raydikalx | 145
-  - FR 🇫🇷 | @Raydikalx | 146
-  - NL 🇳🇱 | @Raydikalx | 147
-  - IN 🇮🇳 | @Raydikalx | 148
+  - SG 🇸🇬 | @Raydikalx | 135
+  - SG 🇸🇬 | @Raydikalx | 136
+  - KR 🇰🇷 | @Raydikalx | 137
+  - KR 🇰🇷 | @Raydikalx | 138
+  - KR 🇰🇷 | @Raydikalx | 139
+  - KR 🇰🇷 | @Raydikalx | 140
+  - KR 🇰🇷 | @Raydikalx | 141
+  - JP 🇯🇵 | @Raydikalx | 142
+  - JP 🇯🇵 | @Raydikalx | 143
+  - JP 🇯🇵 | @Raydikalx | 144
+  - JP 🇯🇵 | @Raydikalx | 145
+  - JP 🇯🇵 | @Raydikalx | 146
+  - JP 🇯🇵 | @Raydikalx | 147
+  - Global 🌐 | @Raydikalx | 148
   - Global 🌐 | @Raydikalx | 149
   - Global 🌐 | @Raydikalx | 150
   - Global 🌐 | @Raydikalx | 151
   - Global 🌐 | @Raydikalx | 152
-  - Global 🌐 | @Raydikalx | 153
-  - Global 🌐 | @Raydikalx | 191
-  - IR 🇮🇷 | @Raydikalx | 193
+  - Global 🌐 | @Raydikalx | 190
+  - IR 🇮🇷 | @Raydikalx | 192
+  - Global 🌐 | @Raydikalx | 193
   - Global 🌐 | @Raydikalx | 194
   - Global 🌐 | @Raydikalx | 195
   - Global 🌐 | @Raydikalx | 196
-  - Global 🌐 | @Raydikalx | 197
+  - DE 🇩🇪 | @Raydikalx | 197
   - DE 🇩🇪 | @Raydikalx | 198
-  - DE 🇩🇪 | @Raydikalx | 199
-  - Global 🌐 | @Raydikalx | 200
-  - Global 🌐 | @Raydikalx | 202
+  - Global 🌐 | @Raydikalx | 199
+  - Global 🌐 | @Raydikalx | 201
+  - TW 🇹🇼 | @Raydikalx | 202
   - TW 🇹🇼 | @Raydikalx | 203
-  - TW 🇹🇼 | @Raydikalx | 204
+  - Global 🌐 | @Raydikalx | 204
   - Global 🌐 | @Raydikalx | 205
-  - Global 🌐 | @Raydikalx | 206
+  - IR 🇮🇷 | @Raydikalx | 206
   - IR 🇮🇷 | @Raydikalx | 207
   - IR 🇮🇷 | @Raydikalx | 208
   - IR 🇮🇷 | @Raydikalx | 209
-  - IR 🇮🇷 | @Raydikalx | 210
+  - Global 🌐 | @Raydikalx | 210
   - Global 🌐 | @Raydikalx | 211
   - Global 🌐 | @Raydikalx | 212
   - Global 🌐 | @Raydikalx | 213
-  - Global 🌐 | @Raydikalx | 214
-  - FI 🇫🇮 | @Raydikalx | 215
+  - FI 🇫🇮 | @Raydikalx | 214
+  - Global 🌐 | @Raydikalx | 215
   - Global 🌐 | @Raydikalx | 216
-  - Global 🌐 | @Raydikalx | 217
-  - Global 🌐 | @Raydikalx | 219
-  - IR 🇮🇷 | @Raydikalx | 220
+  - Global 🌐 | @Raydikalx | 218
+  - IR 🇮🇷 | @Raydikalx | 219
+  - Global 🌐 | @Raydikalx | 220
   - Global 🌐 | @Raydikalx | 221
   - Global 🌐 | @Raydikalx | 222
-  - Global 🌐 | @Raydikalx | 223
-  - NL 🇳🇱 | @Raydikalx | 224
+  - NL 🇳🇱 | @Raydikalx | 223
+  - Global 🌐 | @Raydikalx | 224
   - Global 🌐 | @Raydikalx | 225
   - Global 🌐 | @Raydikalx | 226
-  - Global 🌐 | @Raydikalx | 227
-  - US 🇺🇸 | @Raydikalx | 228
+  - US 🇺🇸 | @Raydikalx | 227
+  - Global 🌐 | @Raydikalx | 228
   - Global 🌐 | @Raydikalx | 229
   - Global 🌐 | @Raydikalx | 230
   - Global 🌐 | @Raydikalx | 231
@@ -17470,18 +17484,18 @@ proxy-groups:
   - Global 🌐 | @Raydikalx | 234
   - Global 🌐 | @Raydikalx | 235
   - Global 🌐 | @Raydikalx | 236
-  - Global 🌐 | @Raydikalx | 237
-  - NL 🇳🇱 | @Raydikalx | 238
-  - Global 🌐 | @Raydikalx | 239
+  - NL 🇳🇱 | @Raydikalx | 237
+  - Global 🌐 | @Raydikalx | 238
+  - Global 🌐 | @Raydikalx | 241
   - Global 🌐 | @Raydikalx | 242
-  - Global 🌐 | @Raydikalx | 243
-  - NL 🇳🇱 | @Raydikalx | 245
+  - NL 🇳🇱 | @Raydikalx | 244
+  - Global 🌐 | @Raydikalx | 245
   - Global 🌐 | @Raydikalx | 246
   - Global 🌐 | @Raydikalx | 247
   - Global 🌐 | @Raydikalx | 248
-  - Global 🌐 | @Raydikalx | 249
-  - CH 🇨🇭 | @Raydikalx | 250
-  - Global 🌐 | @Raydikalx | 251
+  - CH 🇨🇭 | @Raydikalx | 249
+  - Global 🌐 | @Raydikalx | 250
+  - FR 🇫🇷 | @Raydikalx | 251
   - FR 🇫🇷 | @Raydikalx | 252
   - Global 🌐 | @Raydikalx | 253
   - Global 🌐 | @Raydikalx | 254
@@ -17490,7 +17504,7 @@ proxy-groups:
   - Global 🌐 | @Raydikalx | 257
   - BE 🇧🇪 | @Raydikalx | 258
   - GB 🇬🇧 | @Raydikalx | 259
-  - Global 🌐 | @Raydikalx | 260
+  - SE 🇸🇪 | @Raydikalx | 260
   - DE 🇩🇪 | @Raydikalx | 261
   - FR 🇫🇷 | @Raydikalx | 262
   - Global 🌐 | @Raydikalx | 263
