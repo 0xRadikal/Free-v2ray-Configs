@@ -12147,14 +12147,29 @@ proxies:
   cipher: chacha20-ietf-poly1305
   password: k1dBOmOB4oqi7Ump37a1bQ
   udp: true
-- name: Global 🌐 | @Raydikalx | 1422
+- name: CA 🇨🇦 | @Raydikalx | 1422
+  server: 158.51.121.63
+  port: 443
+  type: vmess
+  uuid: 03fcc618-b93d-6796-6aed-8a38c975d581
+  alterId: 0
+  cipher: auto
+  udp: true
+  network: ws
+  tls: true
+  servername: seribus.org
+  ws-opts:
+    path: linkvws
+    headers:
+      Host: seribus.org
+- name: Global 🌐 | @Raydikalx | 1423
   server: 82.38.31.155
   port: 8080
   type: ss
   cipher: chacha20-ietf-poly1305
   password: oZIoA69Q8yhcQV8ka3Pa3A
   udp: true
-- name: Global 🌐 | @Raydikalx | 1423
+- name: Global 🌐 | @Raydikalx | 1424
   server: 82.38.31.176
   port: 8080
   type: ss
@@ -13563,8 +13578,9 @@ proxy-groups:
   - NL 🇳🇱 | @Raydikalx | 1419
   - Global 🌐 | @Raydikalx | 1420
   - Global 🌐 | @Raydikalx | 1421
-  - Global 🌐 | @Raydikalx | 1422
+  - CA 🇨🇦 | @Raydikalx | 1422
   - Global 🌐 | @Raydikalx | 1423
+  - Global 🌐 | @Raydikalx | 1424
 - name: ♻️ Auto
   type: url-test
   url: http://www.gstatic.com/generate_204
@@ -14967,8 +14983,9 @@ proxy-groups:
   - NL 🇳🇱 | @Raydikalx | 1419
   - Global 🌐 | @Raydikalx | 1420
   - Global 🌐 | @Raydikalx | 1421
-  - Global 🌐 | @Raydikalx | 1422
+  - CA 🇨🇦 | @Raydikalx | 1422
   - Global 🌐 | @Raydikalx | 1423
+  - Global 🌐 | @Raydikalx | 1424
 - name: 🔯 Fallback
   type: fallback
   url: http://www.gstatic.com/generate_204
