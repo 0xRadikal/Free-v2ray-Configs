@@ -1,0 +1,659 @@
+# -*- coding: utf-8 -*-
+"""
+test_pipeline.py — تست‌های واحد برای خط‌لولهٔ تجمیع.
+
+چرا این فایل وجود دارد
+──────────────────────
+هر باگی که در این پروژه پیدا شد یک ویژگیِ مشترک داشت: **خاموش** بود. خروجی
+تولید می‌شد، فایل حجم داشت، هیچ خطایی چاپ نمی‌شد — ولی کلاینت آن را رد می‌کرد
+یا کانفیگ هرگز وصل نمی‌شد. تنها راهِ جلوگیری از بازگشتِ چنین باگ‌هایی، تثبیتِ
+هر قاعده در یک تستِ اجراییِ خودکار است.
+
+هر تست به یک باگِ واقعیِ کشف‌شده گره خورده و شمارهٔ آن ذکر شده است.
+
+اجرا:
+    python -m pytest scripts/test_pipeline.py -q
+    python scripts/test_pipeline.py          # بدون pytest هم کار می‌کند
+"""
+from __future__ import annotations
+
+import json
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+import yaml  # noqa: E402
+
+import converters  # noqa: E402
+import core  # noqa: E402
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# P0-1 — لیستِ سفیدِ رمزهای shadowsocks و طولِ کلیدِ SS-2022
+# ──────────────────────────────────────────────────────────────────────────────
+
+def test_ss_cipher_whitelist_rejects_uuid_as_cipher():
+    """باگِ واقعی: یک UUID به‌جای نامِ رمز می‌آمد و mihomo کلِ فایل را رد می‌کرد.
+
+    پیام: `unknown method: 0fb53a60-2372-412a-a693-5157b58ecc94`
+    """
+    assert converters._sanitize_ss("0fb53a60-2372-412a-a693-5157b58ecc94", "pw") is None
+    assert converters._sanitize_ss("aes-256-gcm", "pw") == ("aes-256-gcm", "pw")
+    assert converters._sanitize_ss("CHACHA20-IETF-POLY1305", "pw") is not None
+    assert converters._sanitize_ss("", "pw") is None
+
+
+def test_ss2022_key_length_must_match_exactly():
+    """SS-2022 کلیدِ base64 با طولِ بایتیِ دقیق می‌خواهد؛ وگرنه کلاینت خطا می‌دهد."""
+    import base64
+    ok16 = base64.b64encode(b"A" * 16).decode()
+    ok32 = base64.b64encode(b"A" * 32).decode()
+
+    assert converters._sanitize_ss("2022-blake3-aes-128-gcm", ok16) is not None
+    assert converters._sanitize_ss("2022-blake3-aes-256-gcm", ok32) is not None
+    # طولِ اشتباه → حذف
+    assert converters._sanitize_ss("2022-blake3-aes-128-gcm", ok32) is None
+    assert converters._sanitize_ss("2022-blake3-aes-256-gcm", ok16) is None
+    # کلیدِ غیر-base64 → حذف
+    assert converters._sanitize_ss("2022-blake3-aes-256-gcm", "not-base64!!") is None
+    # چند-کاربره «PSK:PSK» باید پذیرفته شود
+    assert converters._sanitize_ss("2022-blake3-aes-256-gcm", f"{ok32}:{ok32}") is not None
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# P0-2 / BONUS — اعتبارسنجیِ REALITY و flow
+# ──────────────────────────────────────────────────────────────────────────────
+
+def test_reality_short_id_must_be_even_length_hex():
+    """باگِ واقعی: `sid=cfe08c23a85f24@GEMINI_PROXIES³` → mihomo: invalid REALITY short ID."""
+    assert converters._sanitize_short_id("cfe08c23a85f24") == "cfe08c23a85f24"
+    assert converters._sanitize_short_id("") == ""                 # خالی مجاز است
+    assert converters._sanitize_short_id("abc") is None            # طولِ فرد
+    assert converters._sanitize_short_id("zz") is None             # غیر-hex
+    assert converters._sanitize_short_id("a" * 18) is None         # بیش از ۱۶
+    assert converters._sanitize_short_id("cfe08c23a85f24@GEMINI") is None
+
+
+def test_reality_public_key_must_be_32_bytes_base64url():
+    good = "XF21CCK2RAaefcs24Vtp3UwgFQX_xkC9ANNOcfJ_c2w"   # ۴۳ کاراکتر
+    assert converters._sanitize_pbk(good) == good
+    assert converters._sanitize_pbk("tooshort") is None
+    assert converters._sanitize_pbk("") is None
+
+
+def test_flow_whitelist_strips_udp443_suffix():
+    """باگِ واقعی: sing-box با `unsupported flow: xtls-rprx-vision-udp443` می‌مرد."""
+    assert converters._sanitize_flow("xtls-rprx-vision-udp443") == "xtls-rprx-vision"
+    assert converters._sanitize_flow("xtls-rprx-vision") == "xtls-rprx-vision"
+    assert converters._sanitize_flow("xtls-rprx-direct") == ""     # ناشناخته → حذف
+    assert converters._sanitize_flow("") == ""
+
+
+def test_utls_is_always_emitted_for_reality():
+    """sing-box بدون uTLS برای reality هارد-فِیل می‌کند: «uTLS is required by reality client»."""
+    p = {"reality": True, "pbk": "XF21CCK2RAaefcs24Vtp3UwgFQX_xkC9ANNOcfJ_c2w",
+         "sid": "9e63", "sni": "example.com", "server": "1.2.3.4", "fp": ""}
+    tls = converters._singbox_tls(p)
+    assert tls["reality"]["enabled"] is True
+    # اگر کانفیگ هیچ fp نداشته باشد، باز هم باید uTLS داشته باشد
+    assert tls["utls"]["enabled"] is True
+    assert tls["utls"]["fingerprint"] == converters.DEFAULT_UTLS_FINGERPRINT
+    # اثرانگشتِ نامعتبر هم باید به مقدارِ پیش‌فرضِ معتبر برگردد
+    p["fp"] = "totally-bogus"
+    assert converters._singbox_tls(p)["utls"]["fingerprint"] in converters.UTLS_FINGERPRINTS
+    # و برای کانفیگِ غیر-reality نباید uTLS ِ الکی درج شود
+    plain = converters._singbox_tls({"sni": "a.com", "server": "1.2.3.4", "fp": ""})
+    assert "reality" not in plain and "utls" not in plain
+
+
+def test_reality_with_broken_keys_is_dropped_not_emitted():
+    """مقادیرِ خرابِ REALITY باید باعثِ حذفِ کانفیگ شوند، نه درجِ ناقص."""
+    assert converters._reality_params({"reality": True, "pbk": "short", "sid": ""}) is None
+    assert converters._reality_params(
+        {"reality": True,
+         "pbk": "XF21CCK2RAaefcs24Vtp3UwgFQX_xkC9ANNOcfJ_c2w",
+         "sid": "cfe08c23a85f24@GEMINI"}) is None
+    # غیر-reality هم None می‌دهد (ولی به معنای «بی‌خیالِ reality»)
+    assert converters._reality_params({"pbk": "x", "sid": "aa"}) is None
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# P0-3 — از دست رفتنِ خاموشِ برند
+# ──────────────────────────────────────────────────────────────────────────────
+
+def test_brand_remark_strips_fragment_before_base64_decode():
+    """باگِ واقعی: در vmess، `#fragment` داخلِ رشتهٔ base64 حساب می‌شد و decode
+    شکست می‌خورد، پس برندینگ **بی‌صدا** انجام نمی‌شد."""
+    import base64
+    payload = {"v": "2", "ps": "original-name", "add": "1.2.3.4", "port": "443",
+               "id": "11111111-1111-1111-1111-111111111111", "aid": "0",
+               "net": "ws", "tls": "tls"}
+    raw = base64.b64encode(json.dumps(payload).encode()).decode()
+    line = f"vmess://{raw}#some-fragment"
+
+    branded = core.brand_remark(line, 7)
+    decoded = json.loads(base64.b64decode(
+        branded[8:].split("#")[0] + "=" * (-len(branded[8:].split("#")[0]) % 4)))
+    assert "@Raydikalx" in decoded["ps"], f"برند درج نشد: {decoded['ps']!r}"
+    assert decoded["ps"].endswith("| 7")
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# P0-4 — از دست رفتنِ خاموشِ transport
+# ──────────────────────────────────────────────────────────────────────────────
+
+def test_clash_network_maps_aliases_and_never_invents_names():
+    """mihomo برای networkِ ناشناخته **بی‌صدا** به TCP برمی‌گردد؛ یعنی کانفیگ
+    معتبر به نظر می‌رسد ولی هرگز وصل نمی‌شود. پس نگاشت باید صریح باشد."""
+    assert converters._clash_network("websocket") == "ws"
+    assert converters._clash_network("httpupgrade") == "ws"   # ws + v2ray-http-upgrade
+    assert converters._clash_network("gun") == "grpc"
+    assert converters._clash_network("splithttp") == "xhttp"
+    assert converters._clash_network("raw") == "tcp"
+    assert converters._clash_network("") == "tcp"
+    assert converters._clash_network("totallybogus") == "tcp"
+
+
+def test_httpupgrade_becomes_ws_with_upgrade_flag():
+    """در mihomo، httpupgrade یک network نیست: ws است + `v2ray-http-upgrade: true`."""
+    out: dict = {}
+    converters._clash_transport_opts(
+        {"network": "httpupgrade", "path": "/x", "host": "h.com"}, out)
+    assert out["network"] == "ws"
+    assert out["ws-opts"]["v2ray-http-upgrade"] is True
+    assert out["ws-opts"]["path"] == "/x"
+    # و ws معمولی نباید این پرچم را بگیرد
+    out2: dict = {}
+    converters._clash_transport_opts({"network": "ws", "path": "/x"}, out2)
+    assert "v2ray-http-upgrade" not in out2["ws-opts"]
+
+
+def test_xhttp_opts_are_emitted_for_clash():
+    out: dict = {}
+    converters._clash_transport_opts(
+        {"network": "xhttp", "path": "/p", "host": "h.com", "mode": "packet-up"}, out)
+    assert out["network"] == "xhttp"
+    assert out["xhttp-opts"]["path"] == "/p"
+    assert out["xhttp-opts"]["mode"] == "packet-up"
+
+
+def test_grpc_service_name_falls_back_to_path():
+    """برخی منابع serviceName را در path می‌گذارند؛ نباید گم شود."""
+    out: dict = {}
+    converters._clash_transport_opts({"network": "grpc", "path": "/mysvc"}, out)
+    assert out["grpc-opts"]["grpc-service-name"] == "mysvc"
+    out2: dict = {}
+    converters._clash_transport_opts(
+        {"network": "gun", "servicename": "explicit", "path": "/ignored"}, out2)
+    assert out2["network"] == "grpc"
+    assert out2["grpc-opts"]["grpc-service-name"] == "explicit"
+
+
+def test_singbox_drops_transports_it_cannot_express():
+    """sing-box 1.13 اصلاً transportِ xhttp ندارد. تنزل‌دادن به TCP یعنی دادنِ
+    کانفیگی که هرگز وصل نمی‌شود؛ پس باید **حذف** شود."""
+    assert converters._singbox_transport({"network": "xhttp"}) is False   # حذفِ نود
+    assert converters._singbox_transport({"network": "splithttp"}) is False
+    assert converters._singbox_transport({"network": "kcp"}) is False
+    assert converters._singbox_transport({"network": "tcp"}) is None      # بدون transport
+    assert converters._singbox_transport({"network": ""}) is None
+    ws = converters._singbox_transport({"network": "ws", "path": "/a", "host": "h"})
+    assert ws and ws["type"] == "ws"
+    hu = converters._singbox_transport({"network": "httpupgrade", "path": "/a"})
+    assert hu and hu["type"] == "httpupgrade"    # sing-box این را جدا دارد
+    # هر تایپِ تولیدشده باید در فهرستِ مجازِ sing-box باشد
+    for net in ("ws", "websocket", "httpupgrade", "grpc", "gun", "h2", "http", "quic"):
+        tr = converters._singbox_transport({"network": net, "path": "/a"})
+        assert tr is not False and tr is not None
+        assert tr["type"] in converters._SINGBOX_TRANSPORTS, f"{net} → {tr['type']}"
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# BONUS — ناسازگاریِ YAML 1.1 (PyYAML) با YAML 1.2 (Go/mihomo)
+# ──────────────────────────────────────────────────────────────────────────────
+
+def test_ambiguous_scalars_are_quoted_so_go_reads_them_as_strings():
+    """باگِ واقعی: `short-id: 9e63` بدون کوتیشن چاپ می‌شد. PyYAML آن را رشته
+    می‌داند (YAML 1.1) ولی yaml.v3 در Go عددِ ۹×۱۰⁶³ می‌خواند (YAML 1.2) و
+    mihomo کلِ فایل را با «invalid REALITY short ID» رد می‌کرد."""
+    ambiguous = ["9e63", "123456", "0x1f", "true", "False", "null", "~",
+                 "1.5", "3e2", ".inf", "", "01", "+7", "0o17", ".5", "1e10"]
+    dumped = yaml.dump({"v": ambiguous}, Dumper=converters._clash_dumper(),
+                       allow_unicode=True, sort_keys=False,
+                       default_flow_style=False, width=10 ** 6)
+    for item in ambiguous:
+        assert f"'{item}'" in dumped, f"{item!r} کوتیشن نشد → Go آن را عدد می‌خواند"
+    # رفت‌وبرگشت: همه باید رشته بمانند
+    for original, restored in zip(ambiguous, yaml.safe_load(dumped)["v"]):
+        assert isinstance(restored, str) and restored == original
+
+
+def test_plain_strings_are_not_needlessly_quoted():
+    """کوتیشنِ بی‌مورد فایل را بزرگ و ناخوانا می‌کند."""
+    dumped = yaml.dump({"v": ["chrome", "aes-256-gcm", "example.com"]},
+                       Dumper=converters._clash_dumper(), allow_unicode=True,
+                       sort_keys=False, default_flow_style=False, width=10 ** 6)
+    assert "'chrome'" not in dumped and "chrome" in dumped
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# سلامتِ سراسریِ سند
+# ──────────────────────────────────────────────────────────────────────────────
+
+def test_singbox_document_has_no_deprecated_block_outbound():
+    """`block` در sing-box 1.13 منسوخ است؛ جای آن action-based route rules است."""
+    doc = json.loads(converters.build_singbox_json([
+        "vless://11111111-1111-1111-1111-111111111111@1.2.3.4:443"
+        "?type=ws&security=tls&sni=a.com&path=%2F#n1",
+    ]))
+    assert all(o.get("type") != "block" for o in doc["outbounds"])
+    assert doc["route"]["default_domain_resolver"]["server"]
+    tags = {o["tag"] for o in doc["outbounds"]}
+    assert doc["route"]["final"] in tags
+    for o in doc["outbounds"]:
+        if o.get("type") in ("selector", "urltest"):
+            assert set(o["outbounds"]) <= tags, "ارجاعِ آویزان → sing-box فایل را رد می‌کند"
+
+
+def test_empty_input_yields_valid_minimal_documents():
+    """اگر همهٔ منابع بیفتند، نباید فایلِ نامعتبر تولید شود."""
+    doc = json.loads(converters.build_singbox_json([]))
+    assert doc["outbounds"], "sing-box سندِ بدون outbound را رد می‌کند"
+    y = yaml.safe_load(converters.build_clash_yaml([]))
+    assert isinstance(y, dict)
+
+
+def test_proxy_names_are_unique_in_clash_output():
+    """نامِ تکراری باعث رد شدنِ کلِ فایل توسط mihomo می‌شود."""
+    line = ("vless://11111111-1111-1111-1111-111111111111@1.2.3.4:443"
+            "?type=ws&security=tls&sni=a.com&path=%2F#same")
+    y = yaml.safe_load(converters.build_clash_yaml([line, line.replace("1.2.3.4", "5.6.7.8")]))
+    names = [p["name"] for p in y["proxies"]]
+    assert len(names) == len(set(names))
+
+
+def test_output_limit_is_high_enough_not_to_discard_configs():
+    """سقفِ قبلی ۱۵۰۰ بود و ~۶۵٪ کانفیگ‌ها را بی‌دلیل دور می‌ریخت."""
+    assert converters.OUTPUT_PROXY_LIMIT >= 20000
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# انتشارِ فایلِ توخالی و بایگانیِ بی‌مصرف
+# ──────────────────────────────────────────────────────────────────────────────
+
+def _fresh_outdir():
+    """یک پوشهٔ خروجیِ موقت با «فایل‌های دورِ قبل» از پیش کاشته‌شده."""
+    import tempfile
+    d = tempfile.mkdtemp(prefix="aggtest_")
+    os.makedirs(os.path.join(d, "archive"), exist_ok=True)
+    os.makedirs(os.path.join(d, "protocols"), exist_ok=True)
+    return d
+
+
+def test_duplicates_files_are_never_written_and_stale_ones_are_removed():
+    """پوشهٔ archive/ حقِ تولیدِ ‎*_duplicates*‎ ندارد.
+
+    باگِ واقعی: ۱۳.۸۲ مگابایت فایلِ «تکراری‌ها» در هر دور (۹۸ دور در روز)
+    بازنویسی می‌شد. اندازه‌های اندازه‌گیری‌شده روی مخزنِ واقعی:
+        all_duplicates_base64.txt   4,286,344 B
+        heavy_duplicates_base64.txt 3,720,596 B
+        all_duplicates.txt          3,214,809 B
+        heavy_duplicates.txt        2,790,499 B
+        light_duplicates_base64.txt   274,408 B
+        light_duplicates.txt          205,857 B
+    ارزشِ کاربردی: صفر (نسخهٔ یکتای همین‌ها در all/ منتشر است).
+    """
+    import aggregate
+
+    d = _fresh_outdir()
+    # فایل‌های دورِ قبل را می‌کاریم تا مطمئن شویم «حذف» می‌شوند نه فقط «نوشته نمی‌شوند»
+    for stale in ("all_duplicates.txt", "all_duplicates_base64.txt"):
+        with open(os.path.join(d, "archive", stale), "w") as f:
+            f.write("STALE DATA FROM PREVIOUS ROUND\n")
+
+    r = aggregate.CategoryResult()
+    r.broken = ["vmess://brokenexample"]
+    r.duplicates = ["vless://dup1", "vless://dup2"]
+    aggregate.write_archive(d, "all", r)
+
+    files = set(os.listdir(os.path.join(d, "archive")))
+    dup = {f for f in files if "duplicates" in f}
+    assert not dup, f"duplicates files must never be published, found: {dup}"
+    # فایل broken باید بماند (کوچک و برای عیب‌یابی مفید)
+    assert "all_broken.txt" in files
+    assert "all_broken_base64.txt" in files
+
+
+def test_empty_protocol_never_publishes_a_file_and_prunes_both_members():
+    """پروتکلِ بدون کانفیگ نباید هیچ فایلی منتشر کند.
+
+    باگِ واقعی روی مخزن: از ۲۸ فایلِ protocols/، ۱۴ فایل توخالی بودند —
+    ۷ فایلِ ‎*_base64.txt‎ دقیقاً ۰ بایت و ۷ فایلِ ‎*.txt‎ فقط سرآیند
+    (۳۸..۴۲ بایت). فایلِ خالی از نبودِ فایل بدتر است: کلاینتی که آن را
+    subscribe کرده لیستش را با «هیچ» جانشین می‌کند.
+
+    ★ این تست هم‌زمان باگِ کوتاه‌مداری را قفل می‌کند: نوشتنِ
+      `if _remove_if_exists(txt) or _remove_if_exists(b64)` باعث می‌شد
+      وقتی txt حذف شود، فایلِ base64 هرگز حذف نشود. هر دو عضو باید بروند.
+    """
+    import aggregate
+
+    d = _fresh_outdir()
+    pdir = os.path.join(d, "protocols")
+    # جفت‌فایلِ دورِ قبل برای پروتکلی که این دور صفر کانفیگ دارد
+    with open(os.path.join(pdir, "wireguard.txt"), "w") as f:
+        f.write("# @Raydikalx — wireguard — 3 configs\nwireguard://old\n")
+    with open(os.path.join(pdir, "wireguard_base64.txt"), "w") as f:
+        f.write("d2lyZWd1YXJkOi8vb2xk\n")
+
+    # ورودی هیچ کانفیگِ wireguard ندارد، ولی vless دارد
+    counts = aggregate.write_protocols(d, ["vless://x@1.2.3.4:443#a"])
+
+    left = set(os.listdir(pdir))
+    assert "wireguard.txt" not in left, "empty protocol txt must be pruned"
+    assert "wireguard_base64.txt" not in left, (
+        "empty protocol base64 must ALSO be pruned — `or` short-circuits!")
+    # هیچ فایلِ صفر-بایتی یا فقط-سرآیند نباید باقی بماند.
+    # سنجهٔ درست «اندازهٔ بایت» نیست (فایلِ یک-کانفیگی قانوناً کوچک است)،
+    # بلکه «وجودِ حداقل یک خطِ غیرِ سرآیند/غیرِ خالی» است.
+    for f in left:
+        p = os.path.join(pdir, f)
+        assert os.path.getsize(p) > 0, f"{f} is zero bytes"
+        with open(p, encoding="utf-8") as fh:
+            body = [ln for ln in fh.read().splitlines()
+                    if ln.strip() and not ln.startswith("#")]
+        assert body, f"{f} has no payload line (header-only/empty)"
+    # شمارش‌ها باید همهٔ پروتکل‌ها را داشته باشند (حتی صفرها) — اطلاعات گم نمی‌شود
+    assert counts.get("wireguard") == 0
+    assert counts.get("vless") == 1
+
+
+def test_index_only_advertises_urls_whose_files_exist():
+    """index.json نباید لینکی را تبلیغ کند که ۴۰۴ می‌دهد.
+
+    دو باگِ واقعی که تست پیدا کرد:
+      ۱) هر ۱۴ پروتکلِ PROTOCOL_ORDER بی‌قید در protocol_files فهرست
+         می‌شدند، از جمله ۷ موردی که صفر کانفیگ داشتند.
+      ۲) کلیدِ archive.light_broken بی‌قید فهرست می‌شد، حتی وقتی دستهٔ
+         light هیچ کانفیگِ خرابی نداشت و فایلش نوشته نمی‌شد.
+    """
+    import aggregate
+
+    results = {}
+    for cat in ("all", "heavy", "light"):
+        r = aggregate.CategoryResult()
+        r.unique = ["vless://x@1.2.3.4:443#a"]
+        r.broken = ["vmess://bad"] if cat != "light" else []   # light: صفر خراب
+        results[cat] = r
+
+    proto_counts = {"vless": 1, "vmess": 0, "wireguard": 0, "socks": 0}
+    idx = aggregate.build_index(results, proto_counts, 1.0)
+
+    # پروتکل‌های صفر نباید لینک داشته باشند
+    for p, n in proto_counts.items():
+        if n == 0:
+            assert p not in idx["protocol_files"], f"{p} has 0 configs but is advertised"
+            assert p not in idx.get("protocol_files_base64", {})
+        else:
+            assert p in idx["protocol_files"]
+    # دستهٔ بدونِ کانفیگِ خراب نباید کلیدِ broken داشته باشد
+    assert "light_broken" not in idx["archive"]
+    assert "all_broken" in idx["archive"]
+    # هیچ کلیدِ duplicates در archive نماند
+    assert not [k for k in idx["archive"] if "duplicates" in k]
+    # شمارشِ کاملِ پروتکل‌ها (شاملِ صفرها) باید حفظ شود
+    assert idx["protocols"].get("wireguard") == 0
+
+
+def test_primary_links_are_raw_not_jsdelivr():
+    """هر لینکِ «اصلی» در index.json باید raw باشد، نه jsDelivr.
+
+    چرا این تست وجود دارد (اندازه‌گیریِ زنده، نه حدس):
+      raw.githubusercontent →  cache-control: max-age=300      (۵ دقیقه)
+      cdn.jsdelivr.net      →  cache-control: s-maxage=43200   (۱۲ ساعت)
+    در یک سنجشِ زنده jsDelivr نسخه‌ای ۱۲ساعت‌و‌۴۵دقیقه‌ای سرو می‌کرد
+    (۴٬۳۵۳ کانفیگ) و raw نسخهٔ تازه را (۸٬۱۶۸ کانفیگ) — ۵۱ برابرِ بازهٔ
+    هدفِ ۱۵ دقیقه‌ای. پیش از این تغییر، ۳۲ لینک از ۳۳ لینکِ index.json به jsDelivr
+    اشاره می‌کرد؛ یعنی هدفِ «آپدیتِ هر ۱۵ دقیقه» برای عملاً همهٔ مشترکان
+    بی‌اثر بود. این تست جلوی بازگشتِ آن را می‌گیرد.
+    """
+    import aggregate
+
+    results = {}
+    for cat in ("all", "heavy", "light"):
+        r = aggregate.CategoryResult()
+        r.unique = ["vless://x@1.2.3.4:443#a"]
+        r.broken = ["vmess://bad"]
+        results[cat] = r
+    idx = aggregate.build_index(results, {"vless": 1}, 1.0)
+
+    JSD = "cdn.jsdelivr.net"
+    RAW = "raw.githubusercontent.com"
+
+    # ۱) لینک‌های هر دسته: اصلی=raw، آینه=jsdelivr
+    for cat in ("all", "heavy", "light"):
+        files = idx["categories"][cat]["files"]
+        for key in ("configs_txt", "configs_base64", "clash_yaml", "singbox_json"):
+            assert RAW in files[key], f"{cat}.{key} is not raw: {files[key]}"
+            assert JSD not in files[key], f"{cat}.{key} still points at jsDelivr"
+            mk = f"{key}_mirror"
+            assert mk in files, f"{cat}.{mk} missing — mirror must stay available"
+            assert JSD in files[mk], f"{cat}.{mk} is not the jsDelivr mirror"
+
+    # ۲) پروتکل‌ها و archive و health هم باید raw باشند
+    for p, u in idx["protocol_files"].items():
+        assert RAW in u and JSD not in u, f"protocol_files[{p}] not raw: {u}"
+    for p, u in idx.get("protocol_files_base64", {}).items():
+        assert RAW in u and JSD not in u, f"protocol_files_base64[{p}] not raw: {u}"
+    for k, u in idx["archive"].items():
+        assert RAW in u and JSD not in u, f"archive[{k}] not raw: {u}"
+    assert RAW in idx["sources"]["health_url"]
+    assert JSD in idx["sources"]["health_url_mirror"]
+
+    # ۳) آینه باید هنوز کشف‌پذیر باشد (نه حذف‌شده)
+    assert JSD in idx["mirror_base"]
+    assert RAW in idx["primary_base"]
+    assert idx["link_policy"]["primary_cache_seconds"] < \
+           idx["link_policy"]["mirror_cache_seconds"], \
+           "link_policy must state that primary is fresher"
+
+    # ۴) شمارشِ نهایی: اکثریتِ قاطعِ لینک‌ها باید raw باشد
+    blob = json.dumps(idx)
+    n_raw = blob.count(RAW)
+    n_jsd = blob.count(JSD)
+    assert n_raw > n_jsd, f"jsDelivr still dominates: raw={n_raw} jsdelivr={n_jsd}"
+
+
+def test_data_branch_is_configurable_and_defaults_to_data():
+    """برنچِ لینک‌ها نباید hard-code باشد.
+
+    خروجی‌ها به شاخهٔ تک‌کامیتیِ `data` منتقل می‌شوند (چون `main` با ~۹۸
+    کامیتِ روزانه، ۶۹ مگابایت در روز رشد می‌کرد و در ۲۱.۷ روز به سقفِ
+    ۵ گیگابایتیِ توصیه‌شدهٔ گیت‌هاب می‌رسید). اگر برنچ hard-code بماند،
+    بعد از انتقال هر ۳۲ لینکِ داخلِ index.json چهارصد‌و‌چهار می‌شود.
+    """
+    import importlib, os as _os
+    import aggregate
+
+    assert aggregate.GH_BRANCH == "data", \
+        f"default branch must be 'data', got {aggregate.GH_BRANCH!r}"
+    assert "/data" in aggregate.RAW_BASE, aggregate.RAW_BASE
+    assert "@data" in aggregate.CDN_BASE, aggregate.CDN_BASE
+
+    # قابلِ override با env (ورک‌فلو و تست باید بتوانند مقدارش را بدهند)
+    old = _os.environ.get("AGG_DATA_BRANCH")
+    try:
+        _os.environ["AGG_DATA_BRANCH"] = "some-other-branch"
+        reloaded = importlib.reload(aggregate)
+        assert reloaded.GH_BRANCH == "some-other-branch"
+        assert "/some-other-branch" in reloaded.RAW_BASE
+        assert "@some-other-branch" in reloaded.CDN_BASE
+    finally:
+        if old is None:
+            _os.environ.pop("AGG_DATA_BRANCH", None)
+        else:
+            _os.environ["AGG_DATA_BRANCH"] = old
+        importlib.reload(aggregate)   # بازگردانی برای تست‌های بعدی
+
+
+def test_docs_advertise_only_the_data_branch():
+    """هر لینکِ اشتراک در README/README_FA باید به شاخهٔ `data` باشد.
+
+    پیش‌تر مستندات به `@main` اشاره می‌کرد. بعد از انتقالِ خروجی‌ها به
+    شاخهٔ `data`، هر لینکِ باقی‌ماندهٔ `main` یک ۴۰۴ برای کاربرِ واقعی است.
+    این تست هر دو README را می‌خواند و branch-segment را می‌سنجد.
+    """
+    import re
+
+    repo = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    pat_raw = re.compile(
+        r"https://raw\.githubusercontent\.com/[\w.-]+/[\w.-]+/([\w.-]+)/")
+    pat_cdn = re.compile(
+        r"https://cdn\.jsdelivr\.net/gh/[\w.-]+/[\w.-]+@([\w.-]+)/")
+
+    checked = 0
+    for name in ("README.md", "README_FA.md"):
+        path = os.path.join(repo, name)
+        assert os.path.exists(path), f"{name} is missing"
+        txt = open(path, encoding="utf-8").read()
+        for pat in (pat_raw, pat_cdn):
+            for m in pat.finditer(txt):
+                checked += 1
+                assert m.group(1) == "data", \
+                    f"{name}: link pinned to branch {m.group(1)!r}: {m.group(0)}"
+        # آینه باید ذکر شده باشد ولی «اصلی» نباشد
+        n_raw = txt.count("raw.githubusercontent.com")
+        n_cdn = txt.count("cdn.jsdelivr.net")
+        assert n_raw > n_cdn, \
+            f"{name}: jsDelivr still dominates (raw={n_raw} cdn={n_cdn})"
+        # لنگرِ توضیحِ شاخهٔ data باید وجود داشته باشد تا لینکِ داخلی نشکند
+        assert 'name="-why-a-separate-data-branch"' in txt, \
+            f"{name}: anchor for the data-branch rationale is missing"
+        assert "#-why-a-separate-data-branch" in txt, \
+            f"{name}: nothing links to the data-branch rationale"
+
+    assert checked >= 10, f"suspiciously few links checked: {checked}"
+
+
+def test_index_advertises_its_own_url():
+    """index.json باید آدرسِ خودش را هم منتشر کند.
+
+    در بازبینیِ «هر فایلِ منتشرشده باید تبلیغ شود»، تنها فایلی که آدرس نداشت
+    خودِ index.json بود. مصرف‌کننده‌ای که فقط این سند را دارد باید بتواند
+    منبعش را بدون hard-code کردنِ برنچ پیدا کند.
+    """
+    import aggregate
+
+    r = aggregate.CategoryResult()
+    r.unique = ["vless://x@1.2.3.4:443#a"]
+    results = {c: r for c in ("all", "heavy", "light")}
+    idx = aggregate.build_index(results, {"vless": 1}, 1.0)
+
+    assert "self_url" in idx, "index.json must advertise its own URL"
+    assert idx["self_url"].endswith("/index.json"), idx["self_url"]
+    assert "raw.githubusercontent.com" in idx["self_url"]
+    assert f"/{aggregate.GH_BRANCH}/" in idx["self_url"], \
+        "self_url must sit on the configured data branch"
+    assert "cdn.jsdelivr.net" in idx["self_url_mirror"]
+
+
+def test_workflow_publish_target_matches_the_branch_in_the_links():
+    """شاخه‌ای که ورک‌فلو رویش push می‌کند باید همانی باشد که در لینک‌ها است.
+
+    باگِ واقعیِ کشف‌شده: aggregate.py فقط `AGG_DATA_BRANCH` را می‌خواند، ولی
+    ورک‌فلو `DATA_BRANCH` را ست می‌کند و `AGG_DATA_BRANCH` را هرگز. امروز هر
+    دو به "data" می‌رسند پس چیزی نمی‌شکند — و همین خطرناک است: تغییرِ
+    `DATA_BRANCH` در آینده باعث می‌شد ورک‌فلو روی شاخهٔ X منتشر کند و
+    index.json شاخهٔ Y را تبلیغ کند ⇒ ۳۴ لینکِ ۴۰۴ با buildِ سبز.
+    این تست هر دو سمت را از خودِ فایلِ ورک‌فلو می‌خواند و تطابق را الزام می‌کند.
+    """
+    import importlib
+    import aggregate
+
+    repo = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    wf = os.path.join(repo, ".github", "workflows", "aggregate.yml")
+    assert os.path.exists(wf), "workflow file is missing"
+    doc = yaml.safe_load(open(wf, encoding="utf-8"))
+
+    # `on:` در YAML به True پارس می‌شود، پس env را از هر دو جا می‌خوانیم
+    top_env = doc.get("env") or {}
+    branch = top_env.get("DATA_BRANCH")
+    assert branch, "workflow must define DATA_BRANCH at the top level"
+
+    job = doc["jobs"][list(doc["jobs"])[0]]
+
+    # ۱) فقط یک push مجاز است و باید به همان شاخه باشد
+    pushes = [s for s in job["steps"] if "git push" in (s.get("run") or "")]
+    assert len(pushes) == 1, \
+        f"expected exactly one pushing step, found {len(pushes)}"
+    push_run = pushes[0]["run"]
+    assert "refs/heads/$DATA_BRANCH" in push_run, \
+        "the push must target $DATA_BRANCH, not a literal branch name"
+    assert "--force" in push_run, "the data branch must be force-pushed"
+    # هیچ‌جا نباید روی main منتشر شود
+    assert "refs/heads/main" not in push_run, \
+        "outputs must never be pushed to main"
+
+    # ۲) خودِ کد باید همان DATA_BRANCH را ببیند (باگِ نام‌های دوگانه)
+    old_agg = os.environ.pop("AGG_DATA_BRANCH", None)
+    old_data = os.environ.get("DATA_BRANCH")
+    try:
+        os.environ["DATA_BRANCH"] = "branch-from-workflow"
+        reloaded = importlib.reload(aggregate)
+        assert reloaded.GH_BRANCH == "branch-from-workflow", (
+            "aggregate.py ignores DATA_BRANCH — the workflow would publish to "
+            f"one branch while index.json advertises {reloaded.GH_BRANCH!r}")
+        assert "/branch-from-workflow" in reloaded.RAW_BASE
+    finally:
+        if old_data is None:
+            os.environ.pop("DATA_BRANCH", None)
+        else:
+            os.environ["DATA_BRANCH"] = old_data
+        if old_agg is not None:
+            os.environ["AGG_DATA_BRANCH"] = old_agg
+        importlib.reload(aggregate)
+
+    # ۳) پیش‌فرضِ کد و مقدارِ ورک‌فلو باید یکی باشند
+    assert aggregate.GH_BRANCH == branch, (
+        f"workflow publishes to {branch!r} but links point at "
+        f"{aggregate.GH_BRANCH!r}")
+
+
+def test_docs_do_not_advertise_files_the_pipeline_never_writes():
+    """مستندات نباید فایلی را تبلیغ کند که خط‌لوله تولید نمی‌کند.
+
+    تولیدِ `archive/*_duplicates*` حذف شد (۱۳.۸۲ MiB در هر دور).
+    اگر README همچنان آن را لیست کند، کاربر روی یک ۴۰۴ فرود می‌آید.
+    """
+    repo = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    for name in ("README.md", "README_FA.md"):
+        txt = open(os.path.join(repo, name), encoding="utf-8").read()
+        assert "duplicates.txt" not in txt, \
+            f"{name} still advertises *_duplicates.txt, which the pipeline no longer writes"
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# اجرا بدون pytest
+# ──────────────────────────────────────────────────────────────────────────────
+
+def _run_all() -> int:
+    tests = [(n, f) for n, f in sorted(globals().items())
+             if n.startswith("test_") and callable(f)]
+    failed = 0
+    for name, fn in tests:
+        try:
+            fn()
+            print(f"  ✅ {name}")
+        except AssertionError as e:
+            failed += 1
+            print(f"  ❌ {name}\n       {e}")
+        except Exception as e:  # noqa: BLE001
+            failed += 1
+            print(f"  💥 {name}\n       {type(e).__name__}: {e}")
+    print(f"\n{len(tests) - failed}/{len(tests)} passed")
+    return 1 if failed else 0
+
+
+if __name__ == "__main__":
+    sys.exit(_run_all())

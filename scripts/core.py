@@ -392,7 +392,10 @@ def brand_remark(line: str, idx: int) -> str:
 
     if line.startswith("vmess://"):
         try:
-            b64 = line[8:].strip()
+            # مهم: بخش fragment (#...) باید قبل از decode جدا شود، وگرنه
+            # base64 خراب می‌شود و برندینگ خاموشانه رد می‌شود (کانفیگ بدون برند
+            # از پایپ‌لاین بیرون می‌آید). dedup_key هم همین کار را می‌کند.
+            b64 = line[8:].split("#")[0].strip()
             b64 += "=" * ((4 - len(b64) % 4) % 4)
             obj = json.loads(base64.b64decode(b64).decode("utf-8", errors="ignore"))
             old_ps = str(obj.get("ps") or obj.get("name") or "")

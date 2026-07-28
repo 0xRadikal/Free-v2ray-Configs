@@ -1,8 +1,8 @@
 name: 🔄 Aggregate V2Ray Configs
 
 # ─────────────────────────────────────────────────────────────────────────────
-# جمع‌آوری، حذف تکراری/خراب، برندینگ و انتشار کانفیگ‌ها — هدف: هر ۳۱ دقیقه
-# منبع: ۲۲ سورس (۹ سبک + ۱۳ انبوه) — بدون TCP-connect
+# جمع‌آوری، حذف تکراری/خراب، برندینگ و انتشار کانفیگ‌ها — هدف: هر ۱۵ دقیقه
+# منبع: ۲۱ سورس (۷ سبک + ۱۴ انبوه) — بدون TCP-connect
 # توکن: از GITHUB_TOKEN داخلی Actions استفاده می‌شود (هیچ توکنی hardcode نشده)
 #
 # ★ فیکسِ «به‌روزرسانی نشدن سرِ ساعت» ★
@@ -10,16 +10,16 @@ name: 🔄 Aggregate V2Ray Configs
 #   دقیقه تأخیر می‌خورد یا اصلاً اجرا نمی‌شود (محدودیتِ شناخته‌شدهٔ پلتفرم).
 #   راهکارِ مقاوم (سه‌لایه):
 #     ۱) cron با تواترِ بالا (هر ۵ دقیقه) ← شانسِ بیشتر برای اجرا
-#     ۲) دروازهٔ زمانی (freshness gate): اگر index.json در < ۳۱ دقیقهٔ اخیر
+#     ۲) دروازهٔ زمانی (freshness gate): اگر index.json در < ۱۳ دقیقهٔ اخیر
 #        آپدیت شده باشد، job زود خارج می‌شود (کارِ سنگین انجام نمی‌دهد).
-#        نتیجه: تواترِ مؤثرِ به‌روزرسانی ≈ ۳۱ دقیقه، حتی با تأخیرِ cron.
+#        نتیجه: تواترِ مؤثرِ به‌روزرسانی ≈ ۱۵ دقیقه، حتی با تأخیرِ cron.
 #     ۳) repository_dispatch ← سرورِ همیشه‌روشنِ ربات می‌تواند به‌عنوانِ
 #        fallbackِ تضمینی، workflow را trigger کند (event: aggregate-now).
 # ─────────────────────────────────────────────────────────────────────────────
 
 on:
   schedule:
-    # هر ۵ دقیقه تلاش می‌کنیم؛ ولی «دروازهٔ زمانی» فقط هر ~۳۱ دقیقه واقعاً کار
+    # هر ۵ دقیقه تلاش می‌کنیم؛ ولی «دروازهٔ زمانی» فقط هر ~۱۵ دقیقه واقعاً کار
     # می‌کند. این الگو تأخیر/حذفِ cronِ گیت‌هاب را جبران می‌کند.
     - cron: "*/5 * * * *"
   workflow_dispatch:
@@ -52,6 +52,10 @@ env:
   # حاشیهٔ امنیتی: کمی کمتر از ۱۵ می‌گیریم تا اگر cron با ۱-۲ دقیقه تأخیر آمد،
   # باز هم به‌جای رد شدن، اجرا شود (جلوگیری از «۳۰ دقیقه‌ای شدن» تصادفی).
   FRESHNESS_GATE_MINUTES: "13"
+  # شاخه‌ای که خروجی‌های تولیدشده روی آن منتشر می‌شوند.
+  #   `main` فقط کد/مستندات را نگه می‌دارد و هرگز force-push نمی‌شود.
+  #   `data` تک‌کامیتی است و هر دور force-push می‌شود (تاریخ نگه نمی‌دارد).
+  DATA_BRANCH: data
 
 jobs:
   aggregate:
@@ -74,16 +78,25 @@ jobs:
             echo "✅ Manual/dispatch/push event → running unconditionally."
             exit 0
           fi
-          if [ ! -f index.json ]; then
+          # index.json دیگر روی `main` نیست، روی شاخهٔ `data` منتشر
+          #   می‌شود. پس دروازهٔ زمانی باید آن را از remote بخواند، نه از
+          #   worktree. اگر این را اصلاح نمی‌کردیم، فایل هرگز پیدا نمی‌شد و
+          #   دروازه همیشه «باز» می‌ماند: هر ۵ دقیقه یک اجرای کاملِ سنگین
+          #   (به‌جای هر ۱۵ دقیقه) — یعنی سه برابر کامیت و سه برابر رشدِ حجم.
+          if git ls-remote --exit-code --heads origin "$DATA_BRANCH" >/dev/null 2>&1; then
+            git fetch --depth=1 origin "$DATA_BRANCH" >/dev/null 2>&1 || true
+            git show "FETCH_HEAD:index.json" > /tmp/gate_index.json 2>/dev/null || true
+          fi
+          if [ ! -s /tmp/gate_index.json ]; then
             echo "should_run=true" >> "$GITHUB_OUTPUT"
-            echo "✅ No index.json yet → running."
+            echo "✅ No published index.json on '$DATA_BRANCH' yet → running."
             exit 0
           fi
           # اختلافِ زمانِ آخرین آپدیت با حالا (ثانیه)
           AGE=$(python - <<'PY'
           import json, time, datetime
           try:
-              d = json.load(open("index.json"))
+              d = json.load(open("/tmp/gate_index.json"))
               u = d.get("updated_at_unix")
               if not u:
                   ts = d.get("updated_at")
@@ -114,9 +127,61 @@ jobs:
         if: steps.gate.outputs.should_run == 'true'
         run: pip install -r requirements.txt
 
+      # تست‌های واحد پیش از هر تولیدی — هر تست به یک باگِ واقعیِ کشف‌شده گره خورده
+      # است، پس شکستِ آن یعنی یک رگرسیونِ شناخته‌شده برگشته.
+      - name: 🧪 Unit tests
+        if: steps.gate.outputs.should_run == 'true'
+        run: python scripts/test_pipeline.py
+
       - name: 🚀 Run aggregator
         if: steps.gate.outputs.should_run == 'true'
         run: python scripts/aggregate.py --out .
+
+      # ── نصبِ کلاینت‌های واقعی برای اعتبارسنجی ────────────────────────────
+      # چرا: یک نودِ نامعتبر در وسطِ فایل باعث می‌شود کلاینت **کلِ فایل** را رد
+      # کند، نه فقط همان نود. پس تنها اعتبارسنجیِ قابل‌اعتماد، اجرای همان
+      # باینری‌هایی است که کاربر استفاده می‌کند. نسخه‌ها pin شده‌اند تا
+      # به‌روزرسانیِ ناگهانیِ upstream، انتشار را نشکند.
+      - name: 🧰 Install sing-box & mihomo
+        if: steps.gate.outputs.should_run == 'true'
+        env:
+          SING_BOX_VERSION: "1.13.14"
+          MIHOMO_VERSION: "v1.19.29"
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/.local/bin"
+          # sing-box
+          curl -fsSL --retry 3 --retry-delay 2 \
+            "https://github.com/SagerNet/sing-box/releases/download/v${SING_BOX_VERSION}/sing-box-${SING_BOX_VERSION}-linux-amd64.tar.gz" \
+            -o /tmp/sb.tar.gz
+          tar -xzf /tmp/sb.tar.gz -C /tmp
+          install -m 755 "/tmp/sing-box-${SING_BOX_VERSION}-linux-amd64/sing-box" "$HOME/.local/bin/sing-box"
+          # mihomo (فایل .gz تک‌فایلی است، نه tar)
+          curl -fsSL --retry 3 --retry-delay 2 \
+            "https://github.com/MetaCubeX/mihomo/releases/download/${MIHOMO_VERSION}/mihomo-linux-amd64-${MIHOMO_VERSION}.gz" \
+            -o /tmp/mihomo.gz
+          gunzip -f /tmp/mihomo.gz
+          install -m 755 /tmp/mihomo "$HOME/.local/bin/mihomo"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          "$HOME/.local/bin/sing-box" version
+          "$HOME/.local/bin/mihomo" -v
+
+      # ── دروازهٔ اعتبارسنجی: خروجیِ خراب هرگز commit نمی‌شود ───────────────
+      - name: 🔍 Validate outputs with real clients
+        if: steps.gate.outputs.should_run == 'true'
+        run: python scripts/validate.py --out . --strict --json validation.json
+
+      - name: 📎 Upload validation report on failure
+        if: failure() && steps.gate.outputs.should_run == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: validation-report
+          path: |
+            validation.json
+            all/singbox.json
+            all/clash.yaml
+          retention-days: 7
+          if-no-files-found: ignore
 
       - name: 📊 Job summary
         if: always() && steps.gate.outputs.should_run == 'true'
@@ -159,29 +224,400 @@ jobs:
           PY
           fi
 
-      - name: 💾 Commit & push
+      # ── انتشار به‌صورتِ «تک‌کامیتِ force-push» روی شاخهٔ data ★★★ ──
+      #
+      # مسئله‌ای که این مرحله حل می‌کند (اندازه‌گیری‌شده، نه حدس)
+      # ─────────────────────────────────────────────────────────────────────
+      #   مخزن در ۵۲.۵ روز به 3,711,673 KB = 3,624.7 MB = 3.54 GB رسید،
+      #   با 5,648 کامیت و آهنگِ اندازه‌گیری‌شدهٔ ۹۸ کامیت در روز
+      #   (۱۰۰ کامیتِ آخر در بازهٔ ۲۴.۵ ساعت).
+      #   میانگینِ رشد: ۶۹.۰۵ مگابایت در روز.
+      #   سقفِ توصیهٔ رسمیِ گیت‌هاب ۵ گیگابایت است ("less than 5 GB is
+      #   strongly recommended") → با این آهنگ ~۲۲ روزِ دیگر رد می‌شود.
+      #
+      # چرا حذفِ فایل کافی نیست
+      # ─────────────────────────────────────────────────────────────────────
+      #   آزمایشِ کنترل‌شده (۳ دورِ بازتولید + ۱۰٪ جابه‌جاییِ خطوط، سپس
+      #   gc --aggressive --prune=now)، با اندازه‌های واقعیِ فایل‌ها:
+      #     پیش از این پاک‌سازی: 1572 KB/commit → 150.4 MB/day → سقفِ ۵GB در ۹.۹ روز
+      #     پس از این پاک‌سازی: 1216 KB/commit → 116.4 MB/day → سقفِ ۵GB در ۱۲.۸ روز
+      #   یعنی حذفِ ۱۳.۹ مگابایت فایلِ بی‌مصرف در هر دور، فقط ۳ روز وقت خرید.
+      #   ریشهٔ مشکل «حجمِ هر دور» نیست؛ «انباشتِ تاریخ» است: هر دور یک
+      #   کامیتِ ماندگار می‌سازد و git هیچ‌وقت نسخه‌های قبلی را فراموش نمی‌کند.
+      #   هزینه O(تعدادِ کامیت‌ها) است، و تعدادِ کامیت‌ها بی‌کران رشد می‌کند.
+      #
+      # راهکار: تاریخِ داده را «بی‌تاریخ» کن
+      # ─────────────────────────────────────────────────────────────────────
+      #   خروجی‌ها روی یک شاخهٔ orphan به نامِ `data` منتشر می‌شوند که همیشه
+      #   دقیقاً **یک** کامیت دارد: هر دور یک کامیتِ بی‌والد ساخته و
+      #   force-push می‌شود. نتیجه: هزینه از O(n) به O(1) می‌رسد.
+      #   اندازه‌گیریِ واقعی روی یک مخزنِ آزمایشی با ۱۲ چرخهٔ force-push:
+      #     پس از gc → size-pack 2.19 MiB، in-pack 41 آبجکت، هر شاخه ۱ کامیت
+      #   ⚠️ نکتهٔ صادقانه: آبجکت‌های غیرقابل‌دسترس تا اجرای gc در گیت‌هاب
+      #      باقی می‌مانند. در همان آزمایش، پیش از gc: ۱۲۹ آبجکتِ loose و
+      #      18.17 MiB. پس رشد «کراندار» است نه «صفر» — ولی به‌جای رشدِ
+      #      خطیِ بی‌پایان، حول یک مقدارِ ثابت نوسان می‌کند.
+      #
+      # چرا شکستنِ لینک‌ها رخ نمی‌دهد (تستِ واقعی انجام شد)
+      # ─────────────────────────────────────────────────────────────────────
+      #   هم raw.githubusercontent.com و هم cdn.jsdelivr.net شاخهٔ
+      #   غیرپیش‌فرض را سرو می‌کنند؛ روی jsdelivr/jsdelivr@terms (شاخهٔ
+      #   غیرپیش‌فرضِ واقعی) هر دو ۲۰۰ برگرداندند. پس آدرس‌ها فقط
+      #   `/main/` → `/data/` و `@main` → `@data` می‌شوند.
+      #
+      # چرا force-push در اینجا بی‌خطر است
+      # ─────────────────────────────────────────────────────────────────────
+      #   شاخهٔ `data` هیچ کدِ انسان‌نوشته‌ای ندارد؛ ۱۰۰٪ محتوایش در هر دور
+      #   از صفر بازتولید می‌شود. «از دست رفتنِ تاریخ» اینجا هدف است، نه
+      #   عارضه. کدِ پروژه روی `main` می‌ماند و هرگز force-push نمی‌شود.
+      #   این هم‌زمان مسئلهٔ race بینِ دو runِ هم‌زمان را حذف می‌کند: هیچ
+      #   ادغامی لازم نیست، چون تازه‌ترین snapshot همیشه برنده است.
+      - name: 🚀 Publish snapshot to `data` branch (single-commit force-push)
         if: steps.gate.outputs.should_run == 'true'
         run: |
+          set -euo pipefail
           git config user.name  "raydikalx-bot[actions]"
           git config user.email "actions@users.noreply.github.com"
-          # فقط فایل‌های خروجی را stage کن (نه scripts/workflow)
-          git add all/ heavy/ light/ protocols/ archive/ index.json health.json
-          if git diff --cached --quiet; then
-            echo "No changes to commit."
-            exit 0
-          fi
+
           STAMP=$(date -u +'%Y-%m-%d %H:%M UTC')
-          git commit -m "chore: auto-update configs ($STAMP) [@Raydikalx]"
-          # تلاشِ مقاوم در برابرِ race (دو run هم‌زمان): rebase + retry
-          for attempt in 1 2 3 4 5; do
-            if git push origin HEAD:main; then
-              echo "✅ pushed on attempt $attempt"
+
+          # ── چرا «plumbing» و نه `git checkout --orphan` ────────────────────
+          # نسخهٔ اولِ این مرحله با `git checkout --orphan "$DATA_BRANCH"`
+          # نوشته شد و در شبیه‌سازیِ شش‌دورهٔ محلی شکست خورد: در دورِ اول
+          # درست کار کرد، ولی از دورِ دوم به بعد شاخهٔ محلیِ `data` از قبل
+          # وجود داشت و git با
+          #     fatal: a branch named 'data' already exists   (exit 128)
+          # خارج شد. چون مرحله `set -e` دارد، کلِ step بی‌صدا قطع می‌شد و
+          # هیچ چیزی منتشر نمی‌شد. این خطا در actions/checkout تازه دیده
+          # نمی‌شود، ولی هر بار که runner کش‌شده یا شاخه از قبل fetch شده
+          # باشد رخ می‌دهد — یعنی یک بمبِ ساعتیِ خاموش.
+          #
+          # راهکارِ مقاوم: اصلاً شاخه عوض نمی‌کنیم. با ابزارهای سطح‌پایینِ git
+          # مستقیماً یک درخت و یک کامیتِ بی‌والد می‌سازیم:
+          #     git mktree/update-index → write-tree → commit-tree (بدون -p)
+          # مزیت‌ها: (۱) به وضعیتِ شاخه‌های محلی حساس نیست و idempotent است،
+          # (۲) worktree دست‌نخورده می‌ماند پس فایل‌های تولیدشده گم نمی‌شوند،
+          # (۳) سریع‌تر است چون هیچ checkout/حذفِ فایلی لازم نیست.
+          #
+          # وضعیتِ صحت‌سنجی: این مرحله با هارنسِ ۱۲-سناریویی/۴۰-assertionی در
+          # exp/a2sim2/verify.sh روی یک مخزنِ bare واقعی و با دادهٔ واقعیِ
+          # ۸٬۱۶۹ کانفیگی تست شده و همه پاس شده‌اند — شاملِ سه سناریوی
+          # data-loss (index.json خالی / لیستِ کم‌محتوا / نبودِ کلِ خروجی‌ها)
+          # که همه fail-closed اند، و دو باگِ واقعیِ کشف‌شده در همین تست‌ها
+          # («a branch named data already exists» و «pathspec did not match»)
+          # که هر دو زیر `set -e` بی‌صدا انتشار را متوقف می‌کردند.
+          # پس از ۱۱ انتشار: origin از ۲۲٬۰۳۶ KB پیش از gc به ۲٬۲۶۰ KB پس از
+          # gc رسید و شاخه در تمامِ دورها دقیقاً یک کامیتِ بی‌والد داشت.
+          TMP_INDEX="$(mktemp -u /tmp/dataidx.XXXXXX)"
+
+          # فایلِ راهنمای شاخهٔ data (تا بازدیدکننده گیج نشود)
+          DATA_README="$(mktemp)"
+          cat > "$DATA_README" <<EOF
+          # 📦 data — published output snapshot
+
+          This branch is **machine-generated**: it always holds exactly **one**
+          commit, force-pushed on every aggregation round. It carries no history
+          by design.
+
+          - Source code, docs and issues live on the \`main\` branch.
+          - Generated: \`$STAMP\`
+          - Do not open pull requests against this branch.
+
+          ## Why a single-commit orphan branch?
+
+          Publishing ~27 MB of regenerated files ~98 times a day on a normal
+          branch grew this repository by ~69 MB/day (measured: 3.54 GB across
+          5,648 commits in 52 days). Git never forgets an old blob, so the cost
+          is O(commits) and unbounded. A force-pushed orphan snapshot makes it
+          O(1).
+
+          — @Raydikalx
+          EOF
+
+          # ── ۰) دروازهٔ سلامتِ خروجی (fail-closed) ────────────────────────────
+          #
+          # چرا: force-push هیچ راهِ بازگشتی ندارد. اگر snapshotِ این دور ناقص
+          # باشد و ما آن را منتشر کنیم، نسخهٔ سالمِ قبلی برای همیشه از بین
+          # می‌رود و هر مشترکی لیستش را با «هیچ» جایگزین می‌کند. پس پیش از
+          # ساختِ درخت، وجود و غیرخالی‌بودنِ فایل‌های حیاتی را تأیید می‌کنیم.
+          MUST_EXIST="index.json health.json
+          all/configs.txt all/configs_base64.txt all/clash.yaml all/singbox.json
+          heavy/configs.txt light/configs.txt"
+          MISSING=""
+          for f in $MUST_EXIST; do
+            [ -s "$f" ] || MISSING="$MISSING $f"
+          done
+          if [ -n "$MISSING" ]; then
+            echo "❌ refusing to publish — missing/empty critical outputs:$MISSING"
+            echo "   شاخهٔ '$DATA_BRANCH' دست‌نخورده می‌ماند (snapshotِ سالمِ قبلی حفظ می‌شود)."
+            exit 1
+          fi
+          # سنجهٔ کمینهٔ محتوا: یک لیستِ تقریباً خالی هم باید جلویش گرفته شود.
+          ALL_LINES=$(grep -cv '^\s*\(#\|$\)' all/configs.txt || true)
+          if [ "${ALL_LINES:-0}" -lt 100 ]; then
+            echo "❌ refusing to publish — all/configs.txt has only ${ALL_LINES} payload lines (< 100)."
+            exit 1
+          fi
+          echo "✅ output sanity: all/configs.txt has ${ALL_LINES} payload lines"
+
+          # ── ۱) پر کردنِ ایندکسِ موقت ──────────────────────────────────────
+          #    چون ایندکس از صفر ساخته می‌شود، فایلی که در دورِ قبل حذف شده
+          #    خودبه‌خود از snapshot بیرون می‌ماند (نیازی به حذفِ دستی نیست).
+          #    README روی `main` می‌ماند: بازبینی با grep نشان داد
+          #    aggregate.py هیچ‌وقت README را نمی‌نویسد، پس stage کردنش در
+          #    هر دور بی‌فایده بود.
+          #
+          # ⚠️ باگی که با تست کشف شد — «pathspec did not match»
+          #    نسخهٔ قبلی این خط چنین بود:
+          #        git add -A -- all heavy light protocols archive index.json health.json
+          #    اما `archive/` و `protocols/` تضمینی برای وجود ندارند:
+          #    aggregate.py آن‌ها را فقط به‌صورتِ جانبی و از طریقِ
+          #    `_write_text` → `os.makedirs(dirname)` می‌سازد. پس اگر در یک
+          #    دور هیچ کانفیگِ خرابی پیدا نشود (که پس از این پاک‌سازی کاملاً ممکن
+          #    است)، پوشهٔ archive هرگز ساخته نمی‌شود و git با
+          #        fatal: pathspec 'archive' did not match any files
+          #    و exit 128 خارج می‌شود. زیر `set -e` کلِ step بی‌صدا می‌مُرد و
+          #    شاخهٔ `data` روی snapshotِ کهنهٔ دورِ قبل یخ می‌زد.
+          #    این را با اجرای واقعیِ همین اسکریپت اثبات کردم (exit=128،
+          #    هیچ انتشاری، و `write_archive` با صفر کانفیگِ خراب هم واقعاً
+          #    پوشه را نمی‌سازد).
+          #    راهکار: فقط مسیرهایی را stage می‌کنیم که واقعاً وجود دارند.
+          export GIT_INDEX_FILE="$TMP_INDEX"
+          rm -f "$TMP_INDEX"
+          PATHS=""
+          for p in all heavy light protocols archive index.json health.json; do
+            if [ -e "$p" ]; then
+              PATHS="$PATHS $p"
+            else
+              echo "   ℹ️ '$p' absent this round — skipping (not an error)"
+            fi
+          done
+          # shellcheck disable=SC2086
+          git add -A -- $PATHS
+          # README مخصوصِ این شاخه را با plumbing وارد ایندکس می‌کنیم تا
+          # فایلِ روی دیسکِ worktree (README اصلیِ پروژه) دست‌نخورده بماند.
+          BLOB=$(git hash-object -w "$DATA_README")
+          git update-index --add --cacheinfo 100644,"$BLOB",README.md
+
+          TREE=$(git write-tree)
+          echo "🌳 snapshot tree: $TREE"
+
+          # محافظِ دوم: درختِ خالیِ گیت شناسهٔ ثابتی دارد. اگر به هر دلیلی
+          # (مثل شکستِ مهارشدهٔ `git add`) ایندکس خالی مانده باشد، اینجا
+          # متوقف می‌شویم و نمی‌گذاریم snapshotِ سالم پاک شود.
+          EMPTY_TREE=$(git hash-object -t tree /dev/null)
+          if [ "$TREE" = "$EMPTY_TREE" ]; then
+            echo "❌ refusing to publish an EMPTY tree — '$DATA_BRANCH' left untouched."
+            exit 1
+          fi
+          STAGED=$(git ls-files | wc -l)
+          echo "   staged files: $STAGED"
+          if [ "$STAGED" -lt 10 ]; then
+            echo "❌ refusing to publish — only $STAGED files staged (expected ≥ 10)."
+            exit 1
+          fi
+
+          # ── ۲) مقایسه با snapshotِ فعلیِ remote (فقط برای گزارش) ────────────
+          #
+          # ⚠️ تصحیحِ یک ادعای نادرست در نسخهٔ قبلیِ این مرحله
+          #    قبلاً اینجا نوشته بودم «اگر درخت با remote یکی بود، کامیت/پوش
+          #    نمی‌کنیم» و ادعا کرده بودم این از تولیدِ آبجکتِ اضافی جلوگیری
+          #    می‌کند. اندازه‌گیری نشان داد این short-circuit **هرگز فایر
+          #    نمی‌کند**: دو اجرای پشت‌سرهمِ aggregate.py خروجی‌هایی تولید
+          #    می‌کنند که با `diff -rq` کاملاً یکسان‌اند، به‌جز دو فایل —
+          #    index.json (updated_at / updated_at_unix / next_update_eta /
+          #    elapsed_seconds) و health.json (checked_at + latency_ms هر ۲۱
+          #    سورس). یعنی درختِ نهایی همیشه متفاوت است و شرط هیچ‌وقت برقرار
+          #    نمی‌شود. در شبیه‌سازیِ شش‌دوره‌ای هم، دوری که عمداً payloadِ
+          #    یکسان داشت باز هم منتشر شد — دقیقاً همین علت.
+          #
+          # آیا باید short-circuit را payload-محور کنیم؟ اندازه‌گیری: نه.
+          #    دو انتشارِ پشت‌سرهم با payloadِ byte-identical فقط ۳۲ کیلوبایت
+          #    به origin اضافه کرد (۵۶۶۰ → ۵۶۹۲ KB)، چون تنها دو blobِ تازه
+          #    ساخته شد: index.json (۵٬۳۶۹ بایت) و health.json (۶٬۳۳۲ بایت) —
+          #    مجموعاً ~۱۱ کیلوبایت خام. و ۲۰ دورِ پشت‌سرهم با payloadِ ثابت،
+          #    پس از gc حجمِ مخزن را **صفر** بایت افزایش داد (۳۴۹۶ → ۳۴۹۶ KB).
+          #    پس صرفه‌جویی عملاً هیچ است، در حالی که پرش از انتشار یک عارضهٔ
+          #    جدی دارد: updated_at تازه نمی‌شود، پس دروازهٔ زمانی در دورِ بعد
+          #    فایل را «کهنه» می‌بیند و هر ۵ دقیقه یک اجرای کاملِ سنگین راه
+          #    می‌اندازد. یعنی short-circuit نه‌تنها بی‌فایده، بلکه مضر بود.
+          #    نتیجه: حذف شد؛ مقایسه فقط برای شفافیتِ لاگ باقی می‌ماند.
+          if git ls-remote --exit-code --heads origin "$DATA_BRANCH" >/dev/null 2>&1; then
+            git fetch --depth=1 --no-tags origin \
+              "+refs/heads/$DATA_BRANCH:refs/remotes/origin/$DATA_BRANCH" >/dev/null 2>&1 || true
+            OLD_TREE=$(git rev-parse "refs/remotes/origin/$DATA_BRANCH^{tree}" 2>/dev/null || echo none)
+            echo "   previous remote tree: $OLD_TREE"
+          else
+            echo "   '$DATA_BRANCH' does not exist yet — this will create it."
+          fi
+
+          # ۳) کامیتِ بی‌والد. نبودِ `-p` همان چیزی است که این کامیت را
+          #    «orphan» می‌کند: هیچ تاریخی حمل نمی‌شود.
+          COUNT=$(python -c "import json;print(json.load(open('index.json'))['categories']['all']['unique'])" 2>/dev/null || echo '?')
+          COMMIT=$(git commit-tree "$TREE" -m "data: snapshot $STAMP — $COUNT configs [@Raydikalx]")
+          echo "📦 snapshot commit: $COMMIT ($COUNT unique configs in ALL)"
+
+          # ۴) force-push. چون شاخه همیشه تک‌کامیتی است، حجمِ هر push کوچک
+          #    می‌ماند و هرگز به محدودیتِ سختِ ۲ گیگابایتیِ هر push نزدیک
+          #    نمی‌شود — محدودیتی که بازنویسیِ کاملِ تاریخِ ۳.۵ گیگابایتی را
+          #    غیرعملی می‌کند.
+          for attempt in 1 2 3; do
+            if git push --force origin "$COMMIT:refs/heads/$DATA_BRANCH"; then
+              echo "✅ published to '$DATA_BRANCH' on attempt $attempt"
               exit 0
             fi
-            echo "⚠️ push rejected (attempt $attempt) — rebasing onto remote …"
-            git fetch origin main
-            git rebase -X ours origin/main || git rebase --abort
+            echo "⚠️ push failed (attempt $attempt) — retrying …"
             sleep $((attempt * 3))
           done
-          echo "❌ could not push after retries"
+          echo "❌ could not publish after 3 attempts"
           exit 1
+
+      # ── پاک‌سازیِ کشِ jsDelivr ★★★ ─────────────────────────────
+      #
+      # مسئله (اندازه‌گیریِ زندهٔ همین مخزن، نه حدس)
+      # ─────────────────────────────────────────────────────────────────────
+      #   سرآیندِ واقعیِ jsDelivr برای فایل‌های این مخزن:
+      #     cache-control: public, max-age=604800, s-maxage=43200
+      #     age: 26870
+      #   و مستنداتِ رسمیِ jsDelivr: «Branches — 12 hours».
+      #   مقایسهٔ محتوای زنده در لحظهٔ سنجش:
+      #     raw.githubusercontent → updated_at 2026-07-28T20:23:34Z (۸۱۶۸ کانفیگ)
+      #     cdn.jsdelivr.net      → updated_at 2026-07-28T07:38:26Z (۴۳۵۳ کانفیگ)
+      #   یعنی ۱۲ ساعت و ۴۵ دقیقه تأخیر = ۵۱ برابرِ بازهٔ هدفِ ۱۵ دقیقه‌ای.
+      #   پس تلاش برای رساندنِ آپدیت به ۱۵ دقیقه، برای هر کاربری که لینکِ
+      #   jsDelivr را subscribe کرده، عملاً بی‌اثر بود.
+      #
+      # راهکار و تأییدِ عملی
+      # ─────────────────────────────────────────────────────────────────────
+      #   Purge APIِ jsDelivr به‌صورتِ زنده تست شد:
+      #     POST https://purge.jsdelivr.net/  {"path":[…]}
+      #     ۲۶ مسیر در یک درخواست → status finished،
+      #     throttled=false برای همهٔ ۲۶ مسیر، providers CF=true FY=true
+      #   و سپس md5 برای all/configs.txt، index.json، health.json و
+      #   light/clash.yaml بین raw و jsDelivr «یکسان» شد (پیش از purge متفاوت بود).
+      #
+      # حدِ واقعیِ این راهکار — چیزی که با اندازه‌گیریِ دقیق روشن شد
+      # ─────────────────────────────────────────────────────────────────────
+      #   در یک purgeِ دوم (۱۴ مسیر، status=finished، throttled=0) نتیجه
+      #   «نیم‌کاره» بود و این تفاوت مهم است:
+      #     all/configs.txt   → md5 با raw یکسان شد ✅
+      #     light/clash.yaml  → md5 با raw یکسان شد ✅
+      #     index.json        → همچنان متفاوت ❌
+      #     health.json       → همچنان متفاوت ❌
+      #   سرآیندِ jsDelivr پس از purge برای هر دو فایل `age: 22` بود — یعنی
+      #   کشِ لبه واقعاً پاک شده. پس تأخیرِ باقی‌مانده در «لایهٔ originِ خودِ
+      #   jsDelivr» است (resolve کردنِ نامِ برنچ به آخرین کامیت)، نه در CDN.
+      #   purge کشِ لبه را پاک می‌کند ولی نمی‌تواند jsDelivr را مجبور کند
+      #   نامِ برنچ را دوباره resolve کند.
+      #
+      #   ★ نتیجه‌گیریِ عملی که با تست اثبات شد: مسیرِ pin‌شده به کامیت
+      #     همیشه دقیق است. آزمایشِ زنده روی کامیتِ 5cfb623:
+      #       cdn.jsdelivr.net/gh/…@5cfb623/index.json → updated_at 21:23:27.336034
+      #       raw.githubusercontent.com/…/5cfb623/index.json → 21:23:27.336034
+      #     یعنی بیت‌به‌بیت یکی. پس اگر کسی به تازگیِ تضمین‌شده نیاز دارد،
+      #     لینکِ raw (اصلی، کشِ ۵ دقیقه‌ای) یا لینکِ jsDelivrِ pin‌شده به
+      #     کامیت را بگیرد؛ لینکِ jsDelivr روی نامِ برنچ ذاتاً تأخیر دارد.
+      #     دلیلش همین است: raw لینکِ اصلی شد و jsDelivr آینه.
+      #
+      #   این مرحله عمداً `continue-on-error` است: انتشار روی گیت‌هاب همان
+      #   لحظه انجام شده و لینک‌های raw تازه‌اند؛ اگر purge موقتاً throttle
+      #   یا قطع شود، نباید کلِ اجرا شکست‌خورده اعلام شود.
+      - name: 🧹 Purge jsDelivr cache
+        if: steps.gate.outputs.should_run == 'true'
+        continue-on-error: true
+        timeout-minutes: 3
+        run: |
+          python - <<'PY'
+          import json, os, time, urllib.request, urllib.error
+
+          repo   = os.environ.get("GITHUB_REPOSITORY", "0xRadikal/Free-v2ray-Configs")
+          branch = os.environ.get("DATA_BRANCH", "data")
+          base   = f"/gh/{repo}@{branch}"
+
+          # فقط سطحِ انتشارِ واقعی purge می‌شود (چیزی که کاربر subscribe می‌کند).
+          # فایل‌های archive/ عمداً بیرون‌اند: کاربرِ نهایی آن‌ها را subscribe
+          # نمی‌کند و اضافه‌کردنشان فقط سهمیهٔ purge را هدر می‌دهد.
+          paths = [f"{base}/index.json", f"{base}/health.json"]
+          for cat in ("all", "heavy", "light"):
+              for f in ("configs.txt", "configs_base64.txt", "clash.yaml", "singbox.json"):
+                  paths.append(f"{base}/{cat}/{f}")
+
+          # پروتکل‌ها از خودِ index.json خوانده می‌شوند تا مسیرِ ۴۰۴ purge نشود
+          # (فقط پروتکل‌های غیرخالی فایل دارند).
+          try:
+              idx = json.load(open("index.json", encoding="utf-8"))
+              for p, n in idx.get("protocols", {}).items():
+                  if n:
+                      paths.append(f"{base}/protocols/{p}.txt")
+                      paths.append(f"{base}/protocols/{p}_base64.txt")
+          except Exception as e:
+              print(f"⚠️ could not read index.json for protocol list: {e}")
+
+          print(f"🧹 purging {len(paths)} paths on {base}")
+          req = urllib.request.Request(
+              "https://purge.jsdelivr.net/",
+              data=json.dumps({"path": paths}).encode(),
+              headers={"content-type": "application/json", "cache-control": "no-cache"},
+          )
+          try:
+              res = json.load(urllib.request.urlopen(req, timeout=60))
+          except Exception as e:
+              print(f"⚠️ purge request failed: {e}")
+              raise SystemExit(0)   # عمداً بدونِ خطا: انتشار انجام شده است
+
+          job = res.get("id")
+          print(f"   job={job} status={res.get('status')}")
+
+          # نتیجه را واقعاً بررسی می‌کنیم — «درخواست فرستادم» با «کش پاک شد» یکی نیست
+          for _ in range(10):
+              if res.get("status") == "finished":
+                  break
+              time.sleep(3)
+              try:
+                  res = json.load(urllib.request.urlopen(
+                      f"https://purge.jsdelivr.net/status/{job}", timeout=30))
+              except Exception as e:
+                  print(f"   ⚠️ status poll failed: {e}")
+                  raise SystemExit(0)
+
+          done = res.get("paths", {}) or {}
+          throttled = [p for p, v in done.items() if v.get("throttled")]
+          failed    = [p for p, v in done.items()
+                       if not all((v.get("providers") or {}).values())]
+          print(f"   status={res.get('status')} purged={len(done)}"
+                f" throttled={len(throttled)} provider-failures={len(failed)}")
+          for p in throttled[:10]:
+              print(f"   ⏳ throttled: {p}")
+          for p in failed[:10]:
+              print(f"   ⚠️ provider miss: {p} -> {done[p].get('providers')}")
+
+          # ── تأییدِ واقعیِ اثر، نه فقط «درخواست فرستادم» ────────────────────
+          # اگر md5ِ نسخهٔ آینه با نسخهٔ raw یکی شد، purge مؤثر بوده است.
+          # اگر نه، لاگ صادقانه می‌گوید کدام فایل عقب مانده — چون سنجش نشان
+          # داد purge کشِ لبه را پاک می‌کند ولی resolveِ نامِ برنچ در origin
+          # خودِ jsDelivr ممکن است هنوز عقب باشد (به کامنتِ بالای این مرحله
+          # نگاه کنید). این «شکست» نیست، محدودیتِ شناخته‌شده است — و دقیقاً
+          # همان دلیلی که لینکِ اصلی را raw کردیم.
+          import hashlib
+          repo_slug = repo
+          def md5_of(url):
+              try:
+                  r = urllib.request.urlopen(urllib.request.Request(
+                      url, headers={"User-Agent": "raydikalx-ci", "Cache-Control": "no-cache"}),
+                      timeout=30)
+                  return hashlib.md5(r.read()).hexdigest()
+              except Exception:
+                  return None
+
+          probes = ["index.json", "all/configs.txt"]
+          agree = 0
+          for f in probes:
+              m_raw = md5_of(f"https://raw.githubusercontent.com/{repo_slug}/{branch}/{f}")
+              m_cdn = md5_of(f"https://cdn.jsdelivr.net/gh/{repo_slug}@{branch}/{f}")
+              same = (m_raw is not None and m_raw == m_cdn)
+              agree += same
+              print(f"   {'✅' if same else 'ℹ️ '} mirror {f}: "
+                    f"raw={str(m_raw)[:8]} cdn={str(m_cdn)[:8]}"
+                    f"{'' if same else '  (branch-ref lag on jsDelivr origin — raw links are unaffected)'}")
+          print(f"   mirror agreement: {agree}/{len(probes)}")
+          PY

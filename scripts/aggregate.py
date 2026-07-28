@@ -4,7 +4,7 @@
 aggregate.py — خط‌لولهٔ اصلیِ تجمیع کانفیگ‌های @Raydikalx.
 
 جریان کار (هیچ TCP-connect ای انجام نمی‌شود — مطابق تصمیم کاربر):
-  ۱) واکشیِ هم‌زمانِ ۲۲ منبع (۹ سبک + ۱۳ انبوه) با ThreadPool
+  ۱) واکشیِ هم‌زمانِ ۲۱ منبع (۷ سبک + ۱۴ انبوه) با ThreadPool
   ۲) استخراجِ کانفیگ‌های معتبر از هر منبع (direct یا base64)
   ۳) برای سه دستهٔ ALL / HEAVY / LIGHT:
        • حذف خراب‌ها (dummy)  → بایگانیِ broken
@@ -28,7 +28,7 @@ import os
 import sys
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Dict, List, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import requests
 
@@ -39,12 +39,50 @@ import core  # noqa: E402
 import converters  # noqa: E402
 from sources import LIGHT_SOURCES, HEAVY_SOURCES  # noqa: E402
 
-# CDN/raw base — برای درج در index.json
-GH_USER = "0xRadikal"
-GH_REPO = "Free-v2ray-Configs"
-GH_BRANCH = "main"
+# ──────────────────────────────────────────────────────────────────────────────
+# پایهٔ لینک‌ها — برای درج در index.json
+#
+# چرا raw شد لینکِ «اصلی» و jsDelivr شد «آینه»؟
+#   این یک سلیقه نیست؛ اندازه‌گیریِ زندهٔ همین مخزن است:
+#     raw.githubusercontent →  cache-control: max-age=300            (۵ دقیقه)
+#     cdn.jsdelivr.net      →  cache-control: ... s-maxage=43200     (۱۲ ساعت)
+#   و مستنداتِ رسمیِ jsDelivr هم صریح می‌گوید کشِ «Branches» دوازده ساعت است.
+#   در یک سنجشِ زنده، jsDelivr نسخه‌ای ۱۲ساعت‌و‌۴۵دقیقه‌ای را سرو می‌کرد
+#   (۴٬۳۵۳ کانفیگ) در حالی که raw نسخهٔ تازه را می‌داد (۸٬۱۶۸ کانفیگ) —
+#   یعنی ۵۱ برابرِ بازهٔ هدفِ ۱۵ دقیقه‌ای. پس تلاش برای رسیدن به آپدیتِ
+#   ۱۵ دقیقه‌ای، برای هر کسی که لینکِ jsDelivr را subscribe کرده بود، بی‌اثر بود.
+#   حالا: لینکِ اصلی = raw (۱۴۴ برابر تازه‌تر)، و jsDelivr به‌عنوان mirror
+#   می‌ماند (برای کاربرانی که raw برایشان فیلتر است) و در هر دور با
+#   Purge API پاک می‌شود (مرحلهٔ پاک‌سازیِ کش در ورک‌فلو).
+#
+# برنچ دیگر hard-code نیست.
+#   خروجی‌ها به شاخهٔ تک‌کامیتیِ `data` منتقل می‌شوند تا تاریخِ `main` با
+#   ~۹۸ کامیتِ روزانه (۶۹ مگابایت در روز، سنجیده) متورم نشود. اگر برنچ
+#   hard-code می‌ماند، هر ۳۲ لینکِ داخلِ index.json بعد از انتقال ۴۰۴ می‌شد.
+#   با env قابلِ override است تا ورک‌فلو و تست هر دو بتوانند مقدارش را بدهند.
+# ──────────────────────────────────────────────────────────────────────────────
+GH_USER = os.environ.get("AGG_GH_USER", "0xRadikal")
+GH_REPO = os.environ.get("AGG_GH_REPO", "Free-v2ray-Configs")
+
+# ⚠️ باگی که با بازبینیِ ورک‌فلو کشف شد — دو نامِ متفاوت برای یک حقیقت
+#    نسخهٔ قبلی فقط `AGG_DATA_BRANCH` را می‌خواند، در حالی که ورک‌فلو
+#    `DATA_BRANCH` را تنظیم می‌کند و هرگز `AGG_DATA_BRANCH` را ست نمی‌کند.
+#    امروز هر دو به "data" می‌رسند (چون پیش‌فرضِ اینجا هم "data" است)، پس
+#    لینک‌ها درست‌اند؛ ولی این یک بمبِ ساعتیِ خاموش بود: اگر کسی روزی
+#    `DATA_BRANCH` را عوض کند (مثلاً به "publish")، ورک‌فلو روی `publish`
+#    منتشر می‌کرد و index.json همچنان `data` را تبلیغ می‌کرد ⇒ هر ۳۴ لینک
+#    ۴۰۴ می‌شد، بی‌صدا و با buildِ سبز. دقیقاً همان کلاسِ خطایی که این تغییرها
+#    برای حذفش نوشته شدند.
+#    راهکار: `DATA_BRANCH` (همان نامی که ورک‌فلو دارد) منبعِ حقیقت است؛
+#    `AGG_DATA_BRANCH` فقط برای سازگاریِ عقب‌رو و اولویتِ بالاتر می‌ماند.
+GH_BRANCH = (os.environ.get("AGG_DATA_BRANCH")
+             or os.environ.get("DATA_BRANCH")
+             or "data")
 RAW_BASE = f"https://raw.githubusercontent.com/{GH_USER}/{GH_REPO}/{GH_BRANCH}"
 CDN_BASE = f"https://cdn.jsdelivr.net/gh/{GH_USER}/{GH_REPO}@{GH_BRANCH}"
+# از این پس هرجا یک لینکِ «اصلی» لازم است از PRIMARY_BASE استفاده می‌شود.
+PRIMARY_BASE = RAW_BASE
+MIRROR_BASE = CDN_BASE
 
 # چند User-Agent متفاوت — برخی منابع به UAِ خاصی پاسخِ بهتر می‌دهند
 USER_AGENTS = (
@@ -106,6 +144,11 @@ def fetch_source(url: str) -> Tuple[str, List[str]]:
                 last_err = "200 but 0 valid configs"
             else:
                 last_err = f"HTTP {resp.status_code}" if resp.status_code != 200 else "empty body"
+                # fail-fast روی خطاهای دائمیِ کلاینت: 404/410/451 با تلاش مجدد
+                # هرگز درست نمی‌شوند. تلاش مجدد فقط ۴.۵ ثانیه از بودجهٔ زمانی
+                # ورک‌فلو را هدر می‌دهد (۳ تلاش × backoff) بدون هیچ فایده‌ای.
+                if resp.status_code in (400, 401, 403, 404, 410, 451):
+                    break
         except Exception as e:  # noqa: BLE001
             last_err = f"{type(e).__name__}: {str(e)[:80]}"
         if attempt < FETCH_RETRIES:
@@ -113,10 +156,10 @@ def fetch_source(url: str) -> Tuple[str, List[str]]:
     # شکستِ نهایی
     SOURCE_HEALTH[url] = {
         "name": name, "status": "empty" if "0 valid" in last_err else "fail",
-        "count": 0, "http_code": last_code, "attempts": FETCH_RETRIES,
+        "count": 0, "http_code": last_code, "attempts": attempt,
         "latency_ms": int((time.time() - t_start) * 1000), "error": last_err,
     }
-    log(f"  ⚠️ fetch fail {name}: {last_err} (after {FETCH_RETRIES} tries)")
+    log(f"  ⚠️ fetch fail {name}: {last_err} (after {attempt} tries)")
     return url, []
 
 
@@ -146,8 +189,20 @@ class CategoryResult:
         self.protocol_counts: Dict[str, int] = {}
 
 
-def process_category(per_source: Dict[str, List[str]], source_urls: List[str]) -> CategoryResult:
-    """dedup سراسری + برندینگ روی کانفیگ‌های یک دسته."""
+def process_category(
+    per_source: Dict[str, List[str]],
+    source_urls: List[str],
+    _cache: Optional[Dict[str, Tuple[bool, str]]] = None,
+) -> CategoryResult:
+    """dedup سراسری + برندینگ روی کانفیگ‌های یک دسته.
+
+    این تابع سه بار صدا زده می‌شود (all / heavy / light) و منابعِ HEAVY و LIGHT
+    هر دو داخلِ ALL هم هستند، پس `is_dummy_config` و `dedup_key` روی هر خط
+    **دو بار** محاسبه می‌شد. با `_cache` مشترک، هر خط فقط یک بار تحلیل می‌شود.
+    هر دو تابع خالص‌اند (ورودی یکسان ← خروجی یکسان)، پس caching بی‌خطر است.
+    """
+    if _cache is None:
+        _cache = {}
     r = CategoryResult()
     seen_cores: set = set()
     raw_unique: List[str] = []
@@ -159,10 +214,16 @@ def process_category(per_source: Dict[str, List[str]], source_urls: List[str]) -
         r.active_sources += 1
         for line in cfgs:
             r.total_seen += 1
-            if core.is_dummy_config(line):
+            cached = _cache.get(line)
+            if cached is None:
+                cached = (core.is_dummy_config(line), "")
+                if not cached[0]:
+                    cached = (False, core.dedup_key(line))
+                _cache[line] = cached
+            is_dummy, key = cached
+            if is_dummy:
                 r.broken.append(line)
                 continue
-            key = core.dedup_key(line)
             if key not in seen_cores:
                 seen_cores.add(key)
                 raw_unique.append(line)
@@ -206,47 +267,139 @@ def write_category(out_dir: str, cat: str, r: CategoryResult) -> None:
         log(f"  ⚠️ singbox {cat}: {e}")
 
 
+def _remove_if_exists(path: str) -> bool:
+    """حذفِ فایلِ منتشرشدهٔ قبلی (اگر هست). برمی‌گرداند: آیا حذف شد؟
+
+    چرا «حذف» و نه «نوشتنِ فایلِ خالی»؟ اگر فایل را خالی بنویسیم، مشترکی که
+    آن لینک را subscribe کرده هر بار یک پاسخِ ۲۰۰ با بدنهٔ خالی می‌گیرد و
+    کلاینت لیستِ قبلی‌اش را با «هیچ» جانشین می‌کند. اگر فایل را حذف کنیم،
+    لینک ۴۰۴ می‌دهد و کلاینت‌ها لیستِ قبلی را نگه می‌دارند — رفتارِ درست‌تر.
+    مهم‌تر: هر فایلِ نوشته‌شده در هر دور یک blob جدید در تاریخِ git می‌سازد.
+    """
+    if os.path.exists(path):
+        try:
+            os.remove(path)
+            return True
+        except OSError as e:
+            log(f"  ⚠️ could not remove {path}: {e}")
+    return False
+
+
 def write_archive(out_dir: str, cat: str, r: CategoryResult) -> None:
-    """بایگانیِ خراب‌ها و تکراری‌های یک دسته (txt + base64)."""
+    """بایگانیِ خراب‌های یک دسته (txt + base64).
+
+    حذفِ تولیدِ archive/*_duplicates* ★
+    اندازه‌گیریِ واقعی روی همین مخزن:
+        archive/all_duplicates_base64.txt    4,286,344 B
+        archive/heavy_duplicates_base64.txt  3,720,596 B
+        archive/all_duplicates.txt           3,214,809 B
+        archive/heavy_duplicates.txt         2,790,499 B
+        archive/light_duplicates_base64.txt    274,408 B
+        archive/light_duplicates.txt           205,857 B
+        ─────────────────────────────────────────────────
+        جمع                                 14,492,513 B ≈ 13.82 MiB
+    این ۱۳.۸ مگابایت در «هر» دور (۹۸ دور در روز) از نو نوشته می‌شود و چون
+    محتوایش با هر دور عوض می‌شود، هر بار blobهای تازه به تاریخِ git اضافه
+    می‌کند. آزمایشِ کنترل‌شده (۳ کامیتِ بازتولید + ۱۰٪ جابه‌جاییِ خطوط، سپس
+    gc) نشان داد حذفِ همین پوشه هزینهٔ هر کامیت را از ۱۶۸۰ به ۱۳۲۸ کیلوبایت
+    می‌رساند (−۲۱٪).
+    ارزشِ کاربردی این فایل‌ها صفر است: «تکراری‌ها» به تعریف، کانفیگ‌هایی
+    هستند که نسخهٔ یکتای‌شان همین حالا در all/ منتشر شده — هیچ کاربری به
+    نسخهٔ دومِ همان سرور نیاز ندارد.
+    فایل‌های broken نگه داشته می‌شوند: کوچک‌اند (۱۶۸ و ۱۷۰ بایت) و برای
+    عیب‌یابیِ منابع مفیدند.
+    """
     base = os.path.join(out_dir, "archive")
-    bh = f"# @Raydikalx — {cat.upper()} BROKEN/dummy — {len(r.broken)} configs\n"
-    dh = f"# @Raydikalx — {cat.upper()} DUPLICATES — {len(r.duplicates)} configs\n"
-    _write_text(os.path.join(base, f"{cat}_broken.txt"), bh + "\n".join(r.broken) + "\n")
-    _write_text(os.path.join(base, f"{cat}_duplicates.txt"), dh + "\n".join(r.duplicates) + "\n")
+    btxt = os.path.join(base, f"{cat}_broken.txt")
+    bb64 = os.path.join(base, f"{cat}_broken_base64.txt")
     if r.broken:
-        _write_text(os.path.join(base, f"{cat}_broken_base64.txt"),
-                    core.encode_base64_subscription(r.broken))
-    if r.duplicates:
-        _write_text(os.path.join(base, f"{cat}_duplicates_base64.txt"),
-                    core.encode_base64_subscription(r.duplicates))
+        bh = f"# @Raydikalx — {cat.upper()} BROKEN/dummy — {len(r.broken)} configs\n"
+        _write_text(btxt, bh + "\n".join(r.broken) + "\n")
+        _write_text(bb64, core.encode_base64_subscription(r.broken))
+    else:
+        # همان سیاستِ «فایلِ خالی منتشر نمی‌شود»: وقتی این دور هیچ کانفیگِ خرابی نبود،
+        # فایلِ توخالی منتشر نمی‌کنیم (در تستِ واقعی light_broken.txt با ۵۱
+        # بایتِ سرآیندِ تنها و light_broken_base64.txt با ۰ بایت تولید می‌شد).
+        gone_txt = _remove_if_exists(btxt)
+        gone_b64 = _remove_if_exists(bb64)
+        if gone_txt or gone_b64:
+            log(f"  🗑️ pruned empty archive/{cat}_broken*")
+    # ── پاک‌سازیِ فایل‌های duplicates که در دورهای قبل منتشر شده‌اند ──
+    for stale in (f"{cat}_duplicates.txt", f"{cat}_duplicates_base64.txt"):
+        if _remove_if_exists(os.path.join(base, stale)):
+            log(f"  🗑️ removed obsolete archive/{stale}")
 
 
 def write_protocols(out_dir: str, all_unique: List[str]) -> Dict[str, int]:
-    """فایل‌های per-protocol (روی دستهٔ ALL)."""
+    """فایل‌های per-protocol (روی دستهٔ ALL).
+
+    ننوشتنِ فایلِ پروتکلِ خالی ★
+    وضعیتِ اندازه‌گیری‌شدهٔ مخزن پیش از این تغییر: از ۲۸ فایلِ پوشهٔ
+    protocols/، ۱۴ فایل هیچ کانفیگی نداشتند —
+      ۷ فایلِ ‎*_base64.txt‎ با اندازهٔ دقیقاً ۰ بایت:
+        anytls, hysteria, juicity, mieru, snell, socks, wireguard
+      ۷ فایلِ ‎*.txt‎ فقط شاملِ خطِ سرآیند (۳۸ تا ۴۲ بایت، «۰ configs»):
+        mieru(38) snell(38) socks(38) anytls(39) juicity(40) hysteria(41)
+        wireguard(42)
+    این فایل‌ها سه ضررِ هم‌زمان داشتند:
+      ۱) کاربر لینک را باز می‌کند، پاسخِ ۲۰۰ با بدنهٔ خالی می‌گیرد و
+         تصور می‌کند مخزن خراب است (نه اینکه آن پروتکل موجود نیست).
+      ۲) کلاینتی که این لینک را subscribe کرده، لیستش را با «هیچ» جانشین
+         می‌کند — یعنی فایلِ خالی از نبودِ فایل بدتر است.
+      ۳) هر کدام یک ورودیِ درختِ git در هر یک از ۹۸ دورِ روزانه است.
+
+    سیاستِ جدید: فایل فقط وقتی نوشته می‌شود که حداقل یک کانفیگ داشته باشد؛
+    در غیر این صورت فایلِ منتشرشدهٔ قبلی حذف می‌شود تا لینک ۴۰۴ بدهد
+    (سیگنالِ صادق) و دادهٔ بایات هم در مخزن نماند.
+    مقادیرِ شمارش برای همهٔ پروتکل‌ها — حتی صفرها — در index.json می‌مانند،
+    پس هیچ اطلاعاتی از دست نمی‌رود؛ فقط فایلِ توخالی منتشر نمی‌شود.
+    """
     base = os.path.join(out_dir, "protocols")
     buckets: Dict[str, List[str]] = {}
     for line in all_unique:
         proto = core.protocol_of(line)
         if proto:
             buckets.setdefault(proto, []).append(line)
+
     counts: Dict[str, int] = {}
+    written = 0
+    pruned = 0
+
+    def emit(proto: str, lines: List[str]) -> None:
+        """نوشتن (یا حذفِ) جفت‌فایلِ یک پروتکل."""
+        nonlocal written, pruned
+        txt = os.path.join(base, f"{proto}.txt")
+        b64 = os.path.join(base, f"{proto}_base64.txt")
+        if lines:
+            h = f"# @Raydikalx — {proto} — {len(lines)} configs\n"
+            _write_text(txt, h + "\n".join(lines) + "\n")
+            _write_text(b64, core.encode_base64_subscription(lines))
+            written += 1
+        else:
+            # فایلِ توخالی منتشر نمی‌شود و نسخهٔ قبلی پاک می‌شود.
+            # ⚠️ هر دو حذف باید «مستقل» ارزیابی شوند. نوشتنِ
+            #    `if _remove_if_exists(txt) or _remove_if_exists(b64)`
+            #    باگ می‌سازد: عملگر `or` کوتاه‌مدار است، پس وقتی فایلِ txt
+            #    حذف شود، تابعِ دومی هرگز صدا زده نمی‌شود و فایلِ base64
+            #    برای همیشه در مخزن باقی می‌ماند (در تستِ واقعی دقیقاً همین
+            #    رخ داد: ۷ فایلِ ‎*_base64.txt‎ صفر-بایتی باقی مانده بودند).
+            gone_txt = _remove_if_exists(txt)
+            gone_b64 = _remove_if_exists(b64)
+            if gone_txt or gone_b64:
+                pruned += 1
+
     for proto in core.PROTOCOL_ORDER:
         lines = buckets.get(proto, [])
         counts[proto] = len(lines)
-        h = f"# @Raydikalx — {proto} — {len(lines)} configs\n"
-        _write_text(os.path.join(base, f"{proto}.txt"), h + "\n".join(lines) + "\n")
-        if lines:
-            _write_text(os.path.join(base, f"{proto}_base64.txt"),
-                        core.encode_base64_subscription(lines))
+        emit(proto, lines)
+
     # 🧠 پروتکل‌های ناشناخته/جدید (خارج از ترتیبِ شناخته‌شده) — خودکار فایل می‌سازند
     for proto, lines in sorted(buckets.items(), key=lambda x: -len(x[1])):
         if proto not in counts:
             counts[proto] = len(lines)
-            h = f"# @Raydikalx — {proto} — {len(lines)} configs\n"
-            _write_text(os.path.join(base, f"{proto}.txt"), h + "\n".join(lines) + "\n")
-            if lines:
-                _write_text(os.path.join(base, f"{proto}_base64.txt"),
-                            core.encode_base64_subscription(lines))
+            emit(proto, lines)
+
+    log(f"  📁 protocols: {written} file-pairs written, {pruned} empty pruned")
     return counts
 
 
@@ -263,11 +416,19 @@ def build_index(results: Dict[str, CategoryResult], proto_counts: Dict[str, int]
             "total_fetched": r.total_seen,
             "active_sources": r.active_sources,
             "protocols": dict(sorted(r.protocol_counts.items(), key=lambda x: -x[1])),
+            # لینکِ اصلی raw است (کشِ ۵ دقیقه‌ای)، jsDelivr آینه
+            #   (کشِ ۱۲ ساعته). کلیدهای قدیمی حذف نشدند تا هیچ مصرف‌کننده‌ای
+            #   نشکند؛ فقط مقدارشان به raw تغییر کرد و آینه در کلیدهای
+            #   جداگانهٔ *_mirror در دسترس است.
             "files": {
-                "configs_txt": f"{CDN_BASE}/{cat}/configs.txt",
-                "configs_base64": f"{CDN_BASE}/{cat}/configs_base64.txt",
-                "clash_yaml": f"{CDN_BASE}/{cat}/clash.yaml",
-                "singbox_json": f"{CDN_BASE}/{cat}/singbox.json",
+                "configs_txt": f"{PRIMARY_BASE}/{cat}/configs.txt",
+                "configs_base64": f"{PRIMARY_BASE}/{cat}/configs_base64.txt",
+                "clash_yaml": f"{PRIMARY_BASE}/{cat}/clash.yaml",
+                "singbox_json": f"{PRIMARY_BASE}/{cat}/singbox.json",
+                "configs_txt_mirror": f"{MIRROR_BASE}/{cat}/configs.txt",
+                "configs_base64_mirror": f"{MIRROR_BASE}/{cat}/configs_base64.txt",
+                "clash_yaml_mirror": f"{MIRROR_BASE}/{cat}/clash.yaml",
+                "singbox_json_mirror": f"{MIRROR_BASE}/{cat}/singbox.json",
             },
         }
 
@@ -279,24 +440,66 @@ def build_index(results: Dict[str, CategoryResult], proto_counts: Dict[str, int]
         "next_update_eta": next_run.isoformat(),
         "update_interval_minutes": UPDATE_INTERVAL_MIN,
         "elapsed_seconds": round(elapsed, 1),
+        # اولویتِ لینک‌ها به‌صورتِ ماشین‌خوان اعلام می‌شود تا هر
+        #   مصرف‌کننده‌ای (ربات، اپ، اسکریپت) بداند کدام تازه‌تر است.
         "raw_base": RAW_BASE,
         "cdn_base": CDN_BASE,
+        "primary_base": PRIMARY_BASE,
+        "mirror_base": MIRROR_BASE,
+        "data_branch": GH_BRANCH,
+        # index.json آدرسِ خودش را هم منتشر می‌کند.
+        #   چرا: یک بازبینیِ کاملِ «هر فایلِ منتشرشده باید تبلیغ شود» نشان داد
+        #   تنها فایلِ منتشرشده‌ای که در index.json آدرسی نداشت، خودِ index.json
+        #   بود. این یعنی مصرف‌کننده‌ای که فقط همین سند را در دست دارد (مثل یک
+        #   ربات یا آینه‌ساز) نمی‌تواند بفهمد از کجا باید آن را دوباره بگیرد و
+        #   ناچار است آدرس را hard-code کند — همان چیزی که این تغییر حذفش کرد.
+        "self_url": f"{PRIMARY_BASE}/index.json",
+        "self_url_mirror": f"{MIRROR_BASE}/index.json",
+        "link_policy": {
+            "primary": "raw.githubusercontent.com",
+            "primary_cache_seconds": 300,
+            "mirror": "cdn.jsdelivr.net",
+            "mirror_cache_seconds": 43200,
+            "note": ("raw is ~144x fresher (300s vs 43200s cache). The jsDelivr "
+                     "mirror is purged on every run, but use raw when possible."),
+        },
         "categories": {
             "all": cat_block("all", results["all"]),
             "heavy": cat_block("heavy", results["heavy"]),
             "light": cat_block("light", results["light"]),
         },
         "protocols": dict(sorted(proto_counts.items(), key=lambda x: -x[1])),
+        # فقط پروتکل‌هایی که واقعاً فایل دارند اینجا فهرست می‌شوند.
+        #   پیش‌تر همهٔ ۱۴ پروتکلِ PROTOCOL_ORDER بی‌قید فهرست می‌شدند، حتی
+        #   ۷ موردی که صفر کانفیگ داشتند → index.json لینکی را تبلیغ می‌کرد
+        #   که بدنهٔ خالی برمی‌گرداند. حالا که فایلِ خالی حذف می‌شود، فهرست‌کردنِ
+        #   بی‌قید به تبلیغِ ۴۰۴ تبدیل می‌شد؛ پس فهرست هم شرطی شد.
+        #   شمارشِ همهٔ پروتکل‌ها (شاملِ صفرها) در کلیدِ "protocols" باقی است،
+        #   پس هیچ اطلاعاتی از دست نمی‌رود.
         "protocol_files": {
-            p: f"{CDN_BASE}/protocols/{p}.txt" for p in core.PROTOCOL_ORDER
+            p: f"{PRIMARY_BASE}/protocols/{p}.txt"
+            for p in core.PROTOCOL_ORDER if proto_counts.get(p, 0) > 0
         },
+        "protocol_files_base64": {
+            p: f"{PRIMARY_BASE}/protocols/{p}_base64.txt"
+            for p in core.PROTOCOL_ORDER if proto_counts.get(p, 0) > 0
+        },
+        "protocol_files_mirror": {
+            p: f"{MIRROR_BASE}/protocols/{p}.txt"
+            for p in core.PROTOCOL_ORDER if proto_counts.get(p, 0) > 0
+        },
+        # کلیدهای *_duplicates حذف شدند چون فایل‌شان دیگر تولید نمی‌شود.
+        #   نگه‌داشتنِ کلید بدونِ فایل = تبلیغِ لینکِ ۴۰۴ در index.json.
+        #   کلیدهای broken هم شرطی شدند: اگر یک دسته این دور صفر کانفیگِ خراب
+        #   داشته باشد، فایلش نوشته نمی‌شود، پس نباید تبلیغ شود. (در تستِ واقعی
+        #   light صفر خراب داشت و index.json لینکِ ۴۰۴ تبلیغ می‌کرد.)
         "archive": {
-            "all_broken": f"{CDN_BASE}/archive/all_broken.txt",
-            "all_duplicates": f"{CDN_BASE}/archive/all_duplicates.txt",
-            "heavy_broken": f"{CDN_BASE}/archive/heavy_broken.txt",
-            "heavy_duplicates": f"{CDN_BASE}/archive/heavy_duplicates.txt",
-            "light_broken": f"{CDN_BASE}/archive/light_broken.txt",
-            "light_duplicates": f"{CDN_BASE}/archive/light_duplicates.txt",
+            **{f"{cat}_broken": f"{PRIMARY_BASE}/archive/{cat}_broken.txt"
+               for cat in ("all", "heavy", "light") if results[cat].broken},
+            # فایل base64 پیش‌تر تولید می‌شد ولی هیچ‌جا فهرست نشده بود
+            # (منتشرشده اما کشف‌ناپذیر). حالا فهرست می‌شود.
+            **{f"{cat}_broken_base64": f"{PRIMARY_BASE}/archive/{cat}_broken_base64.txt"
+               for cat in ("all", "heavy", "light") if results[cat].broken},
         },
         "sources": {
             "light_count": len(LIGHT_SOURCES),
@@ -305,7 +508,8 @@ def build_index(results: Dict[str, CategoryResult], proto_counts: Dict[str, int]
             # ── گزارشِ سلامتِ منابع (حرفه‌ای): چند منبع زنده/مرده‌اند ──────────
             "healthy": sum(1 for h in SOURCE_HEALTH.values() if h.get("status") == "ok"),
             "unhealthy": sum(1 for h in SOURCE_HEALTH.values() if h.get("status") != "ok"),
-            "health_url": f"{CDN_BASE}/health.json",
+            "health_url": f"{PRIMARY_BASE}/health.json",
+            "health_url_mirror": f"{MIRROR_BASE}/health.json",
         },
     }
 
@@ -352,15 +556,25 @@ def main() -> int:
     per_source = fetch_all(all_urls)
 
     log("🧮 Processing categories (dedup + brand) …")
-    res_all = process_category(per_source, all_urls)
-    res_heavy = process_category(per_source, HEAVY_SOURCES)
-    res_light = process_category(per_source, LIGHT_SOURCES)
+    # cache مشترک بین سه دسته — هر خط فقط یک بار تحلیل می‌شود
+    analysis_cache: Dict[str, Tuple[bool, str]] = {}
+    res_all = process_category(per_source, all_urls, analysis_cache)
+    res_heavy = process_category(per_source, HEAVY_SOURCES, analysis_cache)
+    res_light = process_category(per_source, LIGHT_SOURCES, analysis_cache)
     results = {"all": res_all, "heavy": res_heavy, "light": res_light}
 
     for cat, r in results.items():
         log(f"  • {cat:<5}: {len(r.unique):>6} unique | "
             f"{len(r.duplicates):>6} dup | {len(r.broken):>5} broken | "
             f"{r.active_sources}/{len(HEAVY_SOURCES if cat=='heavy' else LIGHT_SOURCES if cat=='light' else all_urls)} src")
+
+    # ── دروازهٔ ایمنی: پیش از **هر** نوشتنی بررسی کن ────────────────────────────
+    # قبلاً این بررسی بعد از نوشتن همهٔ فایل‌ها انجام می‌شد؛ یعنی اگر همهٔ منابع
+    # از کار می‌افتادند، فایل‌های خوبِ موجود در ریپو با فایل‌های خالی بازنویسی
+    # می‌شدند و بعد کد ۲ برمی‌گشت — دادهٔ سالم قبلی از دست می‌رفت.
+    if not res_all.unique:
+        log("❌ No configs produced — aborting BEFORE writing (existing files preserved)")
+        return 2
 
     log("💾 Writing output files …")
     for cat, r in results.items():
@@ -385,10 +599,6 @@ def main() -> int:
     # خروجی برای GitHub Actions summary
     log(f"✅ Done in {elapsed:.1f}s — "
         f"ALL={len(res_all.unique)} HEAVY={len(res_heavy.unique)} LIGHT={len(res_light.unique)} unique")
-
-    if res_all.unique == []:
-        log("❌ No configs produced — aborting (will not commit empty output)")
-        return 2
     return 0
 
 
