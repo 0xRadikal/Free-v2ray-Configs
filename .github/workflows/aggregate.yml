@@ -181,6 +181,108 @@ jobs:
 
       # تست‌های واحد پیش از هر تولیدی — هر تست به یک باگِ واقعیِ کشف‌شده گره خورده
       # است، پس شکستِ آن یعنی یک رگرسیونِ شناخته‌شده برگشته.
+      # ── پایگاهِ دادهٔ GeoIP ────────────────────────────────────────────────
+      # چرا لازم است: برچسبِ کشور پیش از این از متنِ ریمارک حدس زده می‌شد و
+      # اندازه‌گیری روی ۶۷۵ کانفیگ با مرجعِ مستقل نشان داد فقط ۵۳٫۶٪ درست بود و
+      # ۱۴٫۷٪ **غلط**. با این پایگاهِ داده به ۹۷٫۹٪ درست و ۲٫۱٪ غلط رسید.
+      #
+      # چرا DB-IP و نه GeoLite2: دانلودِ GeoLite2 از ۲۰۱۹ کلیدِ حساب می‌خواهد.
+      # آزمونِ زنده: DB-IP → HTTP 200 ، MaxMind → HTTP 401. پس DB-IP بدونِ هیچ
+      # رمزی در CI کار می‌کند و پروانه‌اش (CC-BY-4.0) هم اجازه می‌دهد.
+      #
+      # چرا cache: فایل ~۴ مگابایتِ فشرده است و ماهانه یک بار عوض می‌شود، ولی
+      # این ورک‌فلو روزی ۹۶ بار اجرا می‌شود. بدونِ cache یعنی ۹۶ دانلودِ روزانهٔ
+      # بی‌دلیل از سرورِ یک پروژهٔ رایگان. کلیدِ cache ماهانه است، پس در ماهِ
+      # جدید خودش تازه می‌شود.
+      #
+      # چرا `.cache/` در .gitignore است: اگر نبود، هر اجرا این ۸ مگابایت را
+      # commit می‌کرد — دقیقاً همان الگوی رشدی که فازِ پیشین حذفش کرد.
+      # ماهِ جاری، به‌عنوانِ کلیدِ cache. عمداً در `env:` سراسری تعریف نشده،
+      # چون آن بخش در زمانِ پارس ارزیابی می‌شود و `date` در آن اجرا نمی‌شود.
+      - name: 🌍 Resolve GeoIP cache key
+        if: steps.gate.outputs.should_run == 'true'
+        id: geoip_key
+        run: echo "ym=$(date -u +%Y-%m)" >> "$GITHUB_OUTPUT"
+
+      - name: 🌍 Restore GeoIP database cache
+        if: steps.gate.outputs.should_run == 'true'
+        id: geoip_cache
+        uses: actions/cache@v4
+        with:
+          path: .cache/dbip-country-lite.mmdb
+          key: dbip-country-lite-${{ steps.geoip_key.outputs.ym }}
+          # اگر فایلِ ماهِ جاری هنوز منتشر نشده، نسخهٔ ماهِ پیش از cache
+          # بازیابی می‌شود — بهتر از هیچ، و دقتش عملاً یکسان است.
+          restore-keys: |
+            dbip-country-lite-
+
+      - name: 🌍 Download GeoIP database
+        if: steps.gate.outputs.should_run == 'true' && steps.geoip_cache.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          mkdir -p .cache
+          DEST=".cache/dbip-country-lite.mmdb"
+
+          # ماهِ جاری و ماهِ پیش، به همین ترتیب.
+          #
+          # چرا دو ماه: فایلِ ماهِ جاری در روزهای نخستِ ماه هنوز منتشر نشده و
+          # ۴۰۴ می‌دهد. آزمونِ زنده در همین لحظه:
+          #   2026-07 → 200 (4٬046٬283 بایت)
+          #   2026-06 → 200 (4٬081٬371 بایت)
+          #   2026-08 → 404
+          # پس بدونِ fallback، خط‌لوله هر اولِ ماه برچسب‌گذاری را از دست می‌داد.
+          ok=0
+          for YM in "$(date -u +%Y-%m)" "$(date -u -d '1 month ago' +%Y-%m)"; do
+            URL="https://download.db-ip.com/free/dbip-country-lite-${YM}.mmdb.gz"
+            echo "→ trying $URL"
+            if curl -fsSL --retry 3 --retry-delay 2 --max-time 120 -o /tmp/dbip.mmdb.gz "$URL"; then
+              gunzip -c /tmp/dbip.mmdb.gz > "$DEST.tmp"
+              # اعتبارسنجی پیش از جای‌گذاری: فایلِ نصفه‌نیمه بدتر از نبودِ فایل
+              # است، چون ماژول آن را «موجود» می‌بیند و همهٔ جست‌وجوها بی‌صدا
+              # None برمی‌گردانند.
+              SZ=$(stat -c%s "$DEST.tmp")
+              if [ "$SZ" -lt 1000000 ]; then
+                echo "  ✗ too small ($SZ bytes) — rejecting"
+                rm -f "$DEST.tmp"; continue
+              fi
+              mv "$DEST.tmp" "$DEST"
+              echo "  ✓ $YM — $SZ bytes"
+              ok=1
+              break
+            fi
+            echo "  ✗ not available"
+          done
+
+          if [ "$ok" != "1" ]; then
+            # عمداً شکست نمی‌دهیم: نبودِ یک پایگاهِ دادهٔ کمکی نباید انتشارِ
+            # کانفیگ‌ها را متوقف کند. ماژول geo خودش به حالتِ کاهش‌یافته می‌رود و
+            # این وضعیت در health.json (کلیدِ geo.db_loaded) ثبت می‌شود.
+            echo "::warning::GeoIP database unavailable — country labels will fall back to remark parsing"
+          fi
+
+      # بررسیِ سلامتِ پایگاهِ داده با همان کدی که خط‌لوله استفاده می‌کند.
+      # اگر cache خراب شده باشد، بهتر است همین‌جا در لاگ دیده شود تا بعداً از
+      # روی برچسب‌های غلط حدس زده شود.
+      - name: 🌍 Verify GeoIP database
+        if: steps.gate.outputs.should_run == 'true'
+        run: |
+          python - <<'EOF'
+          import sys
+          sys.path.insert(0, "scripts")
+          import geo
+          if not geo.database_available():
+              print("::warning::GeoIP database not loaded — degraded labelling")
+              raise SystemExit(0)
+          # سه نشانیِ با کشورِ معلوم و پایدار، به‌عنوانِ آزمونِ سلامت
+          checks = {"8.8.8.8": "US", "1.1.1.1": "AU", "5.6.7.8": "DE"}
+          bad = {ip: geo.country_of_ip(ip) for ip, exp in checks.items()
+                 if geo.country_of_ip(ip) != exp}
+          if bad:
+              print(f"::warning::GeoIP sanity check mismatch: {bad}")
+          else:
+              print(f"GeoIP OK — {len(checks)}/{len(checks)} sanity checks passed")
+          EOF
+
       - name: 🧪 Unit tests
         if: steps.gate.outputs.should_run == 'true'
         run: python scripts/test_pipeline.py

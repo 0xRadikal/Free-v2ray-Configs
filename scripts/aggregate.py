@@ -39,6 +39,14 @@ import core  # noqa: E402
 import converters  # noqa: E402
 from sources import LIGHT_SOURCES, HEAVY_SOURCES  # noqa: E402
 
+# geo اختیاری است: اگر پایگاه‌دادهٔ GeoIP یا کتابخانه‌اش در دسترس نباشد، خط‌لوله
+# باید همان‌طور که پیش از این کار می‌کرد کار کند، فقط با برچسب‌های ضعیف‌تر.
+# پس ایمپورتِ آن هرگز نباید اجرا را متوقف کند.
+try:
+    import geo  # noqa: E402
+except Exception:  # pragma: no cover - محیطِ بدونِ geo
+    geo = None  # type: ignore
+
 # ──────────────────────────────────────────────────────────────────────────────
 # پایهٔ لینک‌ها — برای درج در index.json
 #
@@ -253,6 +261,36 @@ def process_category(
     # ترتیب را به محتوا گره می‌زند: تا وقتی مجموعهٔ کانفیگ‌ها ثابت باشد، ترتیب
     # هم ثابت است.
     ordered = sorted(raw_unique, key=lambda ln: (core.dedup_key(ln) or ln))
+
+    # ── گرم‌کردنِ کشِ کشور، پیش از حلقهٔ برندینگ ─────────────────────────────
+    #
+    # `core.brand_remark` برای هر خط `country_for_endpoint` را صدا می‌زند و آن هم
+    # در صورتِ نیاز DNS حل می‌کند. اگر این کار داخلِ حلقه و *تک‌تک* انجام شود،
+    # هر میزبانِ نامی یک رفت‌وبرگشتِ سریِ DNS می‌شود.
+    #
+    # اندازه‌گیریِ واقعی روی همین دادهٔ زنده:
+    #   ۵٬۰۸۵ میزبانِ یکتا  →  ۳٬۷۲۰ (۷۳٫۲٪) از قبل IP خام‌اند و DNS نمی‌خواهند
+    #                          ۱٬۳۶۵ میزبانِ نامی باقی می‌ماند
+    #   ۱٬۳۶۵ میزبان به‌صورتِ هم‌زمان با ۶۴ کارگر  →  ۴٫۹ ثانیه
+    #   (۱۲۸ کارگر *بدتر* بود: ۸٫۴ ثانیه — گلوگاه، خودِ resolver بالادستی است،
+    #    نه پهنای‌باند، پس افزودنِ کارگر بیشتر فقط صف‌بندی ایجاد می‌کند.)
+    #
+    # کلِ خط‌لوله الان ۴٫۸ ثانیه طول می‌کشد، پس بدترین حالت تقریباً دو برابر
+    # می‌شود و همچنان بسیار کمتر از بازهٔ ۱۵ دقیقه‌ای است.
+    #
+    # این تابع سه بار صدا زده می‌شود (all/heavy/light) ولی کشِ `geo` سراسری است،
+    # پس دورهای دوم و سوم عملاً هزینه‌ای ندارند.
+    if geo is not None:
+        try:
+            hosts = []
+            for ln in ordered:
+                ep = core.endpoint_of(ln)
+                if ep:
+                    hosts.append(ep)
+            geo.warm_up(hosts)
+        except Exception as e:  # هرگز نباید تجمیع را متوقف کند
+            log(f"  ⚠️ geo warm-up skipped: {e}")
+
     for idx, line in enumerate(ordered, start=1):
         branded = core.brand_remark(line, idx)
         r.unique.append(branded)
@@ -540,13 +578,42 @@ def build_index(results: Dict[str, CategoryResult], proto_counts: Dict[str, int]
 
 
 def build_health_report(elapsed: float) -> dict:
-    """گزارشِ کاملِ سلامتِ هر منبع — برای مانیتورینگ و دیباگِ منابعِ مرده."""
+    """گزارشِ کاملِ سلامتِ هر منبع — برای مانیتورینگ و دیباگِ منابعِ مرده.
+
+    از این نسخه، گزارش سه بخشِ تازه هم دارد:
+
+      `converters` — چند کانفیگ در تبدیل به Clash/Sing-box حذف شد و چرا.
+                     تا پیش از این، حذف بی‌صدا بود؛ حالا اگر یک تغییر باعث شود
+                     ناگهان هزاران کانفیگ حذف شوند، در همین فایل دیده می‌شود.
+
+      `geo`        — چند برچسبِ کشور از GeoIP آمد، چند تا از DNS، چند DNS شکست
+                     خورد و آیا پایگاه‌داده اصلاً بارگذاری شد یا نه. بدونِ این،
+                     اگر دانلودِ mmdb در ورک‌فلو خراب شود، خط‌لوله بی‌صدا به
+                     برچسب‌گذاریِ ضعیفِ قدیمی برمی‌گشت و کسی نمی‌فهمید.
+
+    هر دو بخش «بهترین تلاش»اند: اگر ماژول در دسترس نباشد، مقدارشان None می‌شود و
+    گزارش همان ساختارِ قبلی را حفظ می‌کند (سازگاریِ عقب‌رو برای هر مصرف‌کننده‌ای
+    که health.json را پارس می‌کند).
+    """
     now = _dt.datetime.now(_dt.timezone.utc)
     items = []
     for url in (LIGHT_SOURCES + HEAVY_SOURCES):
         h = SOURCE_HEALTH.get(url, {"name": url.rsplit("/", 1)[-1], "status": "unknown", "count": 0})
         tier = "light" if url in LIGHT_SOURCES else "heavy"
         items.append({"url": url, "tier": tier, **h})
+
+    try:
+        conv_stats = converters.drop_stats()
+    except Exception:
+        conv_stats = None
+
+    geo_stats = None
+    if geo is not None:
+        try:
+            geo_stats = geo.stats()
+        except Exception:
+            geo_stats = None
+
     return {
         "brand": core.BRAND_CHANNEL,
         "checked_at": now.isoformat(),
@@ -559,6 +626,8 @@ def build_health_report(elapsed: float) -> dict:
             "fail": sum(1 for i in items if i.get("status") == "fail"),
         },
         "sources": items,
+        "converters": conv_stats,
+        "geo": geo_stats,
     }
 
 
@@ -620,6 +689,21 @@ def main() -> int:
                 json.dumps(health, ensure_ascii=False, indent=2))
     hs = health["summary"]
     log(f"  • source health: {hs['ok']} ok / {hs['empty']} empty / {hs['fail']} fail")
+
+    cs = health.get("converters") or {}
+    for target in ("clash", "singbox"):
+        t = cs.get(target)
+        if t:
+            reasons = ", ".join(f"{k}={v}" for k, v in (t.get("by_reason") or {}).items())
+            log(f"  • {target} drops: {t.get('total', 0)}" + (f" ({reasons})" if reasons else ""))
+
+    gs = health.get("geo")
+    if gs:
+        log("  • geo: db=" + ("yes" if gs.get("db_loaded") else "no")
+            + f" ip={gs.get('by_ip_literal', 0)}"
+            + f" dns={gs.get('by_dns', 0)}"
+            + f" dns_failed={gs.get('dns_failed', 0)}"
+            + f" unknown={gs.get('unknown_ip_literal', 0) + gs.get('unknown_after_dns', 0)}")
 
     # خروجی برای GitHub Actions summary
     log(f"✅ Done in {elapsed:.1f}s — "

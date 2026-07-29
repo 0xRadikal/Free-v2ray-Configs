@@ -2,9 +2,19 @@
 """
 converters.py — تبدیل کانفیگ‌های V2Ray به فرمت‌های Clash (Mihomo) YAML و Sing-box JSON.
 
-پشتیبانی: vless, vmess, trojan, shadowsocks (ss).
-پروتکل‌های hysteria2/tuic/wireguard فعلاً به Clash/Sing-box تبدیل نمی‌شوند
-(در فایل‌های txt/base64 و per-protocol کامل موجودند).
+پشتیبانی: vless, vmess, trojan, shadowsocks (ss), hysteria2, tuic.
+
+hysteria2 و tuic چرا اضافه شدند: توضیحاتِ مخزن این دو پروتکل را تبلیغ می‌کرد
+ولی هیچ‌کدام از دو مبدل آن‌ها را تولید نمی‌کرد. اندازه‌گیریِ زندهٔ خروجی نشان داد
+۸۰ کانفیگِ hysteria2 و ۱ کانفیگِ tuic در فایل‌های متنی منتشر می‌شوند اما در
+clash.yaml و singbox.json **صفر** حضور دارند. کاربری که فقط اشتراکِ Clash را
+وارد می‌کند، این‌ها را هرگز نمی‌بیند. فاصلهٔ میانِ آنچه تبلیغ می‌شود و آنچه
+تحویل داده می‌شود، خودش یک نقصِ اعتماد است.
+
+wireguard آگاهانه بیرون ماند: بر خلافِ بقیه، wireguard کلیدِ خصوصیِ سمتِ کلاینت
+و نشانیِ داخلیِ تخصیص‌یافته لازم دارد. این‌ها در URI عمومی وجود ندارند، پس هر
+تبدیلی ناچار است مقدارِ جعلی بگذارد و کانفیگی بسازد که هرگز وصل نمی‌شود.
+شمارشِ زنده: صفر کانفیگِ wireguard در ورودی هست، پس تبدیلش هم سودی ندارد.
 
 قاعدهٔ طلایی این ماژول: **هرگز خروجی نامعتبر تولید نکن.**
 یک کانفیگ نامعتبر در وسط فایل، کل فایل را برای کلاینت غیرقابل‌استفاده می‌کند
@@ -18,6 +28,7 @@ converters.py — تبدیل کانفیگ‌های V2Ray به فرمت‌های 
 from __future__ import annotations
 
 import base64
+import ipaddress
 import json
 import re
 import urllib.parse
@@ -168,6 +179,254 @@ def _remark_of(line: str) -> str:
 # Parse → dict واسط (نمایش یکنواخت پروتکل)
 # ──────────────────────────────────────────────────────────────────────────────
 
+# ──────────────────────────────────────────────────────────────────────────────
+# شمارشِ کانفیگ‌های حذف‌شده در تبدیل
+#
+# چرا لازم است: تا پیش از این، هر کانفیگی که مبدل نمی‌توانست بیان کند بی‌صدا
+# رد می‌شد. اندازه‌گیریِ واقعی روی ۸۰۱۷ کانفیگِ زندهٔ همین مخزن (پس از افزودنِ
+# پشتیبانیِ hysteria2 و tuic) نشان داد این حذفِ خاموش کوچک نیست:
+#
+#   Clash   : ۶۸ حذف  → unparsable=۶۰ ، not_expressible=۸
+#             به تفکیکِ پروتکل: ss=۳۰ ، ssr=۲۸ ، vless=۵ ، trojan=۳ ، vmess=۲
+#   Sing-box: ۳۱۳ حذف → unparsable=۶۰ ، not_expressible=۲۵۳
+#             به تفکیکِ پروتکل: vless=۲۴۰ ، ss=۳۰ ، ssr=۲۸ ، trojan=۱۲ ، vmess=۳
+#
+# هیچ‌کس این عددها را نمی‌دانست، چون نه لاگی بود نه شمارشی. کاربری که فایلِ
+# Clash را وارد می‌کند و «۸۰۱۷ کانفیگ» را در توضیحاتِ مخزن خوانده، عددِ دیگری
+# می‌بیند و دلیلش را نمی‌فهمد. بزرگ‌ترین قلم — ۲۴۰ عدد vless در Sing-box — همان
+# حذفِ مشکوکِ قدیمی بود که تا امروز فقط گمان می‌رفت و حالا اندازه‌گیری شده است.
+#
+# با ثبتِ علتِ حذف، این عددها به health.json می‌روند و قابلِ پیگیری می‌شوند:
+# اگر فردا یک تغییر باعث شود ۲۰۰۰ کانفیگ حذف شود، در گزارش دیده می‌شود.
+# ──────────────────────────────────────────────────────────────────────────────
+
+class _DropRecorder:
+    """
+    شمارشگرِ علت‌های حذف، به تفکیکِ مبدل و پروتکل.
+
+    عمداً فقط *شمارش* می‌کند و خودِ کانفیگ‌ها را نگه نمی‌دارد: نگه‌داشتنِ هزاران
+    رشته در حافظه سودی ندارد و گزارش را هم بی‌جهت بزرگ می‌کند.
+    """
+
+    def __init__(self) -> None:
+        self.data: Dict[str, Dict[str, Any]] = {}
+
+    def clear_target(self, target: str) -> None:
+        self.data[target] = {"total": 0, "by_reason": {}, "by_protocol": {}}
+
+    def record(self, target: str, reason: str, line: str,
+               proto: Optional[str] = None) -> None:
+        d = self.data.setdefault(
+            target, {"total": 0, "by_reason": {}, "by_protocol": {}})
+        d["total"] += 1
+        d["by_reason"][reason] = d["by_reason"].get(reason, 0) + 1
+        key = proto or _scheme_of(line)
+        if key:
+            d["by_protocol"][key] = d["by_protocol"].get(key, 0) + 1
+
+    def snapshot(self) -> Dict[str, Dict[str, Any]]:
+        """کپیِ آمار برای درج در گزارشِ سلامت."""
+        return {
+            t: {"total": v["total"],
+                "by_reason": dict(sorted(v["by_reason"].items())),
+                "by_protocol": dict(sorted(v["by_protocol"].items(),
+                                           key=lambda kv: (-kv[1], kv[0])))}
+            for t, v in sorted(self.data.items())
+        }
+
+
+_drops = _DropRecorder()
+
+
+def _scheme_of(line: str) -> str:
+    """schemeی خامِ یک خط، برای دسته‌بندیِ حذف‌ها وقتی نوع تحلیل نشده است."""
+    s = (line or "").strip()
+    i = s.find("://")
+    return s[:i].lower() if 0 < i < 20 else ""
+
+
+def drop_stats() -> Dict[str, Dict[str, Any]]:
+    """آمارِ حذف‌های آخرین تبدیل. خطِ لوله آن را در health.json می‌نویسد."""
+    return _drops.snapshot()
+
+
+#: حالت‌های کنترلِ ازدحامِ پذیرفته‌شده در tuic. مقدارِ خارج از این مجموعه در
+#: sing-box خطای بارگذاری می‌دهد و کلِ سند را رد می‌کند، پس به «cubic» می‌افتد.
+_TUIC_CONGESTION = frozenset({"cubic", "new_reno", "bbr"})
+
+#: مقادیرِ ALPN مجاز. رشتهٔ دلخواهِ کاربر مستقیم عبور داده نمی‌شود چون یک مقدارِ
+#: بی‌معنا باعث می‌شود دست‌دادنِ TLS در سمتِ کلاینت شکست بخورد.
+_ALPN_ALLOWED = frozenset({"h3", "h2", "http/1.1", "hysteria", "tuic", "quic"})
+
+
+#: مقادیرِ نگهبان (sentinel) که «نامِ میزبان» نیستند بلکه «مقدارِ تهی» را در
+#: قالبِ متن بیان می‌کنند. تولیدکنندهٔ بالادست یک `None`/`null` پایتونی یا
+#: جاوااسکریپتی را مستقیم در URI چاپ کرده. مصداقِ واقعیِ سنجیده‌شده در دادهٔ
+#: زنده: `sni=None` (۲ مورد) — و `None` در DNS هم شکست می‌خورد (gaierror).
+_SNI_SENTINELS = frozenset({
+    "none", "null", "undefined", "nil", "nan", "false", "true",
+    "localhost", "0.0.0.0", "127.0.0.1", "::1", "example.com",
+})
+
+#: یک برچسبِ (label) نامِ میزبان. زیرخط عمداً مجاز است — بندِ توضیحی پایین.
+_SNI_LABEL = re.compile(r"^(?!-)[A-Za-z0-9_-]{1,63}(?<!-)$")
+
+
+def _is_unroutable_server(host: Any) -> bool:
+    """
+    آیا نشانیِ سرور ذاتاً غیرقابلِ‌اتصال است؟
+
+    این *بی‌ربط* به SNI است و یک نقصِ جداگانهٔ بالادست: بعضی کانفیگ‌ها نشانیِ
+    سرورشان `127.0.0.1` یا `0.0.0.0` است. چنین کانفیگی روی دستگاهِ کاربر هرگز
+    وصل نمی‌شود — کلاینت به خودش وصل می‌شود. اندازه‌گیریِ واقعی روی خروجیِ زنده
+    (پیش از این بند)، در سه دسته ۳۲ رخداد:
+
+        all    127.0.0.1  ×۵    127.0.0.53 ×۱۰   0.0.0.0 ×۱
+        heavy  127.0.0.1  ×۲                     0.0.0.0 ×۱
+        light  127.0.0.1  ×۳    127.0.0.53 ×۱۰
+
+    `127.0.0.53` نشانیِ حل‌کنندهٔ محلیِ systemd-resolved است؛ یعنی تولیدکنندهٔ
+    بالادست به‌جای نشانیِ سرور، نشانیِ DNSِ خودش را چاپ کرده. نگه‌داشتنشان تنها
+    آمار را باد می‌کند و کاربر را سرِ کار می‌گذارد، پس drop می‌شوند و در
+    تلمتریِ drop هم شمرده می‌شوند تا عدد قابلِ‌ردیابی بماند.
+
+    نکته: نامِ میزبانِ *غیرِ* IP این‌جا رد نمی‌شود؛ داوری دربارهٔ آن به DNS نیاز
+    دارد و در زمانِ تبدیل انجام نمی‌شود.
+    """
+    s = str(host or "").strip().strip("[]")
+    if not s:
+        return True
+    try:
+        ip = ipaddress.ip_address(s)
+    except ValueError:
+        return False          # نامِ میزبان است، نه IP — این‌جا داوری نمی‌کنیم
+    return bool(ip.is_loopback or ip.is_unspecified or ip.is_multicast
+                or ip.is_reserved or ip.is_link_local)
+
+
+def _clean_sni(raw: Any) -> str:
+    """
+    پاک‌سازیِ SNI — «ترمیم کن، بعد رد کن».
+
+    نمونهٔ واقعی از ورودیِ زنده: `sni=https%3A%2F%2Ft.me%2Foneclickvpnkeys`.
+    این یک نشانیِ تبلیغاتی است که در جای نامِ میزبان نشسته. هر دو کلاینت آن را
+    هنگامِ *بارگذاری* می‌پذیرند (آزمون شد: mihomo و sing-box هر دو rc=0)، پس
+    فایل نمی‌شکند؛ ولی هنگامِ *اتصال* دست‌دادنِ TLS شکست می‌خورد و کاربر آن را
+    «کانفیگِ خراب» می‌بیند بدون اینکه بداند چرا. حذفِ SNI بی‌معنا بهتر است:
+    کلاینت آن‌گاه به نامِ خودِ سرور برمی‌گردد که حداقل یک نامِ واقعی است.
+
+    ▲ چرا نسخهٔ نخست کافی نبود
+    ─────────────────────────
+    نسخهٔ نخست فقط *رد* می‌کرد. اندازه‌گیری روی خروجیِ زندهٔ همین مخزن نشان داد
+    بخشِ بزرگی از مقادیرِ «نامعتبر» در واقع نامِ میزبانِ درستی هستند که یک
+    نویسهٔ اضافه دارند، و رد کردنشان یعنی دور ریختنِ SNIِ سالم:
+
+        مقدارِ خام                         حقیقتِ DNS (سنجیده‌شده)
+        ──────────────────────────────    ───────────────────────────────
+        `$$hn.xiaohouzi.club`             gaierror  ← با `$` شکست می‌خورد
+        `hn.xiaohouzi.club`               13.248.169.48 ✓ ← بی `$` کار می‌کند
+        `world.yahoo.com:443`             درگاهِ چسبیده؛ نامش معتبر است
+        `.afrcloud22.mmv.kr`              نقطهٔ ابتدا؛ بی‌آن → 104.26.14.21 ✓
+        `t.me%2Fripaojiedian`             دوبار درصدکد‌شده؛ ذاتاً نشانی است ✗
+
+    پس ترتیبِ درست این است: نخست نویسه‌های زائدِ *ساختاری* را برمی‌داریم
+    (درصدکدگشاییِ چندلایه، درگاهِ چسبیده، `$`ِ نشانگرِ منبع، نقطهٔ ابتدا/انتها)
+    و تنها پس از آن داوری می‌کنیم. سنجشِ A/B روی ۳ دستهٔ خروجی:
+
+        قاعدهٔ پیشین   ۲٬۵۹۳ مقدارِ یکتا / ۸٬۷۷۹ رخداد
+        قاعدهٔ کنونی   ۲٬۶۲۵ مقدارِ یکتا / ۸٬۸۷۶ رخداد      (‎+۹۷ رخداد)
+        ترمیم‌شده در جا      ۵۹ مقدار /   ۲۱۷ رخداد
+        تازه حذف‌شده          ۴ مقدار /    ۲۹ رخداد
+
+    و آن ۴ مقدارِ تازه‌حذف‌شده یکی‌یکی با DNS آزموده شدند؛ هیچ‌کدام resolve
+    نمی‌شوند (`None`, `Telegram-Leviko_v2ray`, `wbjj-bbcs-.MaQRor.Ir`, و یک نامِ
+    غیرASCII) — یعنی حذفشان زیانی ندارد.
+
+    ▲ چرا زیرخط (`_`) مجاز است
+    ─────────────────────────
+    RFC 1123 زیرخط را در نامِ میزبان مجاز نمی‌داند، ولی ما داوریِ کاغذی نمی‌کنیم؛
+    آزمونِ DNS انجام دادیم:
+
+        `TM_AZARBAYJAB1.new.99.workers.dev`  →  104.21.61.74 ✓
+        `TM-AZARBAYJAB1.new.99.workers.dev`  →  104.21.61.74 ✓
+
+    نامِ زیرخط‌دار واقعاً resolve می‌شود، پس ردش کردن یعنی خرابِ‌کردنِ کانفیگِ
+    سالم. زیرخط را نگه می‌داریم و آن را به خط‌تیره هم *تبدیل نمی‌کنیم*، چون
+    گواهیِ TLS بر پایهٔ نامِ اصلی صادر شده.
+
+    ▲ چرا نقطهٔ پایانی برداشته می‌شود
+    ───────────────────────────────
+    `wwwuk.mobilex55.com.` در DNS کار می‌کند (138.68.140.39) ولی RFC 6066 §3
+    صریح است: نامِ میزبان در افزونهٔ server_name «بدونِ نقطهٔ پایانی» بیان
+    می‌شود. پس این‌جا نقطه را می‌بُریم نه اینکه مقدار را دور بریزیم.
+
+    ▲ چرا نامِ بی‌نقطه رد می‌شود
+    ──────────────────────────
+    `Telegram-Leviko_v2ray` نامِ کانال است نه میزبان؛ نه نقطه دارد و نه resolve
+    می‌شود. یک برچسبِ تنها نمی‌تواند نامِ کاملِ مقصد باشد.
+    """
+    s = str(raw or "").strip()
+    if not s:
+        return ""
+
+    # درصدکدگشاییِ چندلایه: دادهٔ زنده هم `%2F` دارد و هم `%252F`.
+    for _ in range(3):
+        nxt = urllib.parse.unquote(s)
+        if nxt == s:
+            break
+        s = nxt
+    s = s.strip()
+
+    # درگاهِ چسبیده به انتهای نام: `world.yahoo.com:443` → `world.yahoo.com`
+    s = re.sub(r":\d{1,5}$", "", s)
+    # `$`ِ نشانگرِ منبع و نقطهٔ ابتدا/انتها
+    s = s.strip("$").strip(".").strip()
+
+    if not s or len(s) > 253:
+        return ""
+    if s.lower() in _SNI_SENTINELS:
+        return ""
+    # نشانی، مسیر، یا نامِ کاربری هرگز ترمیم‌پذیر نیست
+    if "://" in s or "/" in s or "?" in s or "@" in s or " " in s or ":" in s:
+        return ""
+
+    labels = s.split(".")
+    if len(labels) < 2:
+        return ""
+    if not all(_SNI_LABEL.match(lb) for lb in labels):
+        return ""
+    return s
+
+
+def _truthy(v: Any) -> bool:
+    """
+    تفسیرِ پرچم‌های متنیِ «آری/نه» در URI.
+
+    منابعِ مختلف برای یک معنا سه نگارش می‌نویسند: «1», «true», «yes». اگر فقط
+    یکی را بپذیریم، بقیه خاموشانه «نه» تفسیر می‌شوند و کاربر گواهیِ نامعتبر را
+    رد می‌کند در حالی که سرور انتظارِ پذیرش دارد.
+    """
+    s = str(v or "").strip().lower()
+    return s in ("1", "true", "yes", "on")
+
+
+def _alpn_list(raw: Any) -> list:
+    """
+    رشتهٔ alpn جدا‌شده با کاما → فهرستِ پاک‌سازی‌شده.
+
+    مقادیرِ ناشناخته دور ریخته می‌شوند نه اینکه خام عبور کنند: یک ALPN بی‌معنا
+    باعثِ شکستِ دست‌دادنِ TLS می‌شود و کاربر آن را «کانفیگِ خراب» می‌بیند.
+    """
+    if not raw:
+        return []
+    out: list = []
+    for part in str(raw).split(","):
+        p = urllib.parse.unquote(part).strip().lower()
+        if p in _ALPN_ALLOWED and p not in out:
+            out.append(p)
+    return out
+
+
 def parse_proxy(line: str) -> Optional[Dict[str, Any]]:
     """یک URI کانفیگ → dict واسط استاندارد یا None."""
     line = line.strip()
@@ -186,8 +445,12 @@ def parse_proxy(line: str) -> Optional[Dict[str, Any]]:
                 "cipher": str(obj.get("scy") or "auto"),
                 "network": (str(obj.get("net") or "tcp") or "tcp").lower(),
                 "tls": str(obj.get("tls") or "").lower() in ("tls", "reality"),
-                "sni": str(obj.get("sni") or obj.get("host") or ""),
-                "host": str(obj.get("host") or ""),
+                # پیش از این این سه مسیر (vmess/vless/trojan) خام عبور می‌کردند و
+                # `_clean_sni` تنها بر hysteria2/tuic اعمال می‌شد. سنجشِ خروجیِ
+                # زنده ۴۳۱ مقدارِ نامِ‌میزبانِ ساختاراً بی‌اعتبار را در همان سه
+                # مسیر نشان داد. اکنون هر ورودیِ نامِ‌میزبان از یک دروازه می‌گذرد.
+                "sni": _clean_sni(obj.get("sni") or obj.get("host")),
+                "host": _clean_sni(obj.get("host")),
                 "path": str(obj.get("path") or ""),
                 # در vmess فیلد type برای grpc به‌عنوان serviceName استفاده می‌شود
                 # و path معمولاً حامل آن است. fp نیز در برخی تولیدکننده‌ها هست.
@@ -213,8 +476,8 @@ def parse_proxy(line: str) -> Optional[Dict[str, Any]]:
                 "network": (q.get("type") or "tcp").lower(),
                 "tls": (q.get("security") or "").lower() in ("tls", "reality"),
                 "reality": (q.get("security") or "").lower() == "reality",
-                "sni": q.get("sni") or q.get("host") or "",
-                "host": q.get("host") or "",
+                "sni": _clean_sni(q.get("sni") or q.get("host")),
+                "host": _clean_sni(q.get("host")),
                 "path": q.get("path") or "",
                 "flow": q.get("flow") or "",
                 "pbk": q.get("pbk") or "",
@@ -234,8 +497,8 @@ def parse_proxy(line: str) -> Optional[Dict[str, Any]]:
                 "port": _safe_int(parsed.port),
                 "password": urllib.parse.unquote(parsed.username or ""),
                 "network": (q.get("type") or "tcp").lower(),
-                "sni": q.get("sni") or q.get("host") or "",
-                "host": q.get("host") or "",
+                "sni": _clean_sni(q.get("sni") or q.get("host")),
+                "host": _clean_sni(q.get("host")),
                 "path": q.get("path") or "",
                 "tls": True,  # trojan همیشه TLS
                 "fp": q.get("fp") or "",
@@ -289,6 +552,76 @@ def parse_proxy(line: str) -> Optional[Dict[str, Any]]:
                 "port": port,
                 "cipher": method,
                 "password": password,
+            }
+
+        if scheme in ("hysteria2", "hy2"):
+            # hysteria2://password@host:port/?sni=..&insecure=1&obfs=salamander
+            #            &obfs-password=..&alpn=h3
+            #
+            # هر دو schemeی بالا در ورودیِ واقعی دیده می‌شود (اندازه‌گیری:
+            # ۷۷ مورد با hysteria2:// و ۳ مورد با hy2://)، پس هر دو پذیرفته
+            # می‌شوند وگرنه سه کانفیگ خاموشانه گم می‌شد.
+            if not parsed.hostname or not parsed.port:
+                return None
+            # گذرواژه ممکن است در userinfo با یا بدونِ بخشِ کاربر بیاید
+            pwd = urllib.parse.unquote(parsed.username or "")
+            if parsed.password:
+                pwd = f"{pwd}:{urllib.parse.unquote(parsed.password)}" if pwd else \
+                    urllib.parse.unquote(parsed.password)
+            if not pwd:
+                return None
+            obfs = (q.get("obfs") or "").strip().lower()
+            # فقط salamander در hysteria2 استاندارد است؛ مقدارِ ناشناخته را
+            # نادیده می‌گیریم تا کلاینت کلِ فایل را رد نکند.
+            if obfs and obfs != "salamander":
+                obfs = ""
+            return {
+                "type": "hysteria2",
+                "name": name,
+                "server": parsed.hostname,
+                "port": _safe_int(parsed.port),
+                "password": pwd,
+                "sni": _clean_sni(q.get("sni") or q.get("peer")),
+                "insecure": _truthy(q.get("insecure") or q.get("allowInsecure")
+                                    or q.get("allow_insecure")),
+                "obfs": obfs,
+                "obfs_password": urllib.parse.unquote(
+                    q.get("obfs-password") or q.get("obfs_password") or ""),
+                "alpn": _alpn_list(q.get("alpn")),
+                "tls": True,          # hysteria2 همیشه روی QUIC/TLS است
+            }
+
+        if scheme == "tuic":
+            # tuic://uuid:password@host:port/?congestion_control=cubic
+            #       &udp_relay_mode=native&sni=..&alpn=h3&allow_insecure=1
+            if not parsed.hostname or not parsed.port:
+                return None
+            uuid = urllib.parse.unquote(parsed.username or "")
+            pwd = urllib.parse.unquote(parsed.password or "")
+            if not uuid or not pwd:
+                return None
+            cc = (q.get("congestion_control") or q.get("congestion-control")
+                  or q.get("congestion") or "cubic").strip().lower()
+            if cc not in _TUIC_CONGESTION:
+                cc = "cubic"
+            urm = (q.get("udp_relay_mode") or q.get("udp-relay-mode")
+                   or "native").strip().lower()
+            if urm not in ("native", "quic"):
+                urm = "native"
+            return {
+                "type": "tuic",
+                "name": name,
+                "server": parsed.hostname,
+                "port": _safe_int(parsed.port),
+                "uuid": uuid,
+                "password": pwd,
+                "congestion_control": cc,
+                "udp_relay_mode": urm,
+                "sni": _clean_sni(q.get("sni")),
+                "insecure": _truthy(q.get("allow_insecure") or q.get("insecure")
+                                    or q.get("allowInsecure")),
+                "alpn": _alpn_list(q.get("alpn")),
+                "tls": True,          # tuic همیشه روی QUIC/TLS است
             }
     except Exception:
         return None
@@ -449,6 +782,37 @@ def _to_clash_proxy(p: Dict[str, Any]) -> Optional[Dict[str, Any]]:
             return out
         if t == "shadowsocks":
             return {**base, "type": "ss", "cipher": p["cipher"], "password": p["password"], "udp": True}
+        if t == "hysteria2":
+            # نام‌گذاریِ کلیدها با mihomo v1.19.29 آزمون شد (rc=0).
+            out = {**base, "type": "hysteria2", "password": p["password"]}
+            if p.get("sni"):
+                out["sni"] = p["sni"]
+            if p.get("insecure"):
+                out["skip-cert-verify"] = True
+            if p.get("obfs"):
+                out["obfs"] = p["obfs"]
+                # obfs بدونِ گذرواژه در mihomo بی‌اثر است؛ اگر گذرواژه نبود
+                # کلِ obfs را نمی‌نویسیم تا کاربر گمان نکند مخفی‌سازی فعال است.
+                if p.get("obfs_password"):
+                    out["obfs-password"] = p["obfs_password"]
+                else:
+                    out.pop("obfs")
+            if p.get("alpn"):
+                out["alpn"] = list(p["alpn"])
+            return out
+        if t == "tuic":
+            out = {**base, "type": "tuic", "uuid": p["uuid"], "password": p["password"],
+                   "congestion-controller": p.get("congestion_control", "cubic"),
+                   "udp-relay-mode": p.get("udp_relay_mode", "native")}
+            if p.get("sni"):
+                out["sni"] = p["sni"]
+            if p.get("insecure"):
+                out["skip-cert-verify"] = True
+            # tuic روی QUIC است و ALPN لازم دارد؛ اگر منبع آن را نگفت h3
+            # پیش‌فرضِ استاندارد است. بدونِ ALPN، دست‌دادن در بسیاری از سرورها
+            # شکست می‌خورد.
+            out["alpn"] = list(p["alpn"]) if p.get("alpn") else ["h3"]
+            return out
     except Exception:
         return None
     return None
@@ -520,14 +884,24 @@ def build_clash_yaml(lines: List[str], limit: int = OUTPUT_PROXY_LIMIT) -> str:
 
     proxies: List[Dict[str, Any]] = []
     used_names: set = set()
+    _drops.clear_target("clash")
     for line in lines:
         if len(proxies) >= limit:
-            break
+            _drops.record("clash", "over_limit", line)
+            continue
         p = parse_proxy(line)
         if not p:
+            _drops.record("clash", "unparsable", line)
+            continue
+        # سرورِ غیرقابلِ‌اتصال (loopback / 0.0.0.0 / …) در ریزه‌ی جداگانه شمرده
+        # می‌شود نه در not_expressible: علتِ حذف نقصِ داده‌ی بالادست است، نه
+        # محدودیتِ کلاینت؛ درهم‌ریختنِ این دو عدد، ریشه‌یابی را کور می‌کند.
+        if _is_unroutable_server(p.get("server")):
+            _drops.record("clash", "unroutable_server", line, p.get("type"))
             continue
         cp = _to_clash_proxy(p)
         if not cp:
+            _drops.record("clash", "not_expressible", line, p.get("type"))
             continue
         # نام یکتا
         nm = cp["name"] or cp["type"]
@@ -677,6 +1051,30 @@ def _to_singbox_outbound(p: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         if t == "shadowsocks":
             return {"type": "shadowsocks", "tag": p["name"], "server": p["server"],
                     "server_port": p["port"], "method": p["cipher"], "password": p["password"]}
+        if t == "hysteria2":
+            # ساختارِ زیر با sing-box 1.13.14 آزمون شد (rc=0). بر خلافِ Clash،
+            # در sing-box مخفی‌سازی یک شیء تودرتو است نه دو کلیدِ جدا.
+            ob = {"type": "hysteria2", "tag": p["name"], "server": p["server"],
+                  "server_port": p["port"], "password": p["password"],
+                  "tls": {"enabled": True,
+                          "server_name": p.get("sni") or p["server"],
+                          "insecure": bool(p.get("insecure"))}}
+            if p.get("alpn"):
+                ob["tls"]["alpn"] = list(p["alpn"])
+            if p.get("obfs") and p.get("obfs_password"):
+                ob["obfs"] = {"type": p["obfs"], "password": p["obfs_password"]}
+            return ob
+        if t == "tuic":
+            ob = {"type": "tuic", "tag": p["name"], "server": p["server"],
+                  "server_port": p["port"], "uuid": p["uuid"],
+                  "password": p["password"],
+                  "congestion_control": p.get("congestion_control", "cubic"),
+                  "udp_relay_mode": p.get("udp_relay_mode", "native"),
+                  "tls": {"enabled": True,
+                          "server_name": p.get("sni") or p["server"],
+                          "insecure": bool(p.get("insecure")),
+                          "alpn": list(p["alpn"]) if p.get("alpn") else ["h3"]}}
+            return ob
     except Exception:
         return None
     return None
@@ -686,14 +1084,21 @@ def build_singbox_json(lines: List[str], limit: int = OUTPUT_PROXY_LIMIT) -> str
     """لیست کانفیگ → رشتهٔ Sing-box JSON کامل (با selector/urltest)."""
     outbounds: List[Dict[str, Any]] = []
     used_tags: set = set()
+    _drops.clear_target("singbox")
     for line in lines:
         if len(outbounds) >= limit:
-            break
+            _drops.record("singbox", "over_limit", line)
+            continue
         p = parse_proxy(line)
         if not p:
+            _drops.record("singbox", "unparsable", line)
+            continue
+        if _is_unroutable_server(p.get("server")):
+            _drops.record("singbox", "unroutable_server", line, p.get("type"))
             continue
         ob = _to_singbox_outbound(p)
         if not ob:
+            _drops.record("singbox", "not_expressible", line, p.get("type"))
             continue
         tag = ob["tag"] or ob["type"]
         base_tag = tag

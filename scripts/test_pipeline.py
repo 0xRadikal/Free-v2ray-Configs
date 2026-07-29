@@ -20,6 +20,7 @@ from __future__ import annotations
 import json
 import os
 import sys
+import urllib.parse
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -152,6 +153,44 @@ def test_brand_remark_strips_fragment_before_base64_decode():
     # بازنشر می‌کنند، پس این حالت واقعاً پیش می‌آید).
     assert core.brand_remark(branded) == branded, \
         "brand_remark is not idempotent for vmess"
+
+
+def test_plain_uri_vmess_is_branded_not_passed_through():
+    """باگِ واقعیِ کشف‌شده در بازبینیِ خروجیِ زنده.
+
+    فرضِ نادرست در دو تابع این بود که «vmess بودن ⇒ base64+JSON بودن». بعضی
+    منابع vmess را در قالبِ استانداردِ URI می‌دهند، درست مثلِ vless:
+
+        vmess://<uuid>@91.107.139.186:51459?encryption=auto&type=tcp#…
+
+    پیامدش دو مرحله‌ای بود: `endpoint_of` رشتهٔ تهی برمی‌گرداند و بعد
+    `brand_remark` در `except` همان خطِ خام را پس می‌داد. پس کانفیگ *برندنخورده*
+    منتشر می‌شد و ریمارکِ بالادست — که اتفاقاً تبلیغِ کانالِ رقیب بود — در
+    خروجیِ ما می‌نشست. مصداقِ واقعی در فایلِ منتشرشده: «📯1@oneclickvpnkeys».
+
+    این آزمون هر سه ادعا را می‌پاید: مقصد پیدا شود، برند درج شود، و نامِ رقیب
+    بیرون برود.
+    """
+    line = ("vmess://500cdc83-b189-4d79-b06b-139c7972a57f@91.107.139.186:51459"
+            "?encryption=auto&security=none&type=tcp#%F0%9F%93%AF1%40oneclickvpnkeys")
+
+    assert core.endpoint_of(line) == "91.107.139.186", (
+        f"a plain-URI vmess must still yield its host, got {core.endpoint_of(line)!r}"
+    )
+
+    branded = core.brand_remark(line, 1)
+    assert "#" in branded, branded
+    remark = urllib.parse.unquote(branded.split("#", 1)[1])
+    assert "@Raydikalx" in remark, f"برند درج نشد: {remark!r}"
+    assert "oneclickvpnkeys" not in branded, (
+        f"a competitor's channel must not survive branding: {remark!r}"
+    )
+    # و بدنهٔ فنی باید دست‌نخورده بماند، وگرنه کانفیگ از کار می‌افتد
+    assert branded.split("#")[0] == line.split("#")[0], "technical body must not change"
+
+    # این مسیر هم باید idempotent باشد
+    assert core.brand_remark(branded) == branded, \
+        "brand_remark is not idempotent for plain-URI vmess"
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -796,10 +835,25 @@ def test_country_label_is_locked_to_the_endpoint_not_the_source_remark():
     assert core.endpoint_of("trojan://p@example.com:443#x") == "example.com"
     assert core.endpoint_of("vless://u@[2001:db8::1]:443?type=tcp") == "2001:db8::1"
 
-    # reset باید واقعاً پاک کند (وگرنه تست‌های بعدی به هم می‌ریزند)
+    # reset باید واقعاً پاک کند (وگرنه تست‌های بعدی به هم می‌ریزند): بعد از
+    # پاک‌سازی، همان ورودی باید همان خروجیِ قبلی را بدهد — نه چیزِ دیگری.
+    #
+    # پیش از این، این بخش انتظارِ «US» داشت، چون تنها منبعِ برچسب متنِ ریمارک
+    # بود و ریمارکِ ساختگیِ «US New York» همان را تحمیل می‌کرد. اکنون برچسب از
+    # مکانِ واقعیِ شبکه می‌آید و 5.6.7.8 در پایگاهِ دادهٔ GeoIP آلمان است، پس
+    # ادعای نادرستِ ریمارک بازنویسی می‌شود. آن انتظارِ قدیمی رفتارِ باگ‌دار را
+    # تثبیت می‌کرد؛ خاصیتی که واقعاً باید ثابت بماند این است که برچسب به
+    # *مقصد* گره خورده باشد و بینِ فراخوانی‌ها عوض نشود.
     core.reset_country_cache()
     third = core.brand_remark(body + "#US New York")
-    assert "US" in third, third
+    assert third == first, (
+        "after reset_country_cache() the same endpoint produced a different label:\n"
+        f"  before reset: {first}\n  after  reset: {third}")
+    core.reset_country_cache()
+    fourth = core.brand_remark(body + "#CN Beijing")
+    assert fourth == first, (
+        "a different source remark changed the label for the same endpoint:\n"
+        f"  with 'RU Moscow' : {first}\n  with 'CN Beijing': {fourth}")
     core.reset_country_cache()
 
 
@@ -851,6 +905,611 @@ def test_index_advertises_the_publish_branch_key():
     assert idx["primary_base"].endswith(f"/{aggregate.GH_BRANCH}"), \
         idx["primary_base"]
     assert f"/{aggregate.GH_BRANCH}/" in idx["self_url"], idx["self_url"]
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# C3/C4/C12/C13 — حذفِ حدسِ دوحرفی و مرزِ واژه در کلیدواژه‌ها
+#
+# باگِ واقعی: مرحلهٔ سومِ تشخیصِ کشور هر واژهٔ دوحرفیِ لاتین را کدِ کشور فرض
+# می‌کرد. نمونه‌های زیر همه از دادهٔ زندهٔ همین مخزن بیرون آمده‌اند.
+# ──────────────────────────────────────────────────────────────────────────────
+
+def test_gigabyte_unit_is_not_mistaken_for_great_britain():
+    """C12 — «55.26 GB» یکای حجم است، نه بریتانیا.
+
+    ریمارکِ واقعیِ منبعِ چینی: «剩余流量：55.26 GB». روشِ قدیمی GB برمی‌گرداند.
+    """
+    code, _flag = core.detect_country_from_remark("剩余流量：55.26 GB")
+    assert code == "Global", f"expected Global, got {code}"
+
+
+def test_english_word_us_is_not_mistaken_for_united_states():
+    """C13 — «join-us-on-Telegram» یک دعوت است، نه ایالاتِ متحده.
+
+    نکتهٔ سنجیده‌شده: «us» هرگز کلیدواژه نبود؛ فقط از راهِ حلقهٔ حدسِ دوحرفی
+    برچسب می‌گرفت. پس حذفِ آن حلقه باید این مورد را کاملاً خاموش کند.
+    """
+    for remark in ("join-us-on-Telegram", "contact us", "trust us", "us server"):
+        code, _flag = core.detect_country_from_remark(remark)
+        assert code == "Global", f"{remark!r} → {code}"
+
+
+def test_speed_and_negation_words_are_not_country_codes():
+    """«NO limit» نروژ نیست، «my node» مالزی نیست، «Best CH speed» سوئیس نیست."""
+    cases = {
+        "Speed 20 mb/s NO limit": "Global",
+        "my node": "Global",
+        "Best CH speed": "Global",
+    }
+    for remark, expected in cases.items():
+        code, _flag = core.detect_country_from_remark(remark)
+        assert code == expected, f"{remark!r} → {code}, expected {expected}"
+
+
+def test_unicode_flag_in_remark_is_still_honoured():
+    """حذفِ حدس نباید مرحلهٔ پرچم را خراب کند — پرچم ادعای صریح است."""
+    code, flag = core.detect_country_from_remark("🇩🇪 Frankfurt node")
+    assert code == "DE", code
+    assert flag == "🇩🇪", flag
+
+
+def test_keyword_stage_requires_a_word_boundary():
+    """C4 — کلیدواژهٔ کوتاه نباید داخلِ واژهٔ دیگر بیفتد."""
+    # «uk» یک کلیدواژهٔ کوتاه است؛ داخلِ «Sukuma» نباید بگیرد
+    assert core.detect_country_from_remark("Sukuma fast")[0] == "Global"
+    # ولی به‌صورتِ واژهٔ مستقل باید بگیرد
+    assert core.detect_country_from_remark("UK | London")[0] == "GB"
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# C5/C14 — اولویتِ GeoIP بر متنِ ریمارک
+# ──────────────────────────────────────────────────────────────────────────────
+
+def test_geoip_overrides_a_wrong_flag_in_the_remark():
+    """C14 — اگر منبع پرچمِ غلط بدهد، مکانِ واقعیِ شبکه باید برنده شود.
+
+    ۵.۶.۷.۸ در پایگاهِ دادهٔ GeoIP آلمان است. ریمارک می‌گوید آمریکا. برچسبِ
+    نهایی باید DE باشد. اگر پایگاهِ داده در دسترس نباشد تست رد نمی‌شود، چون
+    آن‌وقت رفتارِ درست همان تکیه بر ریمارک است.
+    """
+    try:
+        import geo
+    except Exception:
+        return
+    if not geo.database_available():
+        return
+    core.reset_country_cache()
+    code, _flag = core.country_for_endpoint("5.6.7.8", "US 🇺🇸 New York")
+    assert code == "DE", f"GeoIP must win over the remark; got {code}"
+    core.reset_country_cache()
+
+
+def test_country_label_is_stable_for_the_same_endpoint():
+    """پایداری: یک مقصد، همیشه یک برچسب — مستقل از ریمارکِ منبع."""
+    try:
+        import geo
+    except Exception:
+        return
+    if not geo.database_available():
+        return
+    core.reset_country_cache()
+    a = core.country_for_endpoint("8.8.8.8", "RU Moscow")
+    core.reset_country_cache()
+    b = core.country_for_endpoint("8.8.8.8", "CN Beijing")
+    core.reset_country_cache()
+    c = core.country_for_endpoint("8.8.8.8", "")
+    core.reset_country_cache()
+    assert a == b == c, f"unstable label: {a} / {b} / {c}"
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# پایداریِ DNS — رأی‌گیری روی *مجموعهٔ* رکوردهای A
+#
+# باگِ واقعیِ اندازه‌گیری‌شده: gethostbyname یکی از چند نشانیِ round-robin را
+# برمی‌گرداند و انتخابش عوض می‌شود، پس ۲٫۲۲٪ از میزبان‌ها در اجرای دوم کشورِ
+# دیگری می‌گرفتند. راهکار: مجموعهٔ کاملِ رکوردها + رأی‌گیریِ اکثریت.
+# ──────────────────────────────────────────────────────────────────────────────
+
+def test_country_of_addrs_is_independent_of_response_order():
+    """برچسب باید تابعِ *مجموعه* باشد، نه ترتیبِ پاسخِ DNS."""
+    try:
+        import geo
+    except Exception:
+        return
+    if not geo.database_available():
+        return
+    addrs = ["8.8.8.8", "1.1.1.1", "5.6.7.8"]
+    first = geo.country_of_addrs(addrs)
+    for perm in ([addrs[2], addrs[0], addrs[1]],
+                 [addrs[1], addrs[2], addrs[0]],
+                 list(reversed(addrs))):
+        assert geo.country_of_addrs(perm) == first, \
+            f"order changed the result: {perm} → {geo.country_of_addrs(perm)} != {first}"
+
+
+def test_country_of_addrs_breaks_ties_deterministically():
+    """در تساویِ آرا، کوچک‌ترین IP (ترتیبِ الفبایی) تصمیم می‌گیرد.
+
+    بدونِ قاعدهٔ صریحِ تساوی، نتیجه به ترتیبِ پیمایشِ dict وابسته می‌شد و
+    همان ناپایداری از راهِ دیگری برمی‌گشت.
+    """
+    try:
+        import geo
+    except Exception:
+        return
+    if not geo.database_available():
+        return
+    # یک آمریکایی و یک آلمانی: تساویِ ۱-۱
+    pair = ["8.8.8.8", "5.6.7.8"]
+    expected = geo.country_of_addrs(pair)
+    for _ in range(5):
+        assert geo.country_of_addrs(list(reversed(pair))) == expected
+
+
+def test_ip_literals_need_no_dns_and_are_detected():
+    """۷۳٪ از میزبان‌ها IP خام‌اند؛ تشخیصِ آن‌ها نباید به شبکه دست بزند."""
+    try:
+        import geo
+    except Exception:
+        return
+    assert geo.is_ip_literal("8.8.8.8")
+    assert geo.is_ip_literal("2606:4700:4700::1111")
+    assert not geo.is_ip_literal("example.com")
+    assert not geo.is_ip_literal("")
+    # برای IP خام، resolve_all باید همان را برگرداند و DNS نزند
+    assert geo.resolve_all("8.8.8.8") == ("8.8.8.8",)
+
+
+def test_flag_is_computed_from_iso_code_not_a_hardcoded_map():
+    """پرچم با حسابِ نشانگرهای منطقه‌ای ساخته می‌شود، پس هیچ کشوری جا نمی‌افتد.
+
+    نقشهٔ سختِ قدیمی ۵۶ کشور داشت و GeoIP روی دادهٔ زنده ۸۴ کشور پیدا کرد؛
+    یعنی ۳۲ کشور اصلاً قابلِ بیان نبودند.
+    """
+    try:
+        import geo
+    except Exception:
+        return
+    assert geo.flag_of("DE") == "🇩🇪"
+    assert geo.flag_of("IR") == "🇮🇷"
+    # کشورهایی که در نقشهٔ سختِ قدیمی نبودند
+    assert geo.flag_of("CY") == "🇨🇾"
+    assert geo.flag_of("MT") == "🇲🇹"
+    assert geo.flag_of("KZ") == "🇰🇿"
+    # ورودیِ نامعتبر باید به کرهٔ زمین بیفتد، نه استثنا بدهد
+    assert geo.flag_of("") == "🌐"
+    assert geo.flag_of("XYZ") == "🌐"
+    assert geo.flag_of("1A") == "🌐"
+
+
+def test_geo_degrades_gracefully_without_a_database():
+    """نبودِ پایگاهِ داده نباید هیچ استثنایی بدهد — فقط برچسبِ ضعیف‌تر."""
+    import importlib
+    import geo as _geo
+    saved = os.environ.get("GEOIP_MMDB")
+    os.environ["GEOIP_MMDB"] = "/nonexistent/definitely-absent.mmdb"
+    try:
+        fresh = importlib.reload(_geo)
+        assert fresh.database_available() is False
+        assert fresh.country_of_ip("8.8.8.8") is None
+        assert fresh.country_for_host("8.8.8.8") is None
+        assert fresh.stats()["db_loaded"] == 0
+    finally:
+        if saved is None:
+            os.environ.pop("GEOIP_MMDB", None)
+        else:
+            os.environ["GEOIP_MMDB"] = saved
+        importlib.reload(_geo)
+
+
+def test_geo_stats_schema_is_stable():
+    """کلیدهای گزارش باید همیشه حاضر باشند، وگرنه «صفر» با «نبود» قاطی می‌شود."""
+    try:
+        import geo
+    except Exception:
+        return
+    s = geo.stats()
+    for key in ("db_loaded", "by_ip_literal", "unknown_ip_literal", "by_dns",
+                "dns_failed", "unknown_after_dns", "skipped_no_db",
+                "hosts_resolved", "hosts_unknown"):
+        assert key in s, f"missing stats key: {key}"
+        assert isinstance(s[key], int), f"{key} must be int, got {type(s[key])}"
+
+
+def test_geo_warm_up_never_double_counts_across_categories():
+    """باگِ واقعیِ کشف‌شده در اجرای کاملِ خط‌لوله.
+
+    `warm_up` سه بار صدا زده می‌شود (all / heavy / light). پیش از اصلاح، تنها
+    *موفقیت‌ها* کش می‌شدند، پس هر میزبانِ ناموفق در هر سه دور از نو DNS می‌خورد و
+    از نو شمرده می‌شد. عددِ منتشرشده در health.json چنین بود:
+
+        dns_failed = ۹۲۴   در حالی که کلِ میزبانِ نامی ۱٬۳۷۵ است
+
+    اندازه‌گیریِ دوریِ همان ورودی، بیش‌شماری را لو داد:
+        دورِ ۱ → dns_failed=۲۲۷ ، دورِ ۲ → ۴۵۴ (‎+۲۲۷ تکراری) با by_dns بی‌تغییر
+
+    این آزمون هم *بی‌هزینه بودنِ* دورِ دوم را می‌پاید و هم *ترازِ دقیقِ* آمار را،
+    چون گزارشِ غلط بی‌آنکه خطایی بدهد، دروغ می‌گوید.
+    """
+    try:
+        import geo
+    except Exception:
+        return
+    geo.reset()
+
+    calls = {"n": 0}
+    real_resolve = geo.resolve_all
+
+    # میزبان‌های ساختگی: یکی همیشه حل می‌شود، یکی هرگز. بی‌نیاز از شبکهٔ واقعی.
+    def fake_resolve(host):
+        calls["n"] += 1
+        return ("8.8.8.8",) if host == "good.example" else ()
+
+    geo.resolve_all = fake_resolve  # type: ignore
+    try:
+        hosts = ["good.example", "bad.example", "1.1.1.1"]
+        geo.warm_up(hosts)
+        s1 = geo.stats()
+        first_calls = calls["n"]
+
+        geo.warm_up(hosts)          # دورِ heavy
+        geo.warm_up(hosts)          # دورِ light
+        s3 = geo.stats()
+
+        assert s3 == s1, f"repeat warm_up must be free; {s1} -> {s3}"
+        assert calls["n"] == first_calls, (
+            f"a failed host must not be re-resolved: {first_calls} -> {calls['n']}"
+        )
+        # ترازِ دقیق: هر میزبان دقیقاً یک بار در یکی از سبدها
+        assert s3["hosts_resolved"] + s3["hosts_unknown"] == len(hosts), s3
+    finally:
+        geo.resolve_all = real_resolve  # type: ignore
+        geo.reset()
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# C8/C9 — پروتکل‌های hysteria2 و tuic
+#
+# باگِ واقعی: ۸۰ کانفیگِ hysteria2 و ۱ کانفیگِ tuic در هر اجرا **صددرصد** حذف
+# می‌شدند، بی‌هیچ پیامی. شمارشِ زنده: hysteria2:// = ۷۷ و hy2:// = ۳.
+# ──────────────────────────────────────────────────────────────────────────────
+
+_HY2 = "hysteria2://pass123@1.2.3.4:443?sni=example.com#HY2 node"
+_HY2_ALT = "hy2://pass123@1.2.3.5:8443?insecure=1&obfs=salamander&obfs-password=xyz#HY2 alt"
+_TUIC = ("tuic://aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee:secret@1.2.3.6:443"
+         "?congestion_control=bbr&udp_relay_mode=quic&alpn=h3&sni=example.org#TUIC node")
+
+
+def _sb_proxy(line: str) -> dict:
+    """تنها outboundِ *پروکسیِ* سندِ sing-box را برمی‌گرداند.
+
+    اندیس‌گذاریِ موقعیتی (`outbounds[0]`) در اینجا اشتباه است: سندِ خروجی همیشه
+    با گروه‌ها آغاز می‌شود و با `direct` پایان می‌یابد. ترتیبِ واقعیِ سنجیده‌شده:
+
+        ۰ selector «🚀 @Raydikalx»  ۱ urltest «♻️ Auto»  ۲ خودِ پروکسی  ۳ direct
+
+    پس گزینش باید بر اساسِ *نوع* باشد نه جایگاه، وگرنه آزمون به‌جای پروکسی به
+    selector نگاه می‌کند و با `KeyError` می‌ترکد — که خطای آزمون است نه کد.
+    """
+    doc = json.loads(converters.build_singbox_json([line]))
+    groups = {"selector", "urltest", "direct", "block", "dns"}
+    hits = [o for o in doc["outbounds"] if o.get("type") not in groups]
+    assert len(hits) == 1, f"expected exactly one proxy outbound, got {hits}"
+    return hits[0]
+
+
+def test_hysteria2_is_accepted_under_both_schemes():
+    """هر دو طرحِ نام باید پارس شوند؛ پذیرشِ یکی، ۳ کانفیگ را بی‌صدا می‌انداخت."""
+    for line in (_HY2, _HY2_ALT):
+        p = converters.parse_proxy(line)
+        assert p is not None, f"failed to parse: {line}"
+        assert p["type"] == "hysteria2", p["type"]
+
+
+def test_tuic_is_parsed_with_uuid_and_password():
+    p = converters.parse_proxy(_TUIC)
+    assert p is not None, "tuic must parse"
+    assert p["type"] == "tuic", p["type"]
+    assert p["uuid"] == "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee", p["uuid"]
+    assert p["password"] == "secret", p["password"]
+    assert p["congestion_control"] == "bbr", p["congestion_control"]
+
+
+def test_hysteria2_and_tuic_reach_the_clash_output():
+    """پارس شدن کافی نیست — باید در فایلِ نهایی هم ظاهر شوند."""
+    doc = yaml.safe_load(converters.build_clash_yaml([_HY2, _HY2_ALT, _TUIC]))
+    types = [p["type"] for p in doc["proxies"]]
+    assert types.count("hysteria2") == 2, types
+    assert types.count("tuic") == 1, types
+
+
+def test_hysteria2_and_tuic_reach_the_singbox_output():
+    doc = json.loads(converters.build_singbox_json([_HY2, _HY2_ALT, _TUIC]))
+    types = [o["type"] for o in doc["outbounds"] if o.get("type") in ("hysteria2", "tuic")]
+    assert types.count("hysteria2") == 2, types
+    assert types.count("tuic") == 1, types
+
+
+def test_clash_uses_hyphenated_keys_and_singbox_uses_nested_objects():
+    """شمای دو کلاینت *واقعاً* متفاوت است — با باینریِ اصلی سنجیده شد.
+
+    mihomo: `obfs` / `obfs-password` / `skip-cert-verify` / `congestion-controller`
+    sing-box: `obfs: {type, password}` و `tls: {enabled, server_name, insecure}`
+    """
+    cl = yaml.safe_load(converters.build_clash_yaml([_HY2_ALT]))["proxies"][0]
+    assert cl["obfs"] == "salamander", cl
+    assert cl["obfs-password"] == "xyz", cl
+    assert cl["skip-cert-verify"] is True, cl
+
+    sb = _sb_proxy(_HY2_ALT)
+    assert isinstance(sb["obfs"], dict), sb["obfs"]
+    assert sb["obfs"]["type"] == "salamander", sb["obfs"]
+    assert sb["obfs"]["password"] == "xyz", sb["obfs"]
+
+    # همان کلید در mihomo تخت است، در sing-box تودرتو — اثباتِ اینکه دو
+    # امیت‌کننده واقعاً جدا هستند و یکی از دیگری کپی نشده
+    assert "obfs-password" not in sb, "sing-box هرگز کلیدِ خط‌تیره‌دار نمی‌پذیرد"
+    assert not isinstance(cl["obfs"], dict), "mihomo هرگز شیءِ تودرتو نمی‌پذیرد"
+
+    sbt = _sb_proxy(_TUIC)
+    assert isinstance(sbt["tls"], dict), sbt
+    assert sbt["tls"]["enabled"] is True, sbt["tls"]
+    assert sbt["tls"]["server_name"] == "example.org", sbt["tls"]
+    assert sbt["tls"]["alpn"] == ["h3"], sbt["tls"]
+    # sing-box زیرخط می‌خواهد، mihomo خط‌تیره — با باینریِ ۱٫۱۳٫۱۴ سنجیده شد
+    assert sbt["congestion_control"] == "bbr", sbt
+    assert sbt["udp_relay_mode"] == "quic", sbt
+    assert "congestion-controller" not in sbt, sbt
+    clt = yaml.safe_load(converters.build_clash_yaml([_TUIC]))["proxies"][0]
+    assert clt.get("congestion-controller") == "bbr", clt
+    assert clt.get("udp-relay-mode") == "quic", clt
+    assert "congestion_control" not in clt, clt
+
+
+def test_url_shaped_sni_is_dropped_not_forwarded():
+    """SNI واقعیِ زنده: «https://t.me/oneclickvpnkeys».
+
+    کلاینت‌ها آن را در بارگذاری می‌پذیرند (rc=0) ولی TLS در زمانِ اتصال شکست
+    می‌خورد و کاربر فکر می‌کند کانفیگ خراب است. پس باید حذف شود تا کلاینت به
+    نامِ واقعیِ سرور برگردد.
+    """
+    bad = "hysteria2://pw@1.2.3.4:443?sni=https%3A%2F%2Ft.me%2Foneclickvpnkeys#x"
+    p = converters.parse_proxy(bad)
+    assert p is not None
+    assert not p.get("sni"), f"garbage SNI must be dropped, got {p.get('sni')!r}"
+
+
+def test_sni_cleanup_is_applied_to_vless_vmess_and_trojan_too():
+    """باگِ واقعی: `_clean_sni` تنها بر hysteria2/tuic اعمال می‌شد.
+
+    اندازه‌گیری روی خروجیِ زندهٔ همین مخزن، پیش از رفع: ۴۳۱ مقدارِ نامِ‌میزبانِ
+    ساختاراً بی‌اعتبار در سه دستهٔ خروجی — از جمله `sni=t.me/ripaojiedian` (۱۲
+    بار) و یک قطعهٔ HTML. پس از رفع: ۱۰ (که همه‌شان نشانیِ سرورِ loopback بودند
+    و با درِ جداگانه‌ای بسته شدند). vmess/vless/trojan خام عبور می‌کردند.
+    """
+    for line, label in (
+        ("vless://" + "a" * 8 + "-bbbb-cccc-dddd-" + "e" * 12 +
+         "@1.2.3.4:443?security=tls&type=tcp&sni=t.me%2Fripaojiedian#x", "vless"),
+        ("trojan://pw@1.2.3.4:443?sni=t.me%2Fripaojiedian#x", "trojan"),
+    ):
+        p = converters.parse_proxy(line)
+        assert p is not None, label
+        assert not p.get("sni"), f"{label}: garbage SNI survived: {p.get('sni')!r}"
+
+
+def test_repairable_sni_is_repaired_rather_than_thrown_away():
+    """«ترمیم کن، بعد رد کن» — با حقیقتِ DNS سنجیده شد.
+
+    رد کردنِ سرسریِ هر مقدارِ نامعتبر، SNIِ سالم را دور می‌ریخت:
+
+        `$$hn.xiaohouzi.club` → در DNS شکست  |  `hn.xiaohouzi.club` → 13.248.169.48 ✓
+        `.afrcloud22.mmv.kr`  → در DNS شکست  |  `afrcloud22.mmv.kr` → 104.26.14.21 ✓
+
+    و RFC 6066 §3 می‌گوید نامِ server_name «بدونِ نقطهٔ پایانی» بیان می‌شود، پس
+    نقطهٔ پایانی بریده می‌شود نه اینکه مقدار حذف شود.
+    """
+    cases = {
+        "$$hn.xiaohouzi.club": "hn.xiaohouzi.club",
+        "world.yahoo.com:443": "world.yahoo.com",
+        ".afrcloud22.mmv.kr": "afrcloud22.mmv.kr",
+        "wwwuk.mobilex55.com.": "wwwuk.mobilex55.com",
+        # زیرخط عمداً نگه داشته می‌شود: این نام واقعاً resolve می‌شود
+        # (TM_AZARBAYJAB1.new.99.workers.dev → 104.21.61.74)
+        "TM_AZARBAYJAB1.new.99.workers.dev": "TM_AZARBAYJAB1.new.99.workers.dev",
+    }
+    for raw, want in cases.items():
+        got = converters._clean_sni(raw)
+        assert got == want, f"{raw!r} -> {got!r}, expected {want!r}"
+
+    # و مقادیرِ ذاتاً غیرِ‌میزبان باید همچنان حذف شوند
+    for raw in ("https%3A%2F%2Ft.me%2Foneclickvpnkeys", "t.me%2Fripaojiedian",
+                "None", "Telegram-Leviko_v2ray", "/?BIA_TELEGRAM@ShadowProxy66"):
+        assert converters._clean_sni(raw) == "", f"{raw!r} must be dropped"
+
+
+def test_unroutable_server_addresses_are_dropped_and_counted():
+    """نقصِ جداگانهٔ بالادست: نشانیِ سرور loopback یا 0.0.0.0 است.
+
+    اندازه‌گیریِ زنده پیش از رفع، ۳۲ رخداد در سه دسته — از جمله `127.0.0.53`
+    (نشانیِ حل‌کنندهٔ systemd-resolved) ×۲۰ و `0.0.0.0` ×۲. چنین کانفیگی روی
+    دستگاهِ کاربر به خودِ دستگاه وصل می‌شود، پس هرگز کار نمی‌کند.
+
+    نکته: نشانیِ خصوصی (`192.168.…`) عمداً حذف *نمی‌شود* — پروکسیِ درونِ شبکهٔ
+    محلی برای بخشی از کاربران کاملاً مشروع است.
+    """
+    assert converters._is_unroutable_server("127.0.0.1")
+    assert converters._is_unroutable_server("127.0.0.53")
+    assert converters._is_unroutable_server("0.0.0.0")
+    assert converters._is_unroutable_server("::1")
+    assert not converters._is_unroutable_server("192.168.1.1"), \
+        "پروکسیِ شبکهٔ محلی مشروع است و نباید حذف شود"
+    assert not converters._is_unroutable_server("8.8.8.8")
+    assert not converters._is_unroutable_server("example.com"), \
+        "نامِ میزبان به DNS نیاز دارد و در زمانِ تبدیل داوری نمی‌شود"
+
+    good = "trojan://pw@8.8.8.8:443?sni=example.com#ok"
+    bad = "trojan://pw@127.0.0.1:443?sni=example.com#loopback"
+    doc = yaml.safe_load(converters.build_clash_yaml([good, bad]))
+    servers = [p["server"] for p in doc["proxies"]]
+    assert servers == ["8.8.8.8"], servers
+    st = converters.drop_stats()
+    assert st["clash"]["by_reason"].get("unroutable_server") == 1, st["clash"]
+
+    sb = json.loads(converters.build_singbox_json([good, bad]))
+    assert [o["server"] for o in sb["outbounds"] if o.get("server")] == ["8.8.8.8"]
+    st = converters.drop_stats()
+    assert st["singbox"]["by_reason"].get("unroutable_server") == 1, st["singbox"]
+
+
+def test_alpn_values_are_whitelisted():
+    """مقدارِ نامعتبرِ ALPN باید فیلتر شود، نه به کلاینت پاس داده شود."""
+    line = "hysteria2://pw@1.2.3.4:443?alpn=h3%2Cgarbage%2Ch2#x"
+    p = converters.parse_proxy(line)
+    assert p is not None
+    assert p["alpn"] == ["h3", "h2"], p["alpn"]
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# C10 — تلمتریِ حذف در تبدیل
+# ──────────────────────────────────────────────────────────────────────────────
+
+def test_drop_stats_counts_unparsable_lines_per_target():
+    """حذفِ خاموش باید شمرده شود؛ اندازه‌گیریِ زنده: Clash ۶۸ ، Sing-box ۳۱۳."""
+    lines = [_HY2, "vless://not-a-valid-config", "totally garbage line"]
+    converters.build_clash_yaml(lines)
+    converters.build_singbox_json(lines)
+    st = converters.drop_stats()
+    assert "clash" in st and "singbox" in st, st
+    for target in ("clash", "singbox"):
+        assert st[target]["total"] >= 1, st[target]
+        assert "unparsable" in st[target]["by_reason"], st[target]
+
+
+def test_drop_stats_is_reset_per_build_not_accumulated():
+    """اگر پاک نشود، عددها بینِ سه دستهٔ all/heavy/light جمع می‌شوند و دروغ می‌گویند."""
+    converters.build_clash_yaml(["garbage one", "garbage two"])
+    first = converters.drop_stats()["clash"]["total"]
+    converters.build_clash_yaml(["garbage one", "garbage two"])
+    second = converters.drop_stats()["clash"]["total"]
+    assert first == second, f"drop counters accumulated: {first} then {second}"
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# C1 — مرحلهٔ پایگاهِ دادهٔ GeoIP در ورک‌فلو
+# ──────────────────────────────────────────────────────────────────────────────
+
+def _workflow_text() -> str:
+    path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                        ".github", "workflows", "aggregate.yml")
+    with open(path, encoding="utf-8") as f:
+        return f.read()
+
+
+def test_workflow_downloads_and_caches_the_geoip_database():
+    """بدونِ این مرحله، خط‌لوله در CI بی‌صدا به برچسب‌گذاریِ ضعیف برمی‌گردد."""
+    wf = _workflow_text()
+    assert "download.db-ip.com" in wf, "the workflow must fetch the DB-IP database"
+    assert "actions/cache@v4" in wf, "the database must be cached, not re-downloaded 96×/day"
+    assert "dbip-country-lite.mmdb" in wf
+
+
+def _workflow_run_text() -> str:
+    """فقط بدنهٔ `run:`های ورک‌فلو — یعنی چیزی که *اجرا* می‌شود.
+
+    خواندنِ کلِ فایل برای این کار غلط است: توضیحاتِ فایل عمداً می‌گویند «چرا
+    MaxMind نه»، و آزمونی که واژه را در متنِ خام ممنوع کند، مستندسازیِ درست را
+    جریمه می‌کند در حالی که هیچ ریسکِ اجرایی وجود ندارد. YAML پارس می‌شود تا
+    کامنت‌ها طبعاً حذف شوند و تنها دستورهای واقعی بمانند.
+    """
+    doc = yaml.safe_load(_workflow_text())
+    out = []
+    for job in (doc.get("jobs") or {}).values():
+        for step in (job.get("steps") or []):
+            for key in ("run", "uses", "with"):
+                v = step.get(key)
+                if isinstance(v, str):
+                    out.append(v)
+                elif isinstance(v, dict):
+                    out.extend(str(x) for x in v.values())
+    return "\n".join(out)
+
+
+def test_workflow_never_uses_maxmind_which_requires_a_licence_key():
+    """آزمونِ زنده: MaxMind → HTTP 401 ، DB-IP → HTTP 200.
+
+    ادعا دربارهٔ *دستورهای اجرایی* است، نه دربارهٔ توضیحات. توضیحاتِ فایل حق
+    دارند نامِ MaxMind را ببرند تا دلیلِ رد شدنش ثبت بماند.
+    """
+    runs = _workflow_run_text().lower()
+    assert "maxmind" not in runs, "GeoLite2 needs an account key; it would fail in CI"
+    assert "geolite" not in runs
+    assert "license_key" not in runs and "licence_key" not in runs
+    # و آدرسِ واقعیِ دانلود باید همان DB-IP باشد
+    assert "download.db-ip.com" in runs, "the executable step must fetch DB-IP"
+
+
+def test_geoip_cache_directory_is_gitignored():
+    """اگر نبود، هر اجرا ۸ مگابایت commit می‌کرد — همان الگوی رشدی که حذف شد."""
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    with open(os.path.join(root, ".gitignore"), encoding="utf-8") as f:
+        ignored = f.read()
+    assert ".cache/" in ignored, ".cache/ must be gitignored"
+
+
+def test_requirements_pin_the_mmdb_reader_without_heavy_extras():
+    """maxminddb هیچ وابستگی‌ای ندارد؛ geoip2 برای همین کار aiohttp می‌آورد.
+
+    سنجش: روی ۳۷۲۰ آی‌پیِ واقعی، نتیجه صددرصد یکسان و ۱٫۸۲ برابر سریع‌تر.
+    """
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    with open(os.path.join(root, "requirements.txt"), encoding="utf-8") as f:
+        req = f.read()
+    assert "maxminddb==" in req, "the mmdb reader must be pinned in requirements.txt"
+
+
+def test_health_report_carries_drop_and_geo_telemetry():
+    """C10 — عددهای حذف و برچسب‌گذاری باید در health.json دیده شوند."""
+    import aggregate
+    rep = aggregate.build_health_report(1.0)
+    assert "converters" in rep, "health.json must expose converter drop stats"
+    assert "geo" in rep, "health.json must expose geo stats"
+
+
+def test_aggregator_warms_up_the_geo_cache_before_branding():
+    """بدونِ گرم‌کردن، ۱۳۶۵ پرسشِ DNS سری اجرا می‌شود (اندازه‌گیری: >۱۰ دقیقه).
+
+    با گرم‌کردنِ همروند: ۴٫۹ ثانیه.
+    """
+    import ast
+    import inspect
+    import textwrap
+    import aggregate
+
+    # نکته: جست‌وجوی متنیِ ساده در اینجا *غلط* است. متنِ تابع یک بلوکِ توضیحِ
+    # چندخطی دارد که در آن واژهٔ `brand_remark` برای *توضیحِ* دلیلِ گرم‌کردن آمده،
+    # و آن توضیح بالاتر از خودِ فراخوانیِ `warm_up` است. پس `str.index` اولین
+    # تطبیقش کامنت می‌شود و آزمون بی‌گناه‌سوز می‌گردد. پیمایشِ AST فقط کدِ
+    # اجرایی را می‌بیند و کامنت‌ها در درختِ نحوی وجود ندارند.
+    tree = ast.parse(textwrap.dedent(inspect.getsource(aggregate.process_category)))
+    fn = tree.body[0]
+
+    warm_lines = [
+        n.lineno for n in ast.walk(fn)
+        if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)
+        and n.func.attr == "warm_up"
+    ]
+    brand_lines = [
+        n.lineno for n in ast.walk(fn)
+        if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)
+        and n.func.attr == "brand_remark"
+    ]
+    assert warm_lines, "process_category must warm the geo cache in one concurrent pass"
+    assert brand_lines, "process_category must brand every line"
+    # ترتیب مهم است: گرم‌کردن باید *پیش از* حلقهٔ برندینگ باشد
+    assert min(warm_lines) < min(brand_lines), (
+        f"warm_up (line {min(warm_lines)}) must run before the branding loop "
+        f"(line {min(brand_lines)}), otherwise it is pointless"
+    )
 
 
 # ──────────────────────────────────────────────────────────────────────────────

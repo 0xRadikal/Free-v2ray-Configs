@@ -16,3 +16,8 @@ venv/
 
 # CI validation report (artifact only — never committed)
 validation.json
+
+# پایگاهِ دادهٔ GeoIP — ۸ مگابایت، ماهانه عوض می‌شود، و در CI دانلود/cache
+# می‌شود. اگر commit شود، هر اجرا یک نسخهٔ ۸ مگابایتیِ تازه به تاریخِ مخزن
+# اضافه می‌کند؛ یعنی همان الگوی رشدی که فازِ پیشین آن را متوقف کرد.
+.cache/

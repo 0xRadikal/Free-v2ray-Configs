@@ -205,7 +205,48 @@ def _flag_to_country_code(flag: str) -> Optional[str]:
 
 
 def detect_country_from_remark(remark: str) -> Tuple[str, str]:
-    """تشخیص کشور از روی ریمارک. Returns: (country_code, flag_emoji)."""
+    """
+    تشخیصِ کشور از روی متنِ ریمارک — تنها به‌عنوانِ چارهٔ آخر.
+
+    این تابع پیش از این منبعِ *اصلیِ* برچسبِ کشور بود و سه مرحله داشت. مرحلهٔ
+    سوم هر واژهٔ دوحرفیِ لاتین را کدِ کشور فرض می‌کرد، که یک حدس بود نه یک
+    اندازه‌گیری. نمونه‌های واقعی از خروجیِ همین مخزن:
+
+        «join-us-on-Telegram»      → US   (واژهٔ «us» انگلیسی است، نه کشور)
+        «剩余流量：55.26 GB»        → GB   (یکای گیگابایت، نه بریتانیا)
+        «Speed: 20 mb/s NO limit»  → NO   (قیدِ نفی، نه نروژ)
+
+    اندازه‌گیریِ دقتِ کلِ این روش روی ۶۷۵ کانفیگ با کشورِ واقعیِ مستقل
+    (ip-api.com): ۵۳٫۶٪ درست، ۱۴٫۷٪ **غلط**، ۳۱٫۷٪ تسلیم. برچسبِ غلط از نبودِ
+    برچسب زیان‌بارتر است، چون کاربر آن را باور می‌کند.
+
+    اکنون منبعِ اصلی، مکانِ واقعیِ شبکه است (geo.py). این تابع فقط وقتی به کار
+    می‌آید که پایگاهِ دادهٔ GeoIP در دسترس نباشد — یعنی حالتِ کاهش‌یافته. پس:
+
+      • مرحلهٔ پرچمِ یونیکد نگه داشته شد: پرچم یک ادعای صریحِ ماشین‌خوان است.
+      • مرحلهٔ کلیدواژه نگه داشته شد ولی تنها با مرزِ واژه، تا «Vienna» دیگر
+        در «Viennam» یا نامِ کاربری گم نشود.
+      • حلقهٔ حدسِ دوحرفی **حذف شد**. هیچ برچسبی بهتر از برچسبِ اشتباه است.
+
+    چرا حتی نسخهٔ «محافظه‌کارِ» حدس هم برنگشت
+    ────────────────────────────────────────
+    این پرسش جدی گرفته شد و آزموده شد، نه رد. فرضیه: «شاید کدِ دوحرفی اگر فقط
+    در *ابتدای* ریمارک و پیش از یک جداکننده باشد، قابلِ اعتماد است.» سه راهبرد
+    روی ۴٬۲۹۱ ریمارکِ **واقعیِ منابعِ بالادست** (نه ریمارکِ برندشدهٔ خودمان،
+    که پرچم دارد و آزمون را بی‌معنا می‌کند) با مرجعِ مستقلِ ip-api سنجیده شد:
+
+        الف) حدس در هر جای متن   درست ۳۹٫۵٪   غلط ۸٫۲٪   تسلیم ۵۲٫۳٪
+        ب ) بدونِ حدس (فعلی)     درست ۳۹٫۱٪   غلط ۶٫۰٪   تسلیم ۵۵٫۰٪
+        ج ) حدسِ فقط ابتدای متن  درست ۳۹٫۲٪   غلط ۶٫۳٪   تسلیم ۵۴٫۵٪
+
+    «ج» در برابرِ «ب» ‎+۰٫۱۶٪ درست می‌آورد ولی ‎+۰٫۳۳٪ غلط — یعنی به ازای هر
+    برچسبِ درستِ تازه، دو برچسبِ غلط. نمونهٔ واقعیِ شکستش: «AE_speednode_0001»
+    که کدِ ابتدای متنش AE است ولی سرور در فرانسه است، و «CN_speednode_0005»
+    که در آمریکا است. پس حدس، حتی مهارشده، سود نمی‌دهد و برنگشت.
+
+    توجه: حذفِ حدس، «تسلیم» را از ۵۲٫۳٪ به ۵۵٫۰٪ می‌برد؛ این بهاست، نه باگ. در
+    حالتِ عادی GeoIP آن ۵۵٪ را پر می‌کند و تسلیم به ۰٪ می‌رسد.
+    """
     if not remark:
         return ("Global", "🌐")
     for flag in _FLAG_EMOJI_RE.findall(remark):
@@ -214,15 +255,33 @@ def detect_country_from_remark(remark: str) -> Tuple[str, str]:
             return (code, flag)
     remark_lower = remark.lower()
     for keyword, info in _SORTED_KEYWORDS:
-        if keyword in remark_lower:
+        # مرزِ واژه لازم است: بدونِ آن کلیدواژهٔ «us» داخلِ «trust» یا
+        # «status» هم می‌افتد. اندازه‌گیری نشان داد بیشترِ خطاهای مرحلهٔ
+        # کلیدواژه از همین جای‌گیریِ درونِ واژه می‌آمد.
+        if _keyword_hit(remark_lower, keyword):
             return info
-    for word in re.findall(r"\b[A-Za-z]{2}\b", remark):
-        code = word.upper()
-        if code in _VALID_CC:
-            for _kw, (cc, fl) in _COUNTRY_KEYWORD_MAP.items():
-                if cc == code:
-                    return (cc, fl)
     return ("Global", "🌐")
+
+
+def _keyword_hit(haystack: str, needle: str) -> bool:
+    """
+    آیا کلیدواژه به‌صورتِ واژهٔ مستقل در متن آمده است؟
+
+    برای کلیدواژه‌های کوتاه (تا سه حرف) مرزِ واژه الزامی است، چون رشتهٔ کوتاه
+    به‌سادگی داخلِ واژه‌های بی‌ربط پیدا می‌شود. برای کلیدواژه‌های بلندتر مانند
+    «netherlands» جست‌وجوی ساده کافی و مطلوب است، چون در نام‌های مرکب مانند
+    «amsterdam-netherlands-01» هم باید پیدا شود.
+    """
+    if len(needle) > 3:
+        return needle in haystack
+    i = haystack.find(needle)
+    while i != -1:
+        before = haystack[i - 1] if i > 0 else ""
+        after = haystack[i + len(needle)] if i + len(needle) < len(haystack) else ""
+        if not before.isalnum() and not after.isalnum():
+            return True
+        i = haystack.find(needle, i + 1)
+    return False
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -249,10 +308,30 @@ def endpoint_of(line: str) -> str:
         return ""
     try:
         if line.startswith("vmess://"):
+            # اکثرِ vmessها بدنهٔ base64+JSON دارند، ولی *نه همه‌شان*. بعضی منابع
+            # vmess را در قالبِ استانداردِ URI می‌دهند، دقیقاً مثلِ vless:
+            #
+            #   vmess://<uuid>@91.107.139.186:51459?encryption=auto&type=tcp#…
+            #
+            # پیش از این، شکستِ JSON این‌جا به `return ""` می‌رسید و مقصد «نامعلوم»
+            # می‌شد. پیامدِ واقعی‌اش فقط یک برچسبِ ازدست‌رفته نبود: چون
+            # `brand_remark` بی‌مقصد کاری نمی‌کند، ریمارکِ بالادست دست‌نخورده
+            # منتشر می‌شد و تبلیغِ کانالِ رقیب («📯1@oneclickvpnkeys») در خروجیِ
+            # ما می‌نشست. شمارشِ زنده در همین اجرا: ۱ مورد از ۸٬۰۱۸.
+            #
+            # پس در صورتِ شکست، به تجزیهٔ عمومیِ URI پایین می‌افتیم و همان‌جا
+            # میزبان درست به‌دست می‌آید.
             b64 = line[8:].split("#")[0].strip()
             b64 += "=" * ((4 - len(b64) % 4) % 4)
-            obj = json.loads(base64.b64decode(b64).decode("utf-8", errors="ignore"))
-            return str(obj.get("add") or obj.get("host") or "").strip().lower()
+            try:
+                obj = json.loads(base64.b64decode(b64).decode("utf-8", errors="ignore"))
+            except Exception:
+                obj = None
+            if isinstance(obj, dict):
+                host = str(obj.get("add") or obj.get("host") or "").strip().lower()
+                if host:
+                    return host
+            # نه JSON بود و نه میزبانی داشت → ادامه با مسیرِ عمومی
         # سایر پروتکل‌ها: scheme://[userinfo@]host[:port][?query][#fragment]
         rest = line.split("://", 1)[1] if "://" in line else line
         rest = rest.split("#", 1)[0].split("?", 1)[0]
@@ -268,12 +347,21 @@ def endpoint_of(line: str) -> str:
 
 def country_for_endpoint(endpoint: str, remark_hint: str = "") -> Tuple[str, str]:
     """
-    برچسبِ پایدارِ کشور برای یک مقصد.
+    برچسبِ پایدارِ کشور برای یک مقصد، با ترتیبِ اولویتِ زیر:
 
-    نخستین باری که یک host دیده می‌شود، اگر ریمارکِ همراهش کشور را نشان دهد
-    همان ثبت و برای همیشه (در همان اجرا و اجراهای بعدی) به آن host چسبانده
-    می‌شود. بارهای بعد، حتی اگر منبعِ دیگری ریمارکِ متفاوتی بدهد، برچسب عوض
-    نمی‌شود. نتیجه: خروجی بین اجراها پایدار می‌ماند.
+        ۱. GeoIP روی نشانیِ واقعیِ شبکه   ← معتبرترین، اندازه‌گیری‌شده ۹۷٫۹٪ درست
+        ۲. پرچمِ یونیکدِ داخلِ ریمارک       ← ادعای صریحِ منبع (حالتِ کاهش‌یافته)
+        ۳. کلیدواژهٔ نامِ کشور در ریمارک    ← حالتِ کاهش‌یافته
+        ۴. «Global 🌐»                     ← اعترافِ صادقانه به ندانستن
+
+    چرا GeoIP بالاتر از پرچمِ منبع است: پرچمِ ریمارک را نویسندهٔ منبع می‌نویسد و
+    اندازه‌گیری نشان داد که ۱۴٫۷٪ از برچسب‌های حاصل از ریمارک با کشورِ واقعیِ
+    سرور نمی‌خواند. مکانِ واقعیِ شبکه قابلِ اندازه‌گیری است؛ متنِ ریمارک نه.
+    برای همین، پرچمِ نادرستِ بالادست بازنویسی می‌شود.
+
+    پایداری: نتیجه برای هر مقصد یک بار محاسبه و در حافظه قفل می‌شود، پس اگر
+    ده منبعِ مختلف یک سرور را با ده ریمارکِ متفاوت بیاورند، همه یک برچسب
+    می‌گیرند و خروجی بینِ اجراها ثابت می‌ماند.
     """
     ep = (endpoint or "").strip().lower()
     if not ep:
@@ -281,6 +369,26 @@ def country_for_endpoint(endpoint: str, remark_hint: str = "") -> Tuple[str, str
     cached = _HOST_COUNTRY_CACHE.get(ep)
     if cached is not None:
         return cached
+
+    # ۱) مکانِ واقعیِ شبکه. اگر پایگاهِ دادهٔ GeoIP نبود، geo ماژول None
+    #    برمی‌گرداند و به مرحلهٔ بعد می‌رویم؛ نبودِ آن هرگز خطا نمی‌دهد.
+    try:
+        from . import geo  # type: ignore
+    except Exception:
+        try:
+            import geo  # type: ignore
+        except Exception:
+            geo = None  # type: ignore
+    if geo is not None:
+        try:
+            hit = geo.country_for_host(ep)
+        except Exception:
+            hit = None
+        if hit:
+            _HOST_COUNTRY_CACHE[ep] = hit
+            return hit
+
+    # ۲و۳) حالتِ کاهش‌یافته: خواندنِ ریمارک
     info = detect_country_from_remark(remark_hint)
     # فقط نتیجهٔ قاطع را قفل می‌کنیم؛ «Global» یعنی هنوز نمی‌دانیم، پس اگر
     # منبعِ بعدی کشور را گفت اجازهٔ ارتقا می‌دهیم.
@@ -482,6 +590,14 @@ def brand_remark(line: str, idx=None) -> str:
 
     tag = stable_label(line)
 
+    # نکته: «vmess بودن» مساویِ «base64+JSON بودن» نیست. بعضی منابع vmess را در
+    # قالبِ استانداردِ URI می‌دهند. پیش از این، شکستِ JSON به `return line` می‌رسید
+    # و کانفیگ *برندنخورده* منتشر می‌شد — یعنی ریمارکِ بالادست، از جمله تبلیغِ
+    # کانالِ رقیب، در خروجیِ ما می‌ماند. اندازه‌گیریِ زنده: ۱ مورد از ۸٬۰۱۸ با
+    # ریمارکِ «📯1@oneclickvpnkeys». پس فقط وقتی مسیرِ JSON را می‌رویم که واقعاً
+    # JSON باشد؛ در غیرِ این‌صورت به مسیرِ عمومیِ fragment می‌افتیم که همان کار را
+    # برای vless/trojan/… انجام می‌دهد.
+    _vmess_obj = None
     if line.startswith("vmess://"):
         try:
             # مهم: بخش fragment (#...) باید قبل از decode جدا شود، وگرنه
@@ -489,7 +605,15 @@ def brand_remark(line: str, idx=None) -> str:
             # از پایپ‌لاین بیرون می‌آید). dedup_key هم همین کار را می‌کند.
             b64 = line[8:].split("#")[0].strip()
             b64 += "=" * ((4 - len(b64) % 4) % 4)
-            obj = json.loads(base64.b64decode(b64).decode("utf-8", errors="ignore"))
+            _cand = json.loads(base64.b64decode(b64).decode("utf-8", errors="ignore"))
+            if isinstance(_cand, dict):
+                _vmess_obj = _cand
+        except Exception:
+            _vmess_obj = None
+
+    if _vmess_obj is not None:
+        try:
+            obj = _vmess_obj
             old_ps = str(obj.get("ps") or obj.get("name") or "")
             code, flag = country_for_endpoint(endpoint_of(line), old_ps)
             label = "Global 🌐" if code == "Global" else f"{code} {flag}"
