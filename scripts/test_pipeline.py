@@ -30,6 +30,7 @@ import yaml  # noqa: E402
 import converters  # noqa: E402
 import core  # noqa: E402
 import filters  # noqa: E402
+import reachability  # noqa: E402
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -1779,6 +1780,250 @@ def test_filters_stats_are_internally_consistent() -> None:
     # همهٔ نقاطِ پایانی باید به سطر نگاشت شوند
     assert sum(len(v) for v in res["ep_to_lines"].values()) == st["kept"]
 
+
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# فاز B — لایهٔ L2 (`reachability.py`)
+#
+# این آزمون‌ها عمداً **بی‌شبکه** هستند. آزمونِ واحدی که به اینترنت وصل شود روی
+# runnerِ CI ناپایدار است و شکستش چیزی دربارهٔ کد نمی‌گوید. پس رفتارِ شبکه با
+# جایگزینیِ `asyncio.open_connection` ساخته می‌شود و آنچه سنجیده می‌شود
+# *منطقِ* لایه است: شمارشِ خطاها، سقفِ نشانی، نگاشتِ نتیجه به کانفیگ، و
+# مهم‌تر از همه: بلندشدنِ صدای کمبودِ fd.
+#
+# سنجش‌های شبکه‌ایِ واقعی جای دیگری‌اند و در سندِ ماژول با عدد آمده‌اند.
+# ──────────────────────────────────────────────────────────────────────────────
+
+class _FakeWriter:
+    """سوکتِ قلابی که می‌شمارد آیا بسته شد یا نه."""
+
+    def __init__(self, ledger):
+        self._ledger = ledger
+        self._ledger["opened"] += 1
+
+    def close(self):
+        self._ledger["closed"] += 1
+
+    async def wait_closed(self):
+        return None
+
+
+def _patch_connect(monkey, behaviour, ledger=None):
+    """`asyncio.open_connection` را با یک تابعِ معین جایگزین می‌کند.
+
+    `behaviour(ip, port)` یکی از این‌ها را برمی‌گرداند/می‌اندازد:
+        None            → اتصال موفق
+        استثنا          → همان استثنا بالا می‌رود
+    """
+    import asyncio as _a
+    led = ledger if ledger is not None else {"opened": 0, "closed": 0}
+
+    async def fake(ip, port, *a, **kw):
+        outcome = behaviour(ip, port)
+        if isinstance(outcome, BaseException):
+            raise outcome
+        return object(), _FakeWriter(led)
+
+    monkey.append((_a, "open_connection", _a.open_connection))
+    _a.open_connection = fake
+    return led
+
+
+def _unpatch(monkey):
+    for obj, name, orig in monkey:
+        setattr(obj, name, orig)
+
+
+def _patch_dns(monkey, mapping):
+    """DNS را قطع می‌کند: هیچ آزمونی نباید به resolverِ واقعی وابسته باشد."""
+    monkey.append((reachability, "resolve_hosts", reachability.resolve_hosts))
+    reachability.resolve_hosts = lambda hosts: ({h: mapping.get(h, ()) for h in hosts}, 0.0)
+
+
+def test_reachability_emfile_raises_instead_of_reporting_a_wrong_rate() -> None:
+    """
+    مهم‌ترین آزمونِ این ماژول.
+
+    در سنجشِ واقعیِ فاز B، هم‌روندیِ ۱۲۰۰ باعثِ ۵٬۷۰۰ خطای EMFILE شد و
+    فرآیند با **کدِ خروجِ ۰** گزارش داد «۱٫۱٪ کار می‌کنند» — در حالی که
+    واقعیت ۴۸٫۰٪ بود. یک شکستِ خاموشِ ۴۴ برابری.
+
+    پس کمبودِ fd باید استثنا باشد، نه یک عددِ کوچک در گزارش.
+    """
+    monkey = []
+    try:
+        _patch_dns(monkey, {"a.example": ("203.0.113.1",)})
+        _patch_connect(monkey, lambda ip, p: OSError(24, "Too many open files"))
+        raised = False
+        try:
+            reachability.check_endpoints([("a.example", 443)])
+        except reachability.FileDescriptorExhaustion as exc:
+            raised = True
+            assert "EMFILE" in str(exc), str(exc)
+        assert raised, "EMFILE must raise FileDescriptorExhaustion, not be reported"
+    finally:
+        _unpatch(monkey)
+
+    # کنترلِ منفی: خطای *معمولیِ* شبکه نباید استثنا بیندازد
+    monkey = []
+    try:
+        _patch_dns(monkey, {"a.example": ("203.0.113.1",)})
+        _patch_connect(monkey, lambda ip, p: ConnectionRefusedError(111, "refused"))
+        res = reachability.check_endpoints([("a.example", 443)])
+        assert res["errors"][reachability.ERR_REFUSED] == 1, res["errors"]
+    finally:
+        _unpatch(monkey)
+
+
+def test_reachability_closes_every_socket_it_opens() -> None:
+    """
+    نشتِ fd همان فروپاشی را از راهِ دیگری می‌سازد. پس شمارشِ باز و بسته
+    باید برابر باشد — و این با شمارنده سنجیده می‌شود، نه با اعتماد.
+    """
+    monkey = []
+    try:
+        _patch_dns(monkey, {f"h{i}.example": ("203.0.113.1",) for i in range(20)})
+        led = _patch_connect(monkey, lambda ip, p: None)
+        reachability.check_endpoints([(f"h{i}.example", 443) for i in range(20)])
+        assert led["opened"] == 20, led
+        assert led["closed"] == led["opened"], led
+    finally:
+        _unpatch(monkey)
+
+
+def test_reachability_probes_up_to_the_address_cap_not_just_the_first() -> None:
+    """
+    سنجشِ واقعی: ۴۳۹ میزبان بیش از یک نشانی دارند و «فقط نشانیِ اول»
+    ۲۱ نقطه از ۴۱۱ (۵٫۱٪) را از دست می‌داد. سقفِ ۳ آن‌ها را بازمی‌گرداند.
+
+    این آزمون قاعده را قفل می‌کند: نشانیِ دوم و سوم *واقعاً* آزموده شوند،
+    و نشانیِ چهارم *واقعاً* نه.
+    """
+    seen = []
+    monkey = []
+    try:
+        _patch_dns(monkey, {"multi.example": ("203.0.113.1", "203.0.113.2",
+                                              "203.0.113.3", "203.0.113.4")})
+
+        def behave(ip, port):
+            seen.append(ip)
+            # تنها نشانیِ سوم باز است: اگر فقط اولی آزموده شود، نتیجه «بسته»
+            return None if ip == "203.0.113.3" else ConnectionRefusedError(111, "x")
+
+        _patch_connect(monkey, behave)
+        res = reachability.check_endpoints([("multi.example", 443)])
+        assert ("multi.example", 443) in res["open"], res["closed"]
+        assert len(seen) == reachability.ADDR_CAP, seen
+        assert "203.0.113.4" not in seen, "the cap must actually cap"
+    finally:
+        _unpatch(monkey)
+
+
+def test_reachability_distinguishes_refusal_from_timeout_and_dns_failure() -> None:
+    """
+    سه شکستِ متفاوت با سه معنای متفاوت:
+      رد شد   → سرور زنده است، این درگاه نه
+      مهلت    → چیزی جواب نداد (فیلترینگ یا میزبانِ مرده)
+      DNS     → اصلاً نامی برای وصل‌شدن نبود
+    یکی‌کردنشان یعنی نابودیِ تنها نشانه‌ای که سرورِ زنده را لو می‌دهد.
+    """
+    import asyncio
+    monkey = []
+    try:
+        _patch_dns(monkey, {"r.example": ("203.0.113.1",),
+                            "t.example": ("203.0.113.2",),
+                            "d.example": ()})
+
+        def behave(ip, port):
+            if ip == "203.0.113.1":
+                return ConnectionRefusedError(111, "refused")
+            return asyncio.TimeoutError()
+
+        _patch_connect(monkey, behave)
+        res = reachability.check_endpoints(
+            [("r.example", 443), ("t.example", 443), ("d.example", 443)])
+        e = res["errors"]
+        assert e[reachability.ERR_REFUSED] == 1, e
+        assert e[reachability.ERR_TIMEOUT] == 1, e
+        assert e[reachability.ERR_DNS] == 1, e
+        assert e[reachability.ERR_OTHER] == 0, e
+        assert res["stats"]["open"] == 0, res["stats"]
+    finally:
+        _unpatch(monkey)
+
+
+def test_reachability_error_keys_are_always_present_even_at_zero() -> None:
+    """کلیدهای خطا قراردادِ `health.json` هستند؛ ظاهرشدنِ شرطی = حدس‌زنیِ مصرف‌کننده."""
+    monkey = []
+    try:
+        _patch_dns(monkey, {"a.example": ("203.0.113.1",)})
+        _patch_connect(monkey, lambda ip, p: None)
+        res = reachability.check_endpoints([("a.example", 443)])
+        assert set(res["errors"]) == set(reachability.ALL_ERRORS), res["errors"]
+        assert res["errors"][reachability.ERR_EMFILE] == 0
+    finally:
+        _unpatch(monkey)
+
+
+def test_reachability_maps_open_endpoints_back_to_every_config_line() -> None:
+    """
+    L2 روی نقطهٔ پایانی کار می‌کند ولی خروجیِ منتشرشده کانفیگ است. اگر
+    نگاشتِ برگشتی بشکند، چند کانفیگِ سالم بی‌صدا حذف می‌شوند — دقیقاً همان
+    صرفه‌جوییِ ۱۲٫۹۲ درصدیِ L0 به زیان درست می‌شود.
+    """
+    monkey = []
+    try:
+        _patch_dns(monkey, {"open.example": ("203.0.113.1",),
+                            "shut.example": ("203.0.113.9",)})
+        _patch_connect(monkey, lambda ip, p:
+                       None if ip == "203.0.113.1"
+                       else ConnectionRefusedError(111, "x"))
+        lines = [
+            "# header",
+            "trojan://pw@open.example:443#A",
+            "trojan://pw2@open.example:443#B",     # همان نقطهٔ پایانی
+            "trojan://pw@shut.example:443#C",
+        ]
+        res = reachability.check_lines(lines)
+        assert res["stats"]["configs_in"] == 3, res["stats"]
+        assert res["stats"]["configs_open"] == 2, res["stats"]
+        assert len(res["line_delay"]) == len(res["kept_open"])
+        assert all("open.example" in ln for ln in res["kept_open"]), res["kept_open"]
+    finally:
+        _unpatch(monkey)
+
+
+def test_reachability_resolver_accepts_ipv6_only_hosts() -> None:
+    """
+    `geo.resolve_all` عمداً AF_INET است (پایگاهِ کشور IPv4 است). اگر L2 به
+    آن واگذار می‌شد، میزبانِ فقط-IPv6 «حل‌نشده» به حساب می‌آمد.
+
+    دادهٔ زندهٔ همین مخزن یک نمونه دارد و در ۳ تکرار از ۳ تکرار فقط IPv6
+    داشت. پس این آزمون بی‌شبکه فقط قاعده را قفل می‌کند: خودِ ماژول نباید
+    خانوادهٔ نشانی را محدود کند.
+    """
+    import ast
+    import inspect
+    src = inspect.getsource(reachability._resolve_one)
+    tree = ast.parse(src.strip())
+    names = {n.attr for n in ast.walk(tree) if isinstance(n, ast.Attribute)}
+    assert "AF_INET" not in names, \
+        "L2 must not restrict the address family; a v6-only host exists in the data"
+    assert "AF_INET6" not in names, "nor the other way round"
+    # کنترلِ منفی: مرتب‌سازی هم باید حاضر باشد، وگرنه «سه نشانیِ اول» مسابقه است
+    assert "sorted" in src, "addresses must be sorted for reproducibility"
+
+
+def test_reachability_concurrency_stays_under_the_measured_fd_ceiling() -> None:
+    """
+    ۸۰۰ سقفِ سنجیده‌شده است، نه عددِ دلبخواه: در ۱۲۰۰ اندازه‌گیری فرو ریخت.
+    اگر کسی این عدد را بالا ببرد، باید آگاهانه باشد.
+    """
+    assert reachability.CONCURRENCY <= 1000, reachability.CONCURRENCY
+    assert reachability.headroom_warning(10) is None
+    assert reachability.headroom_warning(1000000) is not None, \
+        "an absurd concurrency must warn before the run, not after the damage"
 
 
 # ──────────────────────────────────────────────────────────────────────────────
