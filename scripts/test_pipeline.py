@@ -2922,7 +2922,12 @@ class _StubL3:
             self.seen_lines.append(list(lines))
             rows = self.per_round[min(self.calls, len(self.per_round) - 1)]
             self.calls += 1
-            return {"rows": list(rows)}
+            # شکلِ **واقعیِ** `realtest.run_test`: نقشهٔ لینک→ردیف، نه لیست.
+            # این نکته با هزینه آموخته شد: شیمِ قبلی لیست می‌داد، همهٔ
+            # آزمون‌ها سبز بودند و اجرای واقعی با
+            # `'str' object has no attribute 'get'` شکست. یک فِیکِ
+            # بدشکل، آزمون را از «اثبات» به «توهم» تبدیل می‌کند.
+            return {"rows": {(r.get("link") or ""): r for r in rows}}
 
         realtest.test_lines = fake
         return self
@@ -3284,6 +3289,103 @@ def test_pipeline_reproduces_the_measured_secure_share():
         (f"the measured secure count is 81/224 = 36.2%, got {len(secure)}. "
          "The plan's original 47% figure came from a 36-config pilot and was "
          "corrected.")
+
+
+def test_pipeline_matches_the_real_l3_result_contract():
+    """
+    شیمِ آزمون باید همان شکلی را بدهد که `realtest` واقعاً می‌دهد.
+
+    این تست از یک شکستِ **واقعاً رخ‌داده** محافظت می‌کند: `rows` در
+    `realtest.run_test` یک **dict**ِ لینک→ردیف است (خطِ «"rows": by_link»)،
+    ولی شیم لیست می‌داد. نتیجه: ۱۲۲ آزمون سبز و اجرای واقعی شکسته. پس
+    قرارداد را از خودِ منبع می‌خوانیم، نه از حافظه.
+    """
+    # قرارداد را **رفتاری** می‌سنجیم، نه با جست‌وجوی متنِ کد. منبعِ شکلِ
+    # `rows` تابعِ `classify` است؛ پس همان را با یک ردیفِ واقعی صدا می‌زنیم.
+    probe = _pl_row("vless://probe@1.2.3.4:443?security=tls#p")
+    shape = realtest.classify([probe])
+    assert isinstance(shape["rows"], dict), \
+        (f"realtest.classify now returns rows as {type(shape['rows']).__name__},"
+         " not a link→row map; the pipeline contract helper and the test stub "
+         "must be revisited")
+    assert shape["rows"][probe["link"]] == probe, \
+        "the rows map must be keyed by the config link"
+
+    # ۱) شیم باید dict بدهد، مثل منبع
+    rows = [_pl_row("vless://x@1.1.1.1:443?security=tls#x")]
+    with _StubL3([rows]) as stub:
+        out = realtest.test_lines(["vless://x@1.1.1.1:443?security=tls#x"])
+    assert isinstance(out["rows"], dict), \
+        f"the stub must mimic the real dict shape, got {type(out['rows'])}"
+
+    # ۲) خودِ pipeline باید هر دو شکل را درست بخواند و شکلِ بیگانه را
+    #    **بلند** رد کند — نه آن‌که خاموش صفر ردیف ببیند.
+    row = _pl_row("vless://y@2.2.2.2:443?security=tls#y")
+    assert pipeline._rows_of({"rows": {row["link"]: row}}) == [row]
+    assert pipeline._rows_of({"rows": [row]}) == [row]
+    for bad in ({"rows": None}, {"rows": "oops"}, {}):
+        try:
+            pipeline._rows_of(bad)
+        except pipeline.StabilityError:
+            pass
+        else:
+            raise AssertionError(
+                f"an unexpected rows shape must break loudly: {bad!r}")
+
+
+def test_pipeline_output_survives_the_publication_gate():
+    """
+    شرطِ خروجِ ۷ فاز B: آبشار نباید دروازهٔ انتشار را بشکند.
+
+    این تست از یک اشتباهِ **سنجیده‌شده** محافظت می‌کند، نه فرضی: وقتی
+    `write_buckets` تنها `configs.txt` می‌نوشت، `validate.py` روی همان
+    دایرکتوری `ok=False` و `missing=2` داد — چون هر دسته‌ای که **وجود
+    داشته باشد** به‌سختیِ دسته‌های اصلی سنجیده می‌شود. یعنی وصل‌کردنِ
+    آبشار به CI، کلِ انتشار را می‌شکست.
+    """
+    import tempfile as _tf
+    import validate as _validate
+
+    links = [
+        "vless://11111111-1111-1111-1111-111111111111@1.1.1.1:443"
+        "?security=tls&sni=a.example&type=ws#a",
+        "trojan://pw@2.2.2.2:443?security=tls&sni=b.example#b",
+    ]
+    rows = [_pl_row(L, delay=120) for L in links]
+    with _StubL3([rows] * 3):
+        res = pipeline.run_l3_round(links, rounds=3)
+    buckets = pipeline.build_buckets(res)
+
+    out = _tf.mkdtemp(prefix="pl_gate_")
+    pipeline.write_buckets(out, buckets)
+
+    # دسته‌های اصلی را هم می‌سازیم، چون دروازه بی‌قید و شرط سراغشان می‌رود.
+    for cat in _validate.CORE_CATEGORIES:
+        base = os.path.join(out, cat)
+        os.makedirs(base, exist_ok=True)
+        with open(os.path.join(base, "configs.txt"), "w",
+                  encoding="utf-8") as fh:
+            fh.write("\n".join(links) + "\n")
+        with open(os.path.join(base, "clash.yaml"), "w",
+                  encoding="utf-8") as fh:
+            fh.write(converters.build_clash_yaml(links))
+        with open(os.path.join(base, "singbox.json"), "w",
+                  encoding="utf-8") as fh:
+            fh.write(converters.build_singbox_json(links))
+
+    for cat in pipeline.CATEGORIES:
+        for name in ("configs.txt", "configs_base64.txt", "clash.yaml",
+                     "singbox.json"):
+            p = os.path.join(out, cat, name)
+            assert os.path.isfile(p), \
+                (f"{cat}/{name} is missing — the publication gate counts a "
+                 "missing artifact as a failure, so the whole publish breaks")
+
+    rep = _validate.validate_outputs(out)
+    assert rep["summary"]["missing"] == 0, \
+        (f"the gate found missing artifacts: {rep['summary']} / "
+         f"{rep['results']}")
+    assert rep["ok"], f"the publication gate rejected pipeline output: {rep}"
 
 
 # ──────────────────────────────────────────────────────────────────────────────

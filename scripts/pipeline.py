@@ -14,18 +14,31 @@
 چهار تصمیمِ **سنجیده** که این فایل را شکل می‌دهند:
 
 ۱) «پایدار» = موفق در **همهٔ** اجراهای یک دور، با **۳** اجرا.
-   سنجش (B4b، ۵ اجرای کامل): موفق‌ها ۵۰۱/۴۷۳/۳۶۳/۴۴۲/۴۷۳ — میانگین ۴۵۰٫۴،
-   انحرافِ معیار ۵۳٫۱، دامنه ۱۳۸ (۳۰٫۶٪). از ۶۲۶ کانفیگی که **دست‌کم یک بار**
-   کار کرد، تنها ۲۲۴ **همیشه** کار کرد ⇒ **۶۴٫۲۲٪ از هرچه کار کرد، لرزان است**.
+   سنجش (B4b، ۵ اجرای کامل، **در سندباکس**): موفق‌ها ۵۰۱/۴۷۳/۳۶۳/۴۴۲/۴۷۳ —
+   میانگین ۴۵۰٫۴، انحرافِ معیار ۵۳٫۱، دامنه ۱۳۸ (۳۰٫۶٪). از ۶۲۶ کانفیگی که
+   **دست‌کم یک بار** کار کرد، تنها ۲۲۴ **همیشه** کار کرد ⇒ ۶۴٫۲۲٪ لرزان.
    اعتبارسنجیِ leave-one-out (آموزش روی ۴ اجرا، آزمون روی پنجمی):
        ۱-از-۴ → ۶۱۱ کانفیگ · دقت ۷۱٫۳٪ · بازخوانی ۹۶٫۸٪
        ۲-از-۴ → ۵۲۰ کانفیگ · دقت ۷۷٫۸٪ · بازخوانی ۸۹٫۹٪
        ۳-از-۴ → ۴۱۶ کانفیگ · دقت ۸۳٫۷٪ · بازخوانی ۷۷٫۵٪
        ۴-از-۴ → ۲۵۵ کانفیگ · دقت ۸۸٫۵٪ · بازخوانی ۵۰٫۴٪
        یک اجرا (مبنا) → ۴۵۰ کانفیگ · دقت ۷۸٫۶٪
-   «همه-از-۳» بالاترین دقت را با هزینهٔ قابلِ‌پرداخت می‌دهد: ۳×۴۴s ≈ ۱۳۲ ثانیه
-   از بودجهٔ ۹۰۰ ثانیه‌ایِ CI، و روی اجراهای ۱–۳ عدداً **۲۸۱** کانفیگ می‌داد —
-   بیش از ۱۰۰ موردِ لازم برای `top100.txt`.
+
+   ⚠️ **آن ۶۴٫۲۲٪ عددِ محیط است، نه ثابتِ قاعده.** همان کد روی یک سرورِ
+   اختصاصی (۸۱۵۸ کانفیگِ یکسان، ۳ اجرا) سنجیده شد: موفق‌ها ۵۴۲/۵۳۱/۵۳۲
+   (انحرافِ معیار ≈۶ در برابر ۵۳)، پایدار ۴۵۸ در برابر ۲۲۴، لرزان
+   **۲۴٫۹۲٪** در برابر ۶۴٫۲۲٪. یعنی بخشِ بزرگی از آن لرزش، شبکهٔ سندباکس
+   بود و نه کانفیگ‌ها. **قاعده** («موفق در همهٔ اجراها») از هر دو سنجش
+   سالم بیرون آمد؛ فقط *درصد* را نباید مطلق خواند. هر خروجی درصدِ
+   **همان اجرا** را در سرآیندِ خود می‌نویسد (`stats['flaky_pct']`).
+
+   هزینه: سنجشِ اجراشده روی سرور ⇒ L3 سه اجرا **۱۰۶٫۹۲s** و کلِ آبشار
+   (L0/L1 + L2 + سه اجرای L3) **۱۴۹٫۳۴s** از بودجهٔ ۹۰۰ ثانیه‌ایِ CI،
+   کندترین اجرا ۳۶٫۲۱s ⇒ جا می‌شود. (ادعای پیشینِ «۳×۴۴s ≈ ۱۳۲s» در همین
+   docstring **غلط** بود: آن ۴۴s از سریع‌ترین اجرای سندباکس برداشته شده
+   بود، در حالی که فاصلهٔ واقعیِ اجراهای B4b ۵۴/۳۴۵/۶۱۵/۴۰۴ ثانیه بود.)
+   روی اجراهای ۱–۳ سندباکس عدداً **۲۸۱** کانفیگ می‌داد و روی سرور ۴۵۸ —
+   هر دو بیش از ۱۰۰ موردِ لازم برای `top100.txt`.
 
 ۲) پذیرشِ یک ردیف **چهار** شرط دارد، نه یکی. `success == total` تنها **سوراخ**
    است: برای همهٔ ۸۷ ردیفِ `broken` هم درست است (۰ == ۰). قاعده در
@@ -55,6 +68,8 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import realtest  # noqa: E402
 import reachability  # noqa: E402
+import converters  # noqa: E402
+import core  # noqa: E402
 
 # ──────────────────────────────────────────────────────────────────────────────
 # ثابت‌ها
@@ -157,6 +172,24 @@ def _median_int(values: Sequence[int]) -> int:
     return int(round(statistics.median(values)))
 
 
+def _rows_of(result: Dict[str, Any]) -> List[Dict[str, str]]:
+    """
+    ردیف‌های یک اجرای L3 را برمی‌گرداند.
+
+    `realtest.run_test` کلیدِ `rows` را **نقشهٔ لینک→ردیف** می‌دهد. اتکا به
+    پیمایشِ مستقیمِ آن، کلیدهای رشته‌ای می‌دهد و در اجرای واقعی می‌شکند؛ این
+    تابع قرارداد را در **یک نقطه** متمرکز می‌کند و شکلِ ناشناخته را خاموش رد
+    نمی‌کند، بلکه بلند می‌شکند.
+    """
+    rows = result.get("rows")
+    if isinstance(rows, dict):
+        return list(rows.values())
+    if isinstance(rows, list):
+        return rows
+    raise StabilityError(
+        f"unexpected shape for the L3 'rows' field: {type(rows).__name__}")
+
+
 def run_l3_round(lines: Sequence[str], rounds: int = None,
                  **kwargs: Any) -> Dict[str, Any]:
     """
@@ -188,8 +221,14 @@ def run_l3_round(lines: Sequence[str], rounds: int = None,
 
     for _ in range(rounds):
         res = realtest.test_lines(lines, **kwargs)
+        # قرارداد سنجیده‌شده: `realtest` مقدارِ `rows` را **نقشهٔ لینک→ردیف**
+        # می‌دهد (خطِ ۳۹۳: `"rows": by_link`). پیمایشِ مستقیمِ یک dict کلیدها را
+        # می‌دهد که رشته‌اند، نه ردیف. این اشتباه در اجرای واقعی با
+        # `'str' object has no attribute 'get'` شکست — در حالی که آزمون‌ها سبز
+        # بودند، چون شیمِ آزمون شکلِ نادرستی می‌داد. `.values()` صریح است و
+        # `_rows_of` هر دو شکل را می‌پذیرد تا قرارداد یک‌جا کنترل شود.
         ok_now = set()
-        for row in res["rows"]:
+        for row in _rows_of(res):
             link = (row.get("link") or "").strip()
             if not link:
                 continue
@@ -308,8 +347,10 @@ def write_buckets(out_dir: str, buckets: Dict[str, Any]) -> Dict[str, str]:
             f"# @Raydikalx — FAST — {st['fast']} configs\n"
             f"# criterion: verified AND median delay across {rounds} runs "
             f"< {st['fast_threshold_ms']}ms.\n"
-            f"# the median (not one sample) is used because 34.4% of configs "
-            f"cross this line between runs.\n"),
+            f"# the median (not one sample) is used because configs cross this "
+            f"line between runs: measured 34.4% of them in a 5-run experiment.\n"
+            f"# that share depends on the network the test ran on, so treat it "
+            f"as the reason for using a median, not as a constant.\n"),
         "secure": (
             f"# @Raydikalx — SECURE — {st['secure']} configs\n"
             f"# criterion: verified AND forward secrecy — the session key comes\n"
@@ -325,6 +366,29 @@ def write_buckets(out_dir: str, buckets: Dict[str, Any]) -> Dict[str, str]:
         path = os.path.join(out_dir, cat, "configs.txt")
         _write_lines(path, heads[cat], buckets[cat])
         written[cat] = path
+        # ── چرا سه فایلِ دیگر هم لازم است ────────────────────────────────
+        # سنجیده شد، حدس نیست: `validate.py` هر دایرکتوریِ دسته را که
+        # **وجود داشته باشد** با همان سختیِ دسته‌های اصلی می‌سنجد و
+        # `singbox.json`/`clash.yaml`ِ نبوده را `missing` می‌شمارد. با تنها
+        # `configs.txt` نتیجه اندازه‌گیری شد: ok=False، missing=2 ⇒ دروازهٔ
+        # انتشار با `--strict` کدِ ۱ می‌داد و کلِ انتشار می‌شکست. پس یا باید
+        # هر چهار فایل نوشته شود، یا دسته اصلاً ساخته نشود.
+        for name, build in (
+            ("configs_base64.txt",
+             lambda L: core.encode_base64_subscription(L)),
+            ("clash.yaml", lambda L: converters.build_clash_yaml(L)),
+            ("singbox.json", lambda L: converters.build_singbox_json(L)),
+        ):
+            try:
+                body = build(buckets[cat])
+            except Exception as exc:  # noqa: BLE001
+                # تبدیل‌کننده‌ها ممکن است روی یک لینکِ خاص بشکنند؛ آن نباید
+                # کلِ آبشار را از بین ببرد، ولی **باید دیده شود**.
+                print(f"⚠️ {cat}/{name}: {exc}", file=sys.stderr)
+                continue
+            sub = os.path.join(out_dir, cat, name)
+            _write_lines(sub, "", [body.rstrip("\n")])
+            written[f"{cat}/{name}"] = sub
 
     top_path = os.path.join(out_dir, "top100.txt")
     short = st["top_short_by"]
