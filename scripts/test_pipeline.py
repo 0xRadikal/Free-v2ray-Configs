@@ -17,6 +17,7 @@ test_pipeline.py — تست‌های واحد برای خط‌لولهٔ تجم�
 """
 from __future__ import annotations
 
+import base64
 import json
 import os
 import sys
@@ -28,6 +29,7 @@ import yaml  # noqa: E402
 
 import converters  # noqa: E402
 import core  # noqa: E402
+import filters  # noqa: E402
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -1600,6 +1602,183 @@ def test_aggregator_warms_up_the_geo_cache_before_branding():
         f"warm_up (line {min(warm_lines)}) must run before the branding loop "
         f"(line {min(brand_lines)}), otherwise it is pointless"
     )
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# فاز B — لایهٔ L0/L1 (`filters.py`)
+#
+# هر قاعدهٔ `filters.py` این‌جا یک آزمونِ اختصاصی دارد، و هر آزمون **کنترلِ
+# منفی** هم دارد: نه‌تنها نشان می‌دهد قاعده مقدارِ بد را می‌گیرد، بلکه نشان
+# می‌دهد مقدارِ *سالم* را نمی‌گیرد. بی این نیمهٔ دوم، یک قاعدهٔ «همه‌چیز را رد
+# کن» هم در آزمون قبول می‌شد.
+# ──────────────────────────────────────────────────────────────────────────────
+
+def test_filters_port_rule_rejects_out_of_range_and_keeps_valid() -> None:
+    for bad in (0, -1, 65536, 99999, "abc", None, "", "8.5"):
+        assert filters.is_invalid_port(bad), f"port {bad!r} must be rejected"
+    # کنترلِ منفی: مرزهای معتبر نباید رد شوند
+    for good in (1, 80, 443, 8080, 65535, "443", " 443 "):
+        assert not filters.is_invalid_port(good), f"port {good!r} must be kept"
+
+
+def test_filters_custom_string_ids_are_valid_per_xray_spec() -> None:
+    """
+    مستندِ رسمیِ Xray برای VLESS و VMess: «any string less than 30 bytes, or a
+    valid UUID». پس شناسه‌های سفارشی مثل `13094` مشروع‌اند.
+
+    این آزمون یک اشکالِ *واقعیِ* همین فاز را قفل می‌کند: نخستین پیاده‌سازی
+    «UUIDِ متعارف وگرنه حذف» بود و روی دادهٔ زنده ۱۱۳ کانفیگِ سالم را می‌کشت.
+    """
+    for proto in ("vless", "vmess", "tuic"):
+        for ok in ("13094", "AlfredConfig", "@free_conf_iran", "x" * 29,
+                   "f23bb427-c1f9-4373-876c-2f43e9f790f3",
+                   "f23bb427c1f94373876c2f43e9f790f3"):
+            assert not filters.is_invalid_uuid(ok, proto), (
+                f"{proto} id {ok!r} is legal per the Xray spec and must be kept"
+            )
+        # ۳۰ بایت یا بیشتر و UUID هم نیست → بیرونِ هر دو راهِ مجاز
+        assert filters.is_invalid_uuid("x" * 30, proto)
+        assert filters.is_invalid_uuid("", proto)
+        assert filters.is_invalid_uuid("00000000-0000-0000-0000-000000000000", proto)
+
+
+def test_filters_id_rule_does_not_touch_password_protocols() -> None:
+    """در ss/trojan/hysteria2 این میدان رمزِ عبور است، نه شناسه."""
+    for proto in ("shadowsocks", "ss", "trojan", "hysteria2"):
+        for anything in ("", "x" * 200, "@channel", "p@ssw0rd!"):
+            assert not filters.is_invalid_uuid(anything, proto), (
+                f"{proto} treats this field as a password; it must never be judged"
+            )
+
+
+def test_filters_reuses_converters_rules_instead_of_reimplementing() -> None:
+    """
+    L1 نباید قاعدهٔ خودش را برای «سرورِ بد» بنویسد؛ باید همان توابعِ
+    `converters` را صدا بزند. دو پیاده‌سازیِ موازی = دو رفتارِ واگرا در آینده.
+    داوری با AST، نه با جست‌وجوی رشته — چون رشته در توضیحات هم پیدا می‌شود.
+    """
+    import ast
+    import inspect
+    tree = ast.parse(inspect.getsource(filters.classify))
+    called = {
+        n.func.attr for n in ast.walk(tree)
+        if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)
+    }
+    for required in ("_is_unroutable_server", "_is_structurally_invalid_server",
+                     "parse_proxy"):
+        assert required in called, (
+            f"filters.classify must delegate to converters.{required}, "
+            f"not reimplement it; calls found: {sorted(called)}"
+        )
+
+
+def _vmess_link(**over: str) -> str:
+    """یک لینکِ vmess معتبر می‌سازد؛ فقط میدانِ موردِ آزمون را عوض می‌کنیم.
+
+    برای میزبان‌هایی مثل «یک URLِ کامل» تنها همین قالب واقع‌گراست: در URIِ
+    trojan/vless آن رشته پیش از رسیدن به میدانِ `server` تجزیه می‌شود
+    (`server='https'`, `port=0`) و قاعدهٔ پورت زودتر شلیک می‌کند — چنان‌که
+    دادهٔ زندهٔ این مخزن هم آن مورد را در vmess نشان داد، نه در trojan.
+    """
+    body = {"v": "2", "ps": "X", "add": "example.org", "port": "443",
+            "id": "f23bb427-c1f9-4373-876c-2f43e9f790f3", "aid": "0",
+            "net": "ws", "type": "none", "tls": "tls"}
+    body.update(over)
+    raw = json.dumps(body).encode("utf-8")
+    return "vmess://" + base64.b64encode(raw).decode("ascii")
+
+
+def test_filters_drops_unroutable_and_structurally_invalid_servers() -> None:
+    for host in ("127.0.0.1", "0.0.0.0", "127.0.0.53"):
+        line = f"trojan://pw@{host}:443#T"
+        _, reason = filters.classify(line)
+        assert reason == filters.REASON_UNROUTABLE, (host, reason)
+    # هر سه مقدار از دادهٔ زندهٔ همین مخزن آمده‌اند (سندِ `converters`)
+    for host in ("masir_sefid", "ip",
+                 "https://github.com/ALIILAPRO/v2rayNG-Config",
+                 "使用前记得更新订阅"):
+        _, reason = filters.classify(_vmess_link(add=host))
+        assert reason == filters.REASON_INVALID_SERVER, (host, reason)
+    # کنترلِ منفی: میزبانِ سالم باید بگذرد — در هر دو قالب
+    proxy, reason = filters.classify("trojan://pw@example.org:443#T")
+    assert reason is None and proxy is not None
+    proxy, reason = filters.classify(_vmess_link())
+    assert reason is None and proxy is not None
+
+
+def test_filters_checks_cheap_rules_before_expensive_ones() -> None:
+    """
+    ترتیبِ بندها بخشی از قراردادِ L1 است، نه سلیقه: پورت پیش از میزبان، و
+    میزبان پیش از شناسه. اگر ترتیب عوض شود، دلیلِ حذفِ گزارش‌شده در
+    `health.json` عوض می‌شود و آمارِ تاریخی ناسازگار می‌گردد.
+
+    شاهدِ عینی: `trojan://pw@https://github.com/x/y:443` را پارسر به
+    `server='https', port=0` تبدیل می‌کند؛ پس انتظارِ درست `invalid_port` است.
+    """
+    _, reason = filters.classify("trojan://pw@https://github.com/x/y:443#T")
+    assert reason == filters.REASON_INVALID_PORT, reason
+    # میزبانِ بد + شناسهٔ بد هم‌زمان → باید میزبان گزارش شود، نه شناسه
+    _, reason = filters.classify(_vmess_link(add="masir_sefid", id=""))
+    assert reason == filters.REASON_INVALID_SERVER, reason
+
+
+def test_filters_deduplicates_endpoints_and_maps_them_back() -> None:
+    """
+    L0 روی *نقطهٔ پایانی* یکتا کار می‌کند، ولی هر نقطه باید به همهٔ سطرهایش
+    برگردد — وگرنه نتیجهٔ آزمون به کانفیگ‌ها نسبت داده نمی‌شود.
+    """
+    lines = [
+        "trojan://pw@example.org:443#A",
+        "trojan://pw2@example.org:443#B",   # همان نقطهٔ پایانی
+        "trojan://pw@example.net:443#C",
+    ]
+    res = filters.filter_lines(lines)
+    assert res["stats"]["kept"] == 3
+    assert res["stats"]["endpoints_unique"] == 2, res["endpoints"]
+    assert res["ep_to_lines"][("example.org", 443)] == [0, 1]
+    assert res["ep_to_lines"][("example.net", 443)] == [2]
+    assert len(res["line_endpoint"]) == 3
+
+
+def test_filters_skips_comment_header_and_counts_honestly() -> None:
+    """
+    نخستین سطرِ `configs.txt` توضیح است. شمردنش آمار را باد می‌کند — خطایی که
+    در سنجش‌های پیشینِ همین پروژه واقعاً رخ داد.
+    """
+    res = filters.filter_lines([
+        "# Free V2Ray configs — header",
+        "",
+        "   ",
+        "trojan://pw@example.org:443#A",
+    ])
+    assert res["stats"]["input"] == 1, res["stats"]
+    assert res["stats"]["kept"] == 1
+
+
+def test_filters_reports_every_reason_key_even_when_zero() -> None:
+    """
+    کلیدهای `dropped` قراردادِ `health.json` هستند. اگر کلیدی تنها وقتی ظاهر
+    شود که ≥۱ باشد، مصرف‌کننده مجبور به حدس‌زدن می‌شود.
+    """
+    res = filters.filter_lines(["trojan://pw@example.org:443#A"])
+    assert set(res["dropped"]) == set(filters.ALL_REASONS)
+    assert all(v == 0 for v in res["dropped"].values())
+
+
+def test_filters_stats_are_internally_consistent() -> None:
+    """input = kept + dropped، بی استثنا. تراز، خودش یک ناوردا است."""
+    repo = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    path = os.path.join(repo, "all", "configs.txt")
+    assert os.path.exists(path), f"{path} is tracked in git; it must exist"
+    res = filters.filter_file(path)
+    st = res["stats"]
+    assert st["input"] == st["kept"] + st["dropped"], st
+    assert st["dropped"] == sum(res["dropped"].values()), res["dropped"]
+    assert st["endpoints_unique"] <= st["kept"]
+    assert st["hosts_unique"] <= st["endpoints_unique"]
+    # همهٔ نقاطِ پایانی باید به سطر نگاشت شوند
+    assert sum(len(v) for v in res["ep_to_lines"].values()) == st["kept"]
+
 
 
 # ──────────────────────────────────────────────────────────────────────────────
