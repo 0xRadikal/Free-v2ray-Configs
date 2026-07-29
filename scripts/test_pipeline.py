@@ -31,6 +31,7 @@ import converters  # noqa: E402
 import core  # noqa: E402
 import filters  # noqa: E402
 import reachability  # noqa: E402
+import validate  # noqa: E402
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -2024,6 +2025,106 @@ def test_reachability_concurrency_stays_under_the_measured_fd_ceiling() -> None:
     assert reachability.headroom_warning(10) is None
     assert reachability.headroom_warning(1000000) is not None, \
         "an absurd concurrency must warn before the run, not after the damage"
+
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# فاز B — دروازهٔ اعتبارسنجی برای دسته‌های تازه (`validate.py`)
+#
+# سه دستهٔ verified/ fast/ secure/ هنوز تولید نمی‌شوند. خطرِ واقعی این است که
+# افزودنشان به دروازه، دروازه را *همین حالا* بشکند (چون `ok` شرطِ
+# `missing == 0` دارد) یا برعکس، آن‌قدر نرم شود که دستهٔ خرابِ حاضر بی‌صدا
+# منتشر شود. این آزمون‌ها هر دو سر را قفل می‌کنند.
+# ──────────────────────────────────────────────────────────────────────────────
+
+def test_validate_knows_the_phase_b_categories() -> None:
+    for cat in ("verified", "fast", "secure"):
+        assert cat in validate.CATEGORIES, \
+            f"{cat}/ is a published directory; the gate must know it"
+    # کنترلِ منفی: دسته‌های اصلی نباید در فهرستِ اختیاری بیفتند
+    for cat in ("all", "heavy", "light"):
+        assert cat in validate.CORE_CATEGORIES, cat
+        assert cat not in validate.OPTIONAL_CATEGORIES, \
+            f"{cat}/ is always produced; excusing it would let the gate pass " \
+            f"with zero configs"
+
+
+def test_validate_optional_category_absence_does_not_break_the_gate() -> None:
+    """
+    سنجیده شد: پیش از تفکیک، ۶ بررسی و rc=0؛ با افزودنِ سادهٔ سه دسته به
+    همان تاپل، ۶ موردِ `missing` و rc=1 — یعنی انتشار می‌ایستاد پیش از
+    آنکه کدِ تولیدکنندهٔ آن دسته‌ها نوشته شود.
+    """
+    import tempfile
+    with tempfile.TemporaryDirectory() as root:
+        for cat in validate.CORE_CATEGORIES:
+            os.makedirs(os.path.join(root, cat))
+            with open(os.path.join(root, cat, "singbox.json"), "w",
+                      encoding="utf-8") as f:
+                json.dump({"outbounds": [{"type": "direct", "tag": "d"}]}, f)
+            with open(os.path.join(root, cat, "clash.yaml"), "w",
+                      encoding="utf-8") as f:
+                yaml.safe_dump({"proxies": [{"name": "n", "type": "socks5",
+                                             "server": "1.2.3.4", "port": 1080}]}, f)
+        rep = validate.validate_outputs(root)
+        assert sorted(rep["absent_optional"]) == ["fast", "secure", "verified"], \
+            rep["absent_optional"]
+        assert rep["summary"]["missing"] == 0, rep["summary"]
+        assert rep["ok"] is True, rep
+
+
+def test_validate_present_but_broken_optional_category_fails_the_gate() -> None:
+    """
+    نیمهٔ دومِ قاعده، و مهم‌ترش: «اختیاری» یعنی «ممکن است نباشد»، نه
+    «اگر خراب بود اشکالی ندارد». یک `verified/` خراب باید انتشار را ببندد.
+    """
+    import tempfile
+    with tempfile.TemporaryDirectory() as root:
+        for cat in validate.CORE_CATEGORIES:
+            os.makedirs(os.path.join(root, cat))
+            with open(os.path.join(root, cat, "singbox.json"), "w",
+                      encoding="utf-8") as f:
+                json.dump({"outbounds": [{"type": "direct", "tag": "d"}]}, f)
+            with open(os.path.join(root, cat, "clash.yaml"), "w",
+                      encoding="utf-8") as f:
+                yaml.safe_dump({"proxies": [{"name": "n", "type": "socks5",
+                                             "server": "1.2.3.4", "port": 1080}]}, f)
+        # دایرکتوریِ حاضر ولی نیمه‌نوشته: singbox هست، clash نیست
+        os.makedirs(os.path.join(root, "verified"))
+        with open(os.path.join(root, "verified", "singbox.json"), "w",
+                  encoding="utf-8") as f:
+            json.dump({"outbounds": [{"type": "direct", "tag": "d"}]}, f)
+
+        rep = validate.validate_outputs(root)
+        assert "verified" not in rep["absent_optional"], rep["absent_optional"]
+        assert rep["results"]["verified"]["clash"]["status"] == "missing", \
+            rep["results"]["verified"]
+        assert rep["ok"] is False, "a half-written category must fail the gate"
+
+
+def test_validate_always_checks_every_core_category() -> None:
+    """
+    ناوردا: دستهٔ اصلی هرگز از بررسی رد نمی‌شود، حتی وقتی غایب است — در آن
+    حالت `missing` می‌شود و دروازه می‌شکند. اگر روزی `all/` در مسیرِ
+    «تولیدنشده» بیفتد، دروازه با صفر کانفیگ سبز می‌ماند.
+    """
+    import tempfile
+    with tempfile.TemporaryDirectory() as root:
+        os.makedirs(os.path.join(root, "all"))
+        with open(os.path.join(root, "all", "singbox.json"), "w",
+                  encoding="utf-8") as f:
+            json.dump({"outbounds": [{"type": "direct", "tag": "d"}]}, f)
+        with open(os.path.join(root, "all", "clash.yaml"), "w",
+                  encoding="utf-8") as f:
+            yaml.safe_dump({"proxies": [{"name": "n", "type": "socks5",
+                                         "server": "1.2.3.4", "port": 1080}]}, f)
+        # heavy/ و light/ عمداً ساخته نمی‌شوند
+        rep = validate.validate_outputs(root)
+        for cat in validate.CORE_CATEGORIES:
+            assert cat in rep["results"], f"{cat} must stay checked, not excused"
+            assert cat not in rep["absent_optional"]
+        assert rep["summary"]["missing"] == 4, rep["summary"]
+        assert rep["ok"] is False
 
 
 # ──────────────────────────────────────────────────────────────────────────────

@@ -17,6 +17,21 @@ validate.py — دروازهٔ اعتبارسنجی خروجی‌ها با **ک�
 (JSON/YAML قابل تجزیه + وجود کلیدهای الزامی) و نتیجه «skipped» علامت
 می‌خورد — هرگز به‌دروغ «pass» گزارش نمی‌شود.
 
+دو گونهٔ دسته، با دو قاعدهٔ متفاوت
+──────────────────────────────────
+`all/ heavy/ light/` همیشه تولید می‌شوند، پس نبودنشان خطاست.
+
+`verified/ fast/ secure/` (فاز B) تنها وقتی تولید می‌شوند که آزمونِ واقعیِ
+پروکسی در آن اجرا فعال باشد. قاعدهٔ آن‌ها «الزامی به‌شرطِ حضور» است: اگر
+دایرکتوری نبود، از بررسی رد می‌شود؛ ولی اگر بود و فایلش خراب یا ناقص بود،
+**شکست** است — نه «skipped» و نه نادیده‌گرفتن.
+
+چرا این تفکیک لازم بود؟ `report["ok"]` شرطِ `missing == 0` دارد. افزودنِ
+سادهٔ سه دستهٔ تازه به همان تاپل، دروازه را بی‌درنگ می‌شکست: سنجیده شد که
+پیش از این تغییر ۶ بررسی و rc=0 بود، و با افزودنِ ساده ۶ موردِ `missing`
+و rc=1 می‌شد — یعنی انتشار می‌ایستاد پیش از آنکه اصلاً کدِ تولیدکنندهٔ
+آن دسته‌ها نوشته شود.
+
 اجرا به‌صورت مستقل:
     python scripts/validate.py --out .            # اعتبارسنجی خروجی‌های موجود
     python scripts/validate.py --out . --strict   # کد خروج ≠۰ در صورت شکست
@@ -33,7 +48,33 @@ import sys
 import tempfile
 from typing import Any, Dict, List, Optional, Tuple
 
-CATEGORIES = ("all", "heavy", "light")
+#: دسته‌هایی که خط‌لوله **همیشه** تولید می‌کند. نبودنشان خطاست.
+CORE_CATEGORIES = ("all", "heavy", "light")
+
+#: دسته‌های فاز B (آبشارِ اعتبارسنجی). این‌ها تنها وقتی تولید می‌شوند که
+#: لایهٔ L3 در آن اجرا فعال باشد، و «فعال‌بودن» به محیطِ اجرا بسته است.
+#:
+#: چرا جدا؟ چون `report["ok"]` شرطِ `missing == 0` دارد. اگر این سه به
+#: `CORE_CATEGORIES` اضافه می‌شدند، همان لحظه دروازه با `--strict` کدِ ۱
+#: می‌داد و انتشار را می‌بست — پیش از آنکه اصلاً کدِ تولیدکننده‌شان نوشته
+#: شود. سنجیده شد: پیش از این تغییر ۶ بررسی و rc=0؛ با افزودنِ ساده به
+#: همان تاپل، ۶ موردِ `missing` و rc=1.
+#:
+#: قاعدهٔ درست «الزامی به‌شرطِ حضور» است: اگر دایرکتوری نباشد، رد می‌شود؛
+#: ولی اگر باشد و فایلش خراب یا ناقص باشد، **شکست** است. یعنی حذفِ خودکارِ
+#: یک دسته هرگز به‌شکلِ «موفق» ظاهر نمی‌شود.
+OPTIONAL_CATEGORIES = ("verified", "fast", "secure")
+
+#: سازگاریِ عقب‌رو: هر مصرف‌کنندهٔ بیرونیِ `CATEGORIES` باید کار کند.
+CATEGORIES = CORE_CATEGORIES + OPTIONAL_CATEGORIES
+
+# نرم‌شدنِ قاعده هرگز نباید به دسته‌های اصلی سرایت کند. اگر روزی کسی نامی را
+# جابه‌جا کند، `all/` می‌توانست بی‌صدا «تولیدنشده» به حساب بیاید و دروازه با
+# صفر کانفیگ سبز بماند — بدترین شکستِ خاموشِ ممکن برای این پروژه. پس این‌جا
+# در زمانِ import می‌شکند، نه در زمانِ انتشار.
+assert not (set(CORE_CATEGORIES) & set(OPTIONAL_CATEGORIES)), \
+    "a core category must never be optional"
+assert len(set(CATEGORIES)) == len(CATEGORIES), "duplicate category name"
 
 #: زمان بیشینهٔ اجرای هر باینری اعتبارسنج (ثانیه).
 CHECK_TIMEOUT = 180
@@ -164,15 +205,30 @@ def validate_outputs(out_dir: str) -> Dict[str, Any]:
         "results": {},
         "summary": {"pass": 0, "fail": 0, "skipped": 0, "missing": 0},
     }
+    absent: List[str] = []
     for cat in CATEGORIES:
+        cat_dir = os.path.join(out_dir, cat)
+        # دستهٔ اختیاری که کلاً وجود ندارد: هنوز تولید نمی‌شود، پس بررسی‌ای
+        # هم ندارد. ولی اگر دایرکتوری *باشد*، دقیقاً مثل دسته‌های اصلی
+        # سنجیده می‌شود — نه نرم‌تر.
+        if cat in OPTIONAL_CATEGORIES and not os.path.isdir(cat_dir):
+            absent.append(cat)
+            continue
         report["results"][cat] = {
-            "singbox": check_singbox(os.path.join(out_dir, cat, "singbox.json"), sb),
-            "clash": check_clash(os.path.join(out_dir, cat, "clash.yaml"), mh),
+            "singbox": check_singbox(os.path.join(cat_dir, "singbox.json"), sb),
+            "clash": check_clash(os.path.join(cat_dir, "clash.yaml"), mh),
         }
+    report["absent_optional"] = absent
+    # ناوردا: دستهٔ اصلی هرگز از بررسی رد نمی‌شود، حتی اگر دایرکتوری‌اش نباشد
+    # (در آن حالت فایل‌ها `missing` می‌شوند و دروازه همان‌جا می‌شکند).
+    assert all(c in report["results"] for c in CORE_CATEGORIES), \
+        "every core category must be checked"
     for cat_res in report["results"].values():
         for res in cat_res.values():
             report["summary"][res["status"]] = report["summary"].get(res["status"], 0) + 1
-    report["ok"] = report["summary"]["fail"] == 0 and report["summary"]["missing"] == 0
+
+    report["ok"] = (report["summary"]["fail"] == 0
+                    and report["summary"]["missing"] == 0)
     return report
 
 
@@ -194,6 +250,8 @@ def main() -> int:
         for kind, r in res.items():
             print(f"   {icons.get(r['status'], '?')} {cat:<5} {kind:<8} "
                   f"{r['status']:<8} {r['detail']}")
+    for cat in rep.get("absent_optional", []):
+        print(f"   ➖ {cat:<5} {'—':<8} not produced in this run")
     s = rep["summary"]
     print(f"   → pass={s['pass']} fail={s['fail']} "
           f"skipped={s['skipped']} missing={s['missing']}")
