@@ -32,6 +32,7 @@ import core  # noqa: E402
 import filters  # noqa: E402
 import reachability  # noqa: E402
 import realtest  # noqa: E402
+import pipeline  # noqa: E402
 import validate  # noqa: E402
 
 
@@ -2878,6 +2879,411 @@ def test_realtest_reports_an_unknown_status_instead_of_hiding_it() -> None:
     assert res["stats"]["unknown_status"] == {"totally-new-status": 1}
     assert res["stats"]["ok"] == 0, \
         "an unrecognised status must never be treated as working"
+
+
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# آبشارِ چهارلایه — بندهای B5/B6/B7/B8/B11
+# ──────────────────────────────────────────────────────────────────────────────
+
+def _pl_row(link: str, status: str = "passed", delay: int = 120,
+            tls: str = "tls", code: int = 204, success: int = 1,
+            total: int = 1) -> dict:
+    """یک ردیفِ CSVِ L3 به‌شکلِ دیکشنری — همان ۱۵ ستونِ واقعی."""
+    return {
+        "link": link, "status": status, "reason": "", "tls": tls,
+        "ip": "9.9.9.9", "delay": str(delay), "code": str(code),
+        "download": "0", "upload": "0", "location": "US", "ttfb": "119",
+        "connect_time": "8", "success": str(success), "total": str(total),
+        "endpoints": "cp.cloudflare.com=ok",
+    }
+
+
+class _StubL3:
+    """
+    جایگزینِ `realtest.test_lines` که نتیجهٔ **هر اجرا را جداگانه** می‌دهد.
+
+    چرا لازم است؟ چون قاعدهٔ «پایدار = موفق در همهٔ اجراها» تنها وقتی
+    سنجیدنی است که اجراها بتوانند **با هم اختلاف داشته باشند**. یک شیمِ
+    ثابت این قاعده را غیرقابلِ‌مشاهده می‌کند و تست را توخالی.
+    """
+
+    def __init__(self, per_round: list) -> None:
+        self.per_round = per_round
+        self.calls = 0
+        self.seen_lines = []
+        self._orig = None
+
+    def __enter__(self) -> "_StubL3":
+        self._orig = realtest.test_lines
+
+        def fake(lines, **kwargs):
+            self.seen_lines.append(list(lines))
+            rows = self.per_round[min(self.calls, len(self.per_round) - 1)]
+            self.calls += 1
+            return {"rows": list(rows)}
+
+        realtest.test_lines = fake
+        return self
+
+    def __exit__(self, *exc: object) -> None:
+        realtest.test_lines = self._orig
+
+
+def test_pipeline_stable_requires_success_in_every_round():
+    """
+    قاعدهٔ B4b: «پایدار» = موفق در **همهٔ** اجراهای دور.
+
+    سنجشِ واقعی که این قاعده را ساخت: از ۶۲۶ کانفیگی که دست‌کم یک بار کار
+    کرد، تنها ۲۲۴ همیشه کار کرد ⇒ ۶۴٪ لرزان. پس «یک بار موفق» کافی نیست.
+    """
+    always = "vless://a@1.1.1.1:443?security=tls#always"
+    sometimes = "vless://b@2.2.2.2:443?security=tls#sometimes"
+    never = "vless://c@3.3.3.3:443?security=tls#never"
+
+    rounds = [
+        [_pl_row(always), _pl_row(sometimes), _pl_row(never, status="failed",
+                                                     code=-1, success=0)],
+        [_pl_row(always), _pl_row(sometimes, status="failed", code=-1,
+                                 success=0), _pl_row(never, status="failed",
+                                                     code=-1, success=0)],
+        [_pl_row(always), _pl_row(sometimes), _pl_row(never, status="failed",
+                                                     code=-1, success=0)],
+    ]
+    with _StubL3(rounds) as stub:
+        res = pipeline.run_l3_round([always, sometimes, never], rounds=3)
+
+    assert stub.calls == 3, \
+        f"the round must run L3 exactly 3 times, ran {stub.calls}"
+    assert res["stable"] == {always}, \
+        ("only a config that succeeded in EVERY round may be stable; got "
+         f"{sorted(res['stable'])!r}")
+    assert res["ever_ok"] == {always, sometimes}, \
+        f"ever_ok must union all rounds; got {sorted(res['ever_ok'])!r}"
+    assert never not in res["ever_ok"], \
+        "a config that never succeeded must not appear anywhere"
+    # ۱ از ۲ لینکی که کار کرد، لرزان بود
+    assert res["flaky_pct"] == 50.0, \
+        f"flaky share must be measured and reported; got {res['flaky_pct']}"
+
+
+def test_pipeline_one_bad_round_cannot_be_ignored():
+    """
+    کنترلِ منفی: اگر کانفیگی در **یک** اجرا شکست بخورد، نباید پایدار شود.
+
+    این تست دقیقاً همان اشتباهی را می‌گیرد که «موفق در بیشتر اجراها» یا
+    «موفق در آخرین اجرا» مرتکب می‌شود.
+    """
+    link = "vless://x@4.4.4.4:443?security=tls#x"
+    for bad_index in (0, 1, 2):
+        rounds = []
+        for i in range(3):
+            if i == bad_index:
+                rounds.append([_pl_row(link, status="failed", code=-1,
+                                       success=0)])
+            else:
+                rounds.append([_pl_row(link)])
+        with _StubL3(rounds):
+            res = pipeline.run_l3_round([link], rounds=3)
+        assert res["stable"] == set(), \
+            (f"a failure in round {bad_index} must disqualify the config, "
+             f"but it was called stable")
+        assert res["ever_ok"] == {link}, \
+            "it did work in the other rounds, so ever_ok must still hold it"
+
+
+def test_pipeline_broken_rows_never_become_stable():
+    """
+    ★ سوراخِ سنجیده: `success == total` برای هر ۸۷ ردیفِ `broken` هم درست است
+    (۰ == ۰). قاعدهٔ چهارشرطی باید این‌ها را رد کند — در همهٔ اجراها.
+    """
+    link = "vless://b@5.5.5.5:443?security=tls#broken"
+    broken = _pl_row(link, status="broken", code=-1, success=0, total=0,
+                     delay=0)
+    assert broken["success"] == broken["total"], \
+        "the fixture must reproduce the real 0==0 trap, else the test is vacuous"
+    with _StubL3([[broken]] * 3):
+        res = pipeline.run_l3_round([link], rounds=3)
+    assert res["stable"] == set(), \
+        "a broken row satisfies success==total and MUST still be rejected"
+    assert res["ever_ok"] == set(), \
+        "a broken row must never count as having worked"
+
+
+def test_pipeline_fast_uses_the_median_not_a_single_run():
+    """
+    قاعدهٔ B6: `fast` بر **میانهٔ** اجراها است، نه یک نمونه.
+
+    سنجش: ۷۷ کانفیگ (۳۴٫۴٪) خطِ ۸۰۰ms را بینِ اجراها رد و بدل می‌کنند، پس
+    یک نمونه برچسب را هر دور عوض می‌کند. این تست کانفیگی می‌سازد که در یک
+    اجرا سریع و در دو اجرا کند است: میانه باید «کند» بگوید.
+    """
+    slowish = "vless://s@6.6.6.6:443?security=tls#slowish"
+    quick = "vless://q@7.7.7.7:443?security=tls#quick"
+    rounds = [
+        [_pl_row(slowish, delay=100), _pl_row(quick, delay=100)],
+        [_pl_row(slowish, delay=1500), _pl_row(quick, delay=200)],
+        [_pl_row(slowish, delay=1600), _pl_row(quick, delay=150)],
+    ]
+    with _StubL3(rounds):
+        res = pipeline.run_l3_round([slowish, quick], rounds=3)
+    assert res["delays"][slowish] == 1500, \
+        (f"median of (100,1500,1600) is 1500, got {res['delays'][slowish]} — "
+         "a mean or a first/last sample would give a different number")
+    assert res["delays"][quick] == 150, \
+        f"median of (100,200,150) is 150, got {res['delays'][quick]}"
+
+    buckets = pipeline.build_buckets(res, fast_ms=800)
+    assert quick in buckets["fast"], "150ms median must be fast"
+    assert slowish not in buckets["fast"], \
+        ("1500ms median must NOT be fast even though one run measured 100ms — "
+         "otherwise a single lucky sample decides the label")
+    assert slowish in buckets["verified"], \
+        "being slow does not make a config unverified"
+
+
+def test_pipeline_secure_requires_forward_secrecy():
+    """
+    قاعدهٔ B7 — سنجیده، نه سلیقه‌ای. سه اثباتِ رمزنگاشتیِ اجراشده پشتِ آن است:
+    `ss`+AEAD و `vmess` بی‌TLS با موادِ **منتشرشده** بازگشایی شدند، پس در یک
+    مخزنِ عمومی «امن» نیستند؛ `vless` هم `encryption` را تنها `none` می‌پذیرد.
+    """
+    cases = [
+        ("vless://a@1.1.1.1:443?security=reality&pbk=k#r", "reality", True,
+         "REALITY does an (EC)DHE handshake"),
+        ("vless://a@1.1.1.1:443?security=tls#t", "tls", True,
+         "TLS gives forward secrecy"),
+        ("trojan://p@1.1.1.1:443?sni=x#tj", "tls", True,
+         "trojan is always a TLS socket"),
+        ("hysteria2://p@1.1.1.1:443?sni=x#h2", "", True,
+         "QUIC mandates TLS 1.3 per RFC 9001 §4.2, so an empty tls column "
+         "must NOT be read as plaintext"),
+        ("vless://a@1.1.1.1:443?security=none#n", "none", False,
+         "VLESS encryption accepts only 'none' ⇒ genuinely plaintext"),
+        ("ss://YWVzLTEyOC1nY206cHc@1.1.1.1:8388#ss", "", False,
+         "shadowsocks AEAD is decryptable from the published link"),
+        ("vmess://eyJhZGQiOiIxLjEuMS4xIn0=", "", False,
+         "vmess without TLS: the published UUID yields the session key"),
+    ]
+    for link, tls_value, want, why in cases:
+        got = pipeline.is_secure(link, tls_value)
+        assert got is want, \
+            f"is_secure({link[:34]}…, tls={tls_value!r}) = {got}, want {want}: {why}"
+
+
+def test_pipeline_secure_rejects_a_link_that_disables_cert_checks():
+    """
+    یک لینکِ `tls` که خودش `insecure=1` گفته، در برابر MITM محافظت ندارد.
+    سنجش: دقیقاً ۱ کانفیگ از ۲۲۴ پایدار چنین است و باید حذف شود.
+    """
+    base = "trojan://p@1.1.1.1:443?sni=x"
+    assert pipeline.is_secure(base + "#ok", "tls") is True, \
+        "the control case must be secure, otherwise the test proves nothing"
+    for key in ("insecure", "allowInsecure", "skip-cert-verify"):
+        for val in ("1", "true", "yes"):
+            link = f"{base}&{key}={val}#bad"
+            assert pipeline.declares_insecure(link) is True, \
+                f"{key}={val} must be detected"
+            assert pipeline.is_secure(link, "tls") is False, \
+                (f"{key}={val} disables certificate validation, so the config "
+                 "must not be labelled secure despite tls=tls")
+    # صفر/غایب نباید حذف کند
+    for link in (base + "&insecure=0#z", base + "#absent"):
+        assert pipeline.declares_insecure(link) is False, \
+            f"insecure=0 or absent must NOT be treated as insecure: {link}"
+
+
+def test_pipeline_verified_never_holds_a_failed_config():
+    """
+    ★ B11 — کنترلِ منفیِ اصلی: هیچ سبدی نباید کانفیگی داشته باشد که در آزمونِ
+    واقعی نپذیرفته شده. این تست هر چهار خروجی را با هم می‌سنجد.
+    """
+    good = "vless://g@1.1.1.1:443?security=tls#good"
+    bads = {
+        "failed": _pl_row("vless://f@2.2.2.2:443?security=tls#f",
+                          status="failed", code=-1, success=0),
+        "broken": _pl_row("vless://b@3.3.3.3:443?security=tls#b",
+                          status="broken", code=-1, success=0, total=0),
+        "code_400": _pl_row("vless://c@4.4.4.4:443?security=tls#c",
+                            code=400),
+        "partial_success": _pl_row("vless://p@5.5.5.5:443?security=tls#p",
+                                   success=1, total=2),
+    }
+    rows = [_pl_row(good)] + list(bads.values())
+    with _StubL3([rows] * 3):
+        res = pipeline.run_l3_round([good] + [r["link"] for r in bads.values()],
+                                    rounds=3)
+    buckets = pipeline.build_buckets(res)
+    for cat in ("verified", "fast", "secure", "top"):
+        assert buckets[cat] == [good], \
+            (f"{cat} must contain exactly the one genuinely-ok config; got "
+             f"{buckets[cat]!r}")
+        for label, row in bads.items():
+            assert row["link"] not in buckets[cat], \
+                f"{cat} leaked a {label} config — the publication gate is broken"
+
+
+def test_pipeline_top_file_is_sorted_and_never_padded():
+    """
+    B8: `top100.txt` بر تأخیر مرتب است و اگر استخر کوچک بود، **پر نمی‌شود**.
+    پرکردنِ مصنوعی با کانفیگِ نیازموده بدترین شکلِ ادعای الکی است.
+    """
+    links = [f"vless://u{i}@1.1.1.{i}:443?security=tls#u{i}" for i in range(5)]
+    delays = [900, 100, 500, 300, 700]
+    rows = [_pl_row(L, delay=d) for L, d in zip(links, delays)]
+    with _StubL3([rows] * 3):
+        res = pipeline.run_l3_round(links, rounds=3)
+    buckets = pipeline.build_buckets(res, top_n=3)
+    got = [res["delays"][L] for L in buckets["top"]]
+    assert got == [100, 300, 500], \
+        f"top must be sorted ascending by median delay; got {got}"
+    assert len(buckets["top"]) == 3
+
+    # استخرِ کوچک‌تر از سقف
+    buckets2 = pipeline.build_buckets(res, top_n=100)
+    assert len(buckets2["top"]) == 5, \
+        "with only 5 stable configs the file must hold 5, not 100"
+    assert buckets2["stats"]["top_short_by"] == 95, \
+        "the shortfall must be counted so it can be announced honestly"
+
+    # ── ضدِ پرکردن، با استخری که «هرچه کار کرد» > «پایدار» است ────────────
+    # چرا این بند لازم است؟ در چیدمانِ بالا `ever_ok == stable` بود، پس
+    # منبعِ پرکردن **تهی** بود و «پر کردنِ سقف با کانفیگِ ناپایدار» به‌کل
+    # غیرقابلِ‌مشاهده می‌ماند. آزمونِ جهش همین را گرفت (m20). حالا چهار
+    # لینکِ لرزان می‌سازیم که **سریع‌تر** از پایدارها هستند تا اگر روزی کسی
+    # سقف را پر کند، آن‌ها جذاب‌ترین گزینه برای پرکردن باشند.
+    flaky = [f"vless://f{i}@3.3.3.{i}:443?security=tls#f{i}" for i in range(4)]
+    stable_rows = [_pl_row(L, delay=d) for L, d in zip(links, delays)]
+    round1 = stable_rows + [_pl_row(L, delay=10) for L in flaky]
+    round2 = stable_rows                                  # لرزان‌ها همه افتادند
+    round3 = stable_rows + [_pl_row(flaky[0], delay=10)]  # یکی برگشت
+    with _StubL3([round1, round2, round3]):
+        res2 = pipeline.run_l3_round(links + flaky, rounds=3)
+    assert len(res2["stable"]) == 5, \
+        f"only the 5 always-ok links are stable; got {len(res2['stable'])}"
+    assert len(res2["ever_ok"]) == 9, \
+        ("the fixture must offer a NON-empty padding source, otherwise this "
+         f"test cannot observe padding at all; ever_ok={len(res2['ever_ok'])}")
+
+    buckets3 = pipeline.build_buckets(res2, top_n=100)
+    assert len(buckets3["top"]) == 5, \
+        (f"top must never be padded past the stable pool; it holds "
+         f"{len(buckets3['top'])} while only 5 configs passed every round")
+    for L in flaky:
+        for cat in ("verified", "fast", "secure", "top"):
+            assert L not in buckets3[cat], \
+                f"a flaky config leaked into {cat!r}: {L}"
+
+
+def test_pipeline_writes_files_with_an_honest_shortfall_notice():
+    """خروجی باید معیارش را بنویسد و کمبود را **اعلام** کند، نه پنهان."""
+    import tempfile as _tf
+    good = "vless://g@1.1.1.1:443?security=tls#g"
+    plain = "vless://p@2.2.2.2:443?security=none#p"
+    rows = [_pl_row(good, delay=100), _pl_row(plain, delay=100, tls="none")]
+    with _StubL3([rows] * 3):
+        res = pipeline.run_l3_round([good, plain], rounds=3)
+    buckets = pipeline.build_buckets(res, top_n=100)
+    out = _tf.mkdtemp(prefix="pl_out_")
+    paths = pipeline.write_buckets(out, buckets)
+
+    for cat in ("verified", "fast", "secure"):
+        with open(paths[cat], encoding="utf-8") as fh:
+            body = fh.read()
+        assert body.startswith("#"), f"{cat} must carry a header"
+        assert good in body, f"{cat} must list the good config"
+    with open(paths["secure"], encoding="utf-8") as fh:
+        sec = fh.read()
+    assert plain not in sec, \
+        "a security=none config must not be written into secure/"
+    assert "forward secrecy" in sec, \
+        "secure/ must state its measured criterion, not just a label"
+
+    with open(paths["top"], encoding="utf-8") as fh:
+        top = fh.read()
+    assert "98 short of 100" in top, \
+        f"the shortfall must be announced in the file itself; got:\n{top[:400]}"
+    assert "NOT padded" in top, \
+        "the file must say explicitly that it was not padded"
+
+
+def test_pipeline_refuses_an_empty_input_loudly():
+    """
+    ورودیِ تهی باید **بلند** بشکند — همان درسِ لایهٔ L3.
+
+    و مهم‌تر: باید **پیش از** فراخوانیِ L3 بشکند. اگر فقط استثنا را بسنجیم،
+    آزمونِ جهش (m22) نشان داد که برداشتنِ نگهبانِ این ماژول هیچ‌چیز را
+    نمی‌شکند، چون `realtest.test_lines` خودش همان `EmptyInput` را می‌دهد.
+    اما آن مسیر یک فایلِ موقت می‌سازد و xray-knife را اجرا می‌کند؛ و در CI
+    با stdinِ باز، فایلِ تهی دقیقاً همان‌جاست که ابزار قفل می‌کرد (rc=124).
+    پس «هیچ اجرایی رخ نداد» رفتارِ قابلِ‌سنجش و لازم است.
+    """
+    spy = {"calls": 0}
+    orig = realtest.test_lines
+
+    def counting(lines, **kwargs):
+        spy["calls"] += 1
+        return {"rows": []}
+
+    realtest.test_lines = counting
+    try:
+        for bad in ([], ["", "   ", "\t"]):
+            try:
+                pipeline.run_l3_round(bad, rounds=3)
+            except realtest.EmptyInput:
+                pass
+            else:
+                raise AssertionError(
+                    "an input with no usable configs must raise EmptyInput: "
+                    f"{bad!r}")
+            assert spy["calls"] == 0, \
+                ("L3 must never be launched for an empty input — that is the "
+                 "measured CI hang (rc=124); it was launched "
+                 f"{spy['calls']}× for {bad!r}")
+
+        try:
+            pipeline.run_l3_round(["vless://a@1.1.1.1:443#a"], rounds=0)
+        except ValueError:
+            pass
+        else:
+            raise AssertionError(
+                "rounds=0 must be rejected, not silently accepted")
+        assert spy["calls"] == 0, \
+            f"rounds=0 must not launch L3 either; got {spy['calls']} call(s)"
+    finally:
+        realtest.test_lines = orig
+
+
+def test_pipeline_reproduces_the_measured_secure_share():
+    """
+    قفلِ عددی روی دادهٔ **واقعیِ** ۵ اجرا: قاعدهٔ B7 باید همان ۸۱ از ۲۲۴ را
+    بدهد که مستقلاً سنجیده شد (۳۶٫۲٪). اگر روزی قاعده عوض شد، این تست
+    می‌شکند و کسی مجبور می‌شود عدد را دوباره توجیه کند.
+    """
+    import csv as _csv
+    base = "/home/user/exp/b4b"
+    if not os.path.isdir(base):
+        return  # دادهٔ سنجش در این محیط نیست؛ تست بی‌صدا رد می‌شود
+    ok_sets, tls_of = [], {}
+    for n in range(1, 6):
+        path = os.path.join(base, f"run{n}.csv")
+        if not os.path.isfile(path):
+            return
+        with open(path, newline="", encoding="utf-8") as fh:
+            rows = list(_csv.DictReader(fh))
+        ok_sets.append({r["link"] for r in rows
+                        if realtest.is_row_genuinely_ok(r)})
+        for r in rows:
+            tls_of.setdefault(r["link"], (r["tls"] or "").strip())
+    stable = set.intersection(*ok_sets)
+    assert len(stable) == 224, \
+        f"the measured stable set is 224 configs, got {len(stable)}"
+    secure = [L for L in stable if pipeline.is_secure(L, tls_of.get(L, ""))]
+    assert len(secure) == 81, \
+        (f"the measured secure count is 81/224 = 36.2%, got {len(secure)}. "
+         "The plan's original 47% figure came from a 36-config pilot and was "
+         "corrected.")
 
 
 # ──────────────────────────────────────────────────────────────────────────────
