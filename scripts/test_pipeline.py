@@ -1361,6 +1361,96 @@ def test_unroutable_server_addresses_are_dropped_and_counted():
     assert st["singbox"]["by_reason"].get("unroutable_server") == 1, st["singbox"]
 
 
+def test_structurally_invalid_server_is_dropped_not_published():
+    """H8 — نشانیِ سرور که ساختاراً نامِ میزبان نیست باید حذف شود.
+
+    این نقص روی خروجیِ *زندهٔ* CI (کامیتِ `f692efc`، ۸٬۱۵۲ کانفیگ) پیدا شد، نه
+    در آزمایشگاه: `_clean_sni` فقط `sni` و `host` را پاک می‌کرد و میدانِ
+    `server` — همان جایی که کلاینت واقعاً به آن وصل می‌شود — هیچ سنجشِ شکلی
+    نداشت. با پارسرِ خودِ ماژول ۶ کانفیگِ معیوب شمرده شد و **۴ موردشان در ۶
+    فایلِ منتشرشده (۱۶ رخداد) حاضر بود**:
+
+        trojan  'masir_sefid'                                 (تک‌برچسب)
+        vless   'black_raven_ir'   ← از `@@Black_Raven_ir`    (تک‌برچسب)
+        vless   'ip'                                          (تک‌برچسب)
+        vmess   'https://github.com/ALIILAPRO/v2rayNG-Config' (کلِ یک URL)
+
+    هر ۶ مقدار در DNS شکست می‌خورند (`gaierror`)، پس «ترمیم» ممکن نیست: تنها
+    ترمیمِ موردِ URL تبدیل به `github.com` است که کلاینت را به GitHub می‌برد نه
+    به پروکسی — یعنی «معتبر به‌نظر می‌رسد ولی هرگز وصل نمی‌شود». شاهدِ تکمیلی:
+    `uuid` همان ردیف `aliilapro-v2rayng-config` است که UUID نیست؛ یک تبلیغ است.
+
+    سنجشِ A/B روی همان ۸٬۱۵۲ خطِ زنده: clash ۸۰۶۷→۸۰۶۳ و singbox ۷۸۳۴→۷۸۳۰،
+    یعنی **دقیقاً ۴ حذف در هر کلاینت و صفر حذفِ جانبی و صفر افزوده**.
+    """
+    f = converters._is_structurally_invalid_server
+
+    # مقادیرِ واقعیِ معیوب — همه باید رد شوند
+    for bad in ("", "   ", "masir_sefid", "black_raven_ir", "ip",
+                "使用前记得更新订阅",
+                "https://github.com/ALIILAPRO/v2rayNG-Config",
+                "t.me/ripaojiedian", "example.com:443", "host name.com",
+                "foo@bar.com", "a/b.com"):
+        assert f(bad), f"{bad!r} باید ساختاراً نامعتبر شمرده شود"
+
+    # مقادیرِ واقعیِ سالم — هیچ‌کدام نباید قربانی شوند
+    for ok in ("1.2.3.4", "104.21.61.74",
+               "2a01:4f8:1c1b:26eb::1", "[2a01:4f8:1c1b:26eb::1]",
+               "TM_AZARBAYJAB1.new.99.workers.dev",  # زیرخط واقعاً حل می‌شود
+               "afrcloud22.mmv.kr", "hn.xiaohouzi.club",
+               "store.steampowered.com", "ip11-2.freegradely.xyz",
+               "a.b", "xn--80ak6aa92e.com", "example.com."):
+        assert not f(ok), f"{ok!r} سالم است و نباید حذف شود"
+
+    # IPv6ِ لخت هرگز نباید با «باقی‌ماندهٔ پورت» اشتباه شود
+    assert not f("2a0b:8800:580::12d")
+
+    # و در خطِ لولهٔ واقعی: حذف می‌شود و با ریزه‌ی مخصوصِ خودش شمرده می‌شود
+    good = "trojan://pw@example.com:443?sni=example.com#ok"
+    bad = "trojan://pw@masir_sefid:443?sni=example.com#advert"
+    doc = yaml.safe_load(converters.build_clash_yaml([good, bad]))
+    assert [p["server"] for p in doc["proxies"]] == ["example.com"], doc["proxies"]
+    st = converters.drop_stats()
+    assert st["clash"]["by_reason"].get("invalid_server") == 1, st["clash"]
+    # ریزه‌ی جدا از unroutable_server است — درهم‌ریختنشان ریشه‌یابی را کور می‌کند
+    assert not st["clash"]["by_reason"].get("unroutable_server"), st["clash"]
+
+    sb = json.loads(converters.build_singbox_json([good, bad]))
+    assert [o["server"] for o in sb["outbounds"] if o.get("server")] == ["example.com"]
+    st = converters.drop_stats()
+    assert st["singbox"]["by_reason"].get("invalid_server") == 1, st["singbox"]
+
+
+def test_invalid_server_gate_runs_in_both_emitters():
+    """H8 — دروازه باید در *هر دو* حلقهٔ تولید باشد، نه یکی.
+
+    درسِ سنجیده‌شدهٔ فاز H: `_clean_sni` نوشته شده بود ولی فقط به ۲ پروتکل از ۵
+    وصل شده بود، و همین شکاف ۴۳۱ مقدارِ نامعتبر را منتشر کرد. پس «وجودِ تابع»
+    شاهدِ کافی نیست؛ باید *فراخوانی‌اش* در هر دو مسیر اثبات شود. اینجا با AST
+    بررسی می‌شود تا ذکرِ نام در توضیحات، تست را الکی سبز نکند.
+    """
+    import ast
+    import inspect
+
+    tree = ast.parse(inspect.getsource(converters))
+    wanted = {"build_clash_yaml", "build_singbox_json"}
+    seen = {}
+    for node in ast.walk(tree):
+        if isinstance(node, ast.FunctionDef) and node.name in wanted:
+            calls = {
+                c.func.id
+                for c in ast.walk(node)
+                if isinstance(c, ast.Call) and isinstance(c.func, ast.Name)
+            }
+            seen[node.name] = calls
+    assert wanted <= set(seen), f"توابعِ تولید پیدا نشدند: {set(seen)}"
+    for fn in wanted:
+        assert "_is_structurally_invalid_server" in seen[fn], \
+            f"{fn} دروازهٔ invalid_server را صدا نمی‌زند"
+        assert "_is_unroutable_server" in seen[fn], \
+            f"{fn} دروازهٔ unroutable_server را صدا نمی‌زند"
+
+
 def test_alpn_values_are_whitelisted():
     """مقدارِ نامعتبرِ ALPN باید فیلتر شود، نه به کلاینت پاس داده شود."""
     line = "hysteria2://pw@1.2.3.4:443?alpn=h3%2Cgarbage%2Ch2#x"

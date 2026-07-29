@@ -291,7 +291,8 @@ def _is_unroutable_server(host: Any) -> bool:
     تلمتریِ drop هم شمرده می‌شوند تا عدد قابلِ‌ردیابی بماند.
 
     نکته: نامِ میزبانِ *غیرِ* IP این‌جا رد نمی‌شود؛ داوری دربارهٔ آن به DNS نیاز
-    دارد و در زمانِ تبدیل انجام نمی‌شود.
+    دارد و در زمانِ تبدیل انجام نمی‌شود. شکلِ *ساختاریِ* نامِ میزبان جداگانه در
+    `_is_structurally_invalid_server` سنجیده می‌شود.
     """
     s = str(host or "").strip().strip("[]")
     if not s:
@@ -302,6 +303,71 @@ def _is_unroutable_server(host: Any) -> bool:
         return False          # نامِ میزبان است، نه IP — این‌جا داوری نمی‌کنیم
     return bool(ip.is_loopback or ip.is_unspecified or ip.is_multicast
                 or ip.is_reserved or ip.is_link_local)
+
+
+def _is_structurally_invalid_server(host: Any) -> bool:
+    """
+    آیا نشانیِ سرور از نظرِ *ساختاری* اصلاً نمی‌تواند نامِ میزبان باشد؟
+
+    این بند خواهرِ `_clean_sni` است ولی روی میدانِ دیگری: `_clean_sni` فقط
+    `sni` و `host` را پاک می‌کند، در حالی که `server` — یعنی همان جایی که
+    کلاینت واقعاً به آن وصل می‌شود — هیچ‌گاه از نظرِ شکل سنجیده نمی‌شد. نتیجه:
+    مقدارهایی که *تبلیغ* یا *جانگهدار* بودند تا انتهای فایلِ کلاینت می‌رسیدند.
+
+    اندازه‌گیریِ واقعی روی خروجیِ زندهٔ CI (کامیتِ `f692efc`، ۸٬۱۵۲ کانفیگ)، با
+    خودِ پارسرِ همین ماژول — **۶ کانفیگ**:
+
+        trojan  'masir_sefid'                                   (تک‌برچسب)
+        vless   'black_raven_ir'                                (تک‌برچسب)
+        vless   'ip'                                            (تک‌برچسب)
+        vless   ''                                              (تهی)
+        vmess   'https://github.com/ALIILAPRO/v2rayNG-Config'   (کلِ یک URL)
+        vmess   '使用前记得更新订阅'                              (متنِ تبلیغی)
+
+    از این ۶، دو موردِ آخرِ سطرهای «تهی» و «متنِ تبلیغی» پیش‌تر به دلیلِ دیگری
+    (not_expressible) حذف می‌شدند، ولی **۴ موردِ دیگر در فایلِ منتشرشده حاضر
+    بودند**: در `all/` و `light/` و `heavy/` جمعاً ۱۶ رخداد در ۶ فایلِ کلاینت.
+
+    چرا «ترمیم» نه، «رد»؟ — همان قاعدهٔ `_clean_sni` («ترمیم کن، بعد رد کن») این
+    بار به رد می‌رسد، و این با DNS اثبات شد نه با حدس. هر ۶ مقدار در DNS
+    شکست می‌خورند (`gaierror`)، و تنها ترمیمِ ممکن برای موردِ URL این است که به
+    `github.com` تبدیل شود — که **مقصدِ درستی نیست**: کلاینت به‌جای پروکسی به
+    خودِ GitHub وصل می‌شود. یعنی ترمیم این‌جا کانفیگی می‌سازد که «معتبر به‌نظر
+    می‌رسد ولی هرگز کار نمی‌کند» — همان چیزی که قاعدهٔ طلاییِ این ماژول منع
+    می‌کند. شاهدِ تکمیلی: `uuid` همان کانفیگ `aliilapro-v2rayng-config` است،
+    که اصلاً UUID نیست — پس این ردیف یک تبلیغِ مخزن است، نه یک سرور.
+
+    چرا «تک‌برچسب» (نداشتنِ نقطه) رد می‌شود؟ نامِ میزبانِ بدونِ نقطه فقط در
+    شبکهٔ محلی (با پسوندِ search domain) معنا دارد؛ برای یک پروکسیِ اینترنتی
+    هرگز حل نمی‌شود. هر سه نمونهٔ زنده هم همین را تأیید کردند.
+
+    آنچه عمداً رد **نمی‌شود**: IP (چه v4 چه v6، با یا بدون `[]`) — چون IP نقطه‌ی
+    ساختاری‌اش را ممکن است نداشته باشد (IPv6) و داوریِ نشانیِ IP کارِ
+    `_is_unroutable_server` است. زیرخط در برچسب مجاز می‌ماند، چون در سنجشِ
+    واقعی نام‌هایی مثل `TM_AZARBAYJAB1.new.99.workers.dev` **حل می‌شوند**.
+    """
+    s = str(host or "").strip()
+    if not s:
+        return True
+    # IP (شاملِ IPv6 با یا بدونِ کروشه) ساختاراً معتبر است؛ داوری‌اش جای دیگری‌ست
+    try:
+        ipaddress.ip_address(s.strip("[]"))
+        return False
+    except ValueError:
+        pass
+    # نشانه‌های اینکه مقدار یک URL/مسیر/متن است، نه نامِ میزبان
+    if any(ch in s for ch in ("/", "?", "#", "@", "\\")) or "://" in s:
+        return True
+    if any(ch.isspace() for ch in s):
+        return True
+    if ":" in s:                      # باقی‌ماندهٔ پورت روی نامِ غیرِ IPv6
+        return True
+    if "." not in s:                  # تک‌برچسب — روی اینترنت حل نمی‌شود
+        return True
+    if len(s) > 253:
+        return True
+    labels = s.rstrip(".").split(".")
+    return not all(_SNI_LABEL.match(x) for x in labels)
 
 
 def _clean_sni(raw: Any) -> str:
@@ -899,6 +965,12 @@ def build_clash_yaml(lines: List[str], limit: int = OUTPUT_PROXY_LIMIT) -> str:
         if _is_unroutable_server(p.get("server")):
             _drops.record("clash", "unroutable_server", line, p.get("type"))
             continue
+        # نشانیِ سرور که ساختاراً نامِ میزبان نیست (URL کامل، متنِ تبلیغی،
+        # تک‌برچسب). ریزه‌ی جدا از unroutable_server چون آن دربارهٔ *مقصدِ* IP
+        # است و این دربارهٔ *شکلِ* مقدار — یکی‌کردنشان ریشه‌یابی را کور می‌کند.
+        if _is_structurally_invalid_server(p.get("server")):
+            _drops.record("clash", "invalid_server", line, p.get("type"))
+            continue
         cp = _to_clash_proxy(p)
         if not cp:
             _drops.record("clash", "not_expressible", line, p.get("type"))
@@ -1095,6 +1167,9 @@ def build_singbox_json(lines: List[str], limit: int = OUTPUT_PROXY_LIMIT) -> str
             continue
         if _is_unroutable_server(p.get("server")):
             _drops.record("singbox", "unroutable_server", line, p.get("type"))
+            continue
+        if _is_structurally_invalid_server(p.get("server")):
+            _drops.record("singbox", "invalid_server", line, p.get("type"))
             continue
         ob = _to_singbox_outbound(p)
         if not ob:
