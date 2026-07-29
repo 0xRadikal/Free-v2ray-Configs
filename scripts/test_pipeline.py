@@ -136,7 +136,22 @@ def test_brand_remark_strips_fragment_before_base64_decode():
     decoded = json.loads(base64.b64decode(
         branded[8:].split("#")[0] + "=" * (-len(branded[8:].split("#")[0]) % 4)))
     assert "@Raydikalx" in decoded["ps"], f"برند درج نشد: {decoded['ps']!r}"
-    assert decoded["ps"].endswith("| 7")
+
+    # ★ این assert عوض شد و دلیلش یک اندازه‌گیری است:
+    #   قبلاً انتظار `| 7` بود، یعنی شمارندهٔ **موقعیتی**. آن شمارنده حذف شد
+    #   چون هر بار که یک کانفیگ به ابتدای لیست اضافه می‌شد، remarkِ همهٔ
+    #   خطوطِ بعدی جابه‌جا می‌شد و delta compressionِ گیت بی‌اثر می‌شد.
+    #   حالا برچسب از خودِ محتوا مشتق است، پس idx نباید در خروجی دیده شود.
+    assert decoded["ps"].endswith(core.stable_label(line)), \
+        f"remark must end with the content-derived tag, got {decoded['ps']!r}"
+    assert not decoded["ps"].endswith("| 7"), \
+        "the positional index leaked back into the remark"
+
+    # و همین موضوع برای vmess هم باید idempotent باشد: برندینگِ دوباره روی
+    # خروجیِ برندشده نباید چیزی را عوض کند (منابعِ این حوزه خروجیِ ما را
+    # بازنشر می‌کنند، پس این حالت واقعاً پیش می‌آید).
+    assert core.brand_remark(branded) == branded, \
+        "brand_remark is not idempotent for vmess"
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -465,75 +480,8 @@ def test_primary_links_are_raw_not_jsdelivr():
     assert n_raw > n_jsd, f"jsDelivr still dominates: raw={n_raw} jsdelivr={n_jsd}"
 
 
-def test_data_branch_is_configurable_and_defaults_to_data():
-    """برنچِ لینک‌ها نباید hard-code باشد.
-
-    خروجی‌ها به شاخهٔ تک‌کامیتیِ `data` منتقل می‌شوند (چون `main` با ~۹۸
-    کامیتِ روزانه، ۶۹ مگابایت در روز رشد می‌کرد و در ۲۱.۷ روز به سقفِ
-    ۵ گیگابایتیِ توصیه‌شدهٔ گیت‌هاب می‌رسید). اگر برنچ hard-code بماند،
-    بعد از انتقال هر ۳۲ لینکِ داخلِ index.json چهارصد‌و‌چهار می‌شود.
-    """
-    import importlib, os as _os
-    import aggregate
-
-    assert aggregate.GH_BRANCH == "data", \
-        f"default branch must be 'data', got {aggregate.GH_BRANCH!r}"
-    assert "/data" in aggregate.RAW_BASE, aggregate.RAW_BASE
-    assert "@data" in aggregate.CDN_BASE, aggregate.CDN_BASE
-
-    # قابلِ override با env (ورک‌فلو و تست باید بتوانند مقدارش را بدهند)
-    old = _os.environ.get("AGG_DATA_BRANCH")
-    try:
-        _os.environ["AGG_DATA_BRANCH"] = "some-other-branch"
-        reloaded = importlib.reload(aggregate)
-        assert reloaded.GH_BRANCH == "some-other-branch"
-        assert "/some-other-branch" in reloaded.RAW_BASE
-        assert "@some-other-branch" in reloaded.CDN_BASE
-    finally:
-        if old is None:
-            _os.environ.pop("AGG_DATA_BRANCH", None)
-        else:
-            _os.environ["AGG_DATA_BRANCH"] = old
-        importlib.reload(aggregate)   # بازگردانی برای تست‌های بعدی
 
 
-def test_docs_advertise_only_the_data_branch():
-    """هر لینکِ اشتراک در README/README_FA باید به شاخهٔ `data` باشد.
-
-    پیش‌تر مستندات به `@main` اشاره می‌کرد. بعد از انتقالِ خروجی‌ها به
-    شاخهٔ `data`، هر لینکِ باقی‌ماندهٔ `main` یک ۴۰۴ برای کاربرِ واقعی است.
-    این تست هر دو README را می‌خواند و branch-segment را می‌سنجد.
-    """
-    import re
-
-    repo = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    pat_raw = re.compile(
-        r"https://raw\.githubusercontent\.com/[\w.-]+/[\w.-]+/([\w.-]+)/")
-    pat_cdn = re.compile(
-        r"https://cdn\.jsdelivr\.net/gh/[\w.-]+/[\w.-]+@([\w.-]+)/")
-
-    checked = 0
-    for name in ("README.md", "README_FA.md"):
-        path = os.path.join(repo, name)
-        assert os.path.exists(path), f"{name} is missing"
-        txt = open(path, encoding="utf-8").read()
-        for pat in (pat_raw, pat_cdn):
-            for m in pat.finditer(txt):
-                checked += 1
-                assert m.group(1) == "data", \
-                    f"{name}: link pinned to branch {m.group(1)!r}: {m.group(0)}"
-        # آینه باید ذکر شده باشد ولی «اصلی» نباشد
-        n_raw = txt.count("raw.githubusercontent.com")
-        n_cdn = txt.count("cdn.jsdelivr.net")
-        assert n_raw > n_cdn, \
-            f"{name}: jsDelivr still dominates (raw={n_raw} cdn={n_cdn})"
-        # لنگرِ توضیحِ شاخهٔ data باید وجود داشته باشد تا لینکِ داخلی نشکند
-        assert 'name="-why-a-separate-data-branch"' in txt, \
-            f"{name}: anchor for the data-branch rationale is missing"
-        assert "#-why-a-separate-data-branch" in txt, \
-            f"{name}: nothing links to the data-branch rationale"
-
-    assert checked >= 10, f"suspiciously few links checked: {checked}"
 
 
 def test_index_advertises_its_own_url():
@@ -558,66 +506,6 @@ def test_index_advertises_its_own_url():
     assert "cdn.jsdelivr.net" in idx["self_url_mirror"]
 
 
-def test_workflow_publish_target_matches_the_branch_in_the_links():
-    """شاخه‌ای که ورک‌فلو رویش push می‌کند باید همانی باشد که در لینک‌ها است.
-
-    باگِ واقعیِ کشف‌شده: aggregate.py فقط `AGG_DATA_BRANCH` را می‌خواند، ولی
-    ورک‌فلو `DATA_BRANCH` را ست می‌کند و `AGG_DATA_BRANCH` را هرگز. امروز هر
-    دو به "data" می‌رسند پس چیزی نمی‌شکند — و همین خطرناک است: تغییرِ
-    `DATA_BRANCH` در آینده باعث می‌شد ورک‌فلو روی شاخهٔ X منتشر کند و
-    index.json شاخهٔ Y را تبلیغ کند ⇒ ۳۴ لینکِ ۴۰۴ با buildِ سبز.
-    این تست هر دو سمت را از خودِ فایلِ ورک‌فلو می‌خواند و تطابق را الزام می‌کند.
-    """
-    import importlib
-    import aggregate
-
-    repo = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    wf = os.path.join(repo, ".github", "workflows", "aggregate.yml")
-    assert os.path.exists(wf), "workflow file is missing"
-    doc = yaml.safe_load(open(wf, encoding="utf-8"))
-
-    # `on:` در YAML به True پارس می‌شود، پس env را از هر دو جا می‌خوانیم
-    top_env = doc.get("env") or {}
-    branch = top_env.get("DATA_BRANCH")
-    assert branch, "workflow must define DATA_BRANCH at the top level"
-
-    job = doc["jobs"][list(doc["jobs"])[0]]
-
-    # ۱) فقط یک push مجاز است و باید به همان شاخه باشد
-    pushes = [s for s in job["steps"] if "git push" in (s.get("run") or "")]
-    assert len(pushes) == 1, \
-        f"expected exactly one pushing step, found {len(pushes)}"
-    push_run = pushes[0]["run"]
-    assert "refs/heads/$DATA_BRANCH" in push_run, \
-        "the push must target $DATA_BRANCH, not a literal branch name"
-    assert "--force" in push_run, "the data branch must be force-pushed"
-    # هیچ‌جا نباید روی main منتشر شود
-    assert "refs/heads/main" not in push_run, \
-        "outputs must never be pushed to main"
-
-    # ۲) خودِ کد باید همان DATA_BRANCH را ببیند (باگِ نام‌های دوگانه)
-    old_agg = os.environ.pop("AGG_DATA_BRANCH", None)
-    old_data = os.environ.get("DATA_BRANCH")
-    try:
-        os.environ["DATA_BRANCH"] = "branch-from-workflow"
-        reloaded = importlib.reload(aggregate)
-        assert reloaded.GH_BRANCH == "branch-from-workflow", (
-            "aggregate.py ignores DATA_BRANCH — the workflow would publish to "
-            f"one branch while index.json advertises {reloaded.GH_BRANCH!r}")
-        assert "/branch-from-workflow" in reloaded.RAW_BASE
-    finally:
-        if old_data is None:
-            os.environ.pop("DATA_BRANCH", None)
-        else:
-            os.environ["DATA_BRANCH"] = old_data
-        if old_agg is not None:
-            os.environ["AGG_DATA_BRANCH"] = old_agg
-        importlib.reload(aggregate)
-
-    # ۳) پیش‌فرضِ کد و مقدارِ ورک‌فلو باید یکی باشند
-    assert aggregate.GH_BRANCH == branch, (
-        f"workflow publishes to {branch!r} but links point at "
-        f"{aggregate.GH_BRANCH!r}")
 
 
 def test_docs_do_not_advertise_files_the_pipeline_never_writes():
@@ -631,6 +519,317 @@ def test_docs_do_not_advertise_files_the_pipeline_never_writes():
         txt = open(os.path.join(repo, name), encoding="utf-8").read()
         assert "duplicates.txt" not in txt, \
             f"{name} still advertises *_duplicates.txt, which the pipeline no longer writes"
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# انتشار روی شاخهٔ پیش‌فرض + قطعیتِ خروجی (rolling squash)
+# ──────────────────────────────────────────────────────────────────────────────
+
+def test_publish_branch_is_the_default_branch_and_configurable():
+    """خروجی‌ها باید روی شاخهٔ پیش‌فرض (`main`) منتشر شوند.
+
+    ★ این تست عمداً برعکسِ نسخهٔ قبلیِ خودش است و دلیلش اندازه‌گیری است:
+
+    قبلاً خروجی‌ها به یک شاخهٔ orphan به نامِ `data` منتقل شده بودند تا
+    تاریخِ گیت باد نکند. آن تصمیم مهندسی درست ولی از نظرِ محصول مخرب بود:
+
+      • هر لینکی که کاربران قبلاً کپی کرده بودند (`.../main/all/configs.txt`)
+        با HTTP 404 پاسخ می‌داد ⇒ اشتراکِ کاربرِ قدیمی بی‌صدا خالی می‌شد.
+      • بازدیدکنندهٔ صفحهٔ اصلیِ مخزن هیچ فایلِ کانفیگی نمی‌دید. کاربرِ
+        معمولی نمی‌داند «branch» چیست تا عوضش کند.
+      • بررسیِ مخازنِ موفقِ همین حوزه: هیچ‌کدام خروجی را روی شاخهٔ جدا
+        نمی‌گذارند — Epodonios (⭐3166، ۲۴.۷GB روی main)،
+        mahdibland (⭐4003، master)، Pawdroid (⭐18420، main).
+
+    مسئلهٔ حجم با «rolling squash» در ورک‌فلو حل شد (شاخه همیشه
+    «تاریخِ سورس + دقیقاً یک کامیتِ خروجی» است ⇒ هزینه O(1)).
+    پس اینجا الزام می‌کنیم که برنچِ پیش‌فرض `main` باشد، ولی hard-code نباشد.
+    """
+    import importlib, os as _os
+    import aggregate
+
+    assert aggregate.GH_BRANCH == "main", \
+        f"outputs must be published on the default branch 'main', got {aggregate.GH_BRANCH!r}"
+    assert "/main" in aggregate.RAW_BASE, aggregate.RAW_BASE
+    assert "@main" in aggregate.CDN_BASE, aggregate.CDN_BASE
+
+    # قابلِ override با env (چهار نام پشتیبانی می‌شود؛ دو تای آخر legacy)
+    for var in ("AGG_PUBLISH_BRANCH", "PUBLISH_BRANCH",
+                "AGG_DATA_BRANCH", "DATA_BRANCH"):
+        saved = {k: _os.environ.get(k) for k in
+                 ("AGG_PUBLISH_BRANCH", "PUBLISH_BRANCH",
+                  "AGG_DATA_BRANCH", "DATA_BRANCH")}
+        try:
+            for k in saved:
+                _os.environ.pop(k, None)
+            _os.environ[var] = "some-other-branch"
+            reloaded = importlib.reload(aggregate)
+            assert reloaded.GH_BRANCH == "some-other-branch", \
+                f"{var} is ignored by aggregate.py"
+            assert "/some-other-branch" in reloaded.RAW_BASE
+            assert "@some-other-branch" in reloaded.CDN_BASE
+        finally:
+            for k, v in saved.items():
+                if v is None:
+                    _os.environ.pop(k, None)
+                else:
+                    _os.environ[k] = v
+            importlib.reload(aggregate)
+
+
+def test_docs_advertise_the_default_branch_only():
+    """هر لینکِ اشتراک در README/README_FA باید روی `main` باشد.
+
+    اگر حتی یک لینکِ `@data` جا بماند، همان لینک بعد از بازنشستنِ شاخهٔ
+    `data` یک ۴۰۴ می‌شود. این تست هر دو README را می‌خواند و
+    branch-segmentِ هر لینک را می‌سنجد.
+    """
+    import re
+
+    repo = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    pat_raw = re.compile(
+        r"https://raw\.githubusercontent\.com/[\w.-]+/[\w.-]+/([\w.-]+)/")
+    pat_cdn = re.compile(
+        r"https://cdn\.jsdelivr\.net/gh/[\w.-]+/[\w.-]+@([\w.-]+)/")
+
+    checked = 0
+    for name in ("README.md", "README_FA.md"):
+        path = os.path.join(repo, name)
+        assert os.path.exists(path), f"{name} is missing"
+        txt = open(path, encoding="utf-8").read()
+        for pat in (pat_raw, pat_cdn):
+            for m in pat.finditer(txt):
+                checked += 1
+                assert m.group(1) == "main", \
+                    f"{name}: link pinned to branch {m.group(1)!r}: {m.group(0)}"
+        # آینه باید ذکر شده باشد ولی «اصلی» نباشد
+        n_raw = txt.count("raw.githubusercontent.com")
+        n_cdn = txt.count("cdn.jsdelivr.net")
+        assert n_raw > n_cdn, \
+            f"{name}: jsDelivr still dominates (raw={n_raw} cdn={n_cdn})"
+        # هیچ اثری از شاخهٔ data نباید در مستندات بماند
+        assert "-why-a-separate-data-branch" not in txt, \
+            f"{name}: still contains the obsolete data-branch rationale anchor"
+
+    assert checked >= 10, f"suspiciously few links checked: {checked}"
+
+
+def test_workflow_publishes_to_the_same_branch_the_links_advertise():
+    """شاخه‌ای که ورک‌فلو رویش push می‌کند باید همانی باشد که در لینک‌ها است.
+
+    باگِ واقعیِ کشف‌شده (نسخهٔ قبلی): aggregate.py فقط `AGG_DATA_BRANCH` را
+    می‌خواند، ولی ورک‌فلو `DATA_BRANCH` را ست می‌کرد ⇒ اگر مقدار عوض می‌شد،
+    ورک‌فلو روی شاخهٔ X منتشر می‌کرد و index.json شاخهٔ Y را تبلیغ می‌کرد:
+    ۳۴ لینکِ ۴۰۴ با buildِ سبز.
+    این تست هر دو سمت را از خودِ فایلِ ورک‌فلو می‌خواند.
+    """
+    import importlib
+    import aggregate
+
+    repo = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    wf = os.path.join(repo, ".github", "workflows", "aggregate.yml")
+    assert os.path.exists(wf), "workflow file is missing"
+    doc = yaml.safe_load(open(wf, encoding="utf-8"))
+
+    top_env = doc.get("env") or {}
+    branch = top_env.get("PUBLISH_BRANCH")
+    assert branch, "workflow must define PUBLISH_BRANCH at the top level"
+    assert branch == "main", \
+        f"outputs must be published on the default branch, got {branch!r}"
+    # نامِ قدیمی باید به همان شاخه اشاره کند تا مصرف‌کنندهٔ قدیمی نشکند
+    assert top_env.get("DATA_BRANCH") == branch, \
+        "legacy DATA_BRANCH must alias PUBLISH_BRANCH"
+
+    job = doc["jobs"][list(doc["jobs"])[0]]
+
+    pushes = [s for s in job["steps"] if "git push" in (s.get("run") or "")]
+    assert len(pushes) == 1, \
+        f"expected exactly one pushing step, found {len(pushes)}"
+    push_run = pushes[0]["run"]
+    assert "refs/heads/$PUBLISH_BRANCH" in push_run, \
+        "the push must target $PUBLISH_BRANCH, not a literal branch name"
+
+    # ★ کدِ خروجی باید همان PUBLISH_BRANCH را ببیند
+    keys = ("AGG_PUBLISH_BRANCH", "PUBLISH_BRANCH", "AGG_DATA_BRANCH", "DATA_BRANCH")
+    saved = {k: os.environ.get(k) for k in keys}
+    try:
+        for k in keys:
+            os.environ.pop(k, None)
+        os.environ["PUBLISH_BRANCH"] = "branch-from-workflow"
+        reloaded = importlib.reload(aggregate)
+        assert reloaded.GH_BRANCH == "branch-from-workflow", (
+            "aggregate.py ignores PUBLISH_BRANCH — the workflow would publish to "
+            f"one branch while index.json advertises {reloaded.GH_BRANCH!r}")
+        assert "/branch-from-workflow" in reloaded.RAW_BASE
+    finally:
+        for k, v in saved.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
+        importlib.reload(aggregate)
+
+    assert aggregate.GH_BRANCH == branch, (
+        f"workflow publishes to {branch!r} but links point at "
+        f"{aggregate.GH_BRANCH!r}")
+
+
+def test_publish_step_uses_rolling_squash_and_never_orphans_the_source():
+    """مرحلهٔ انتشار باید «rolling squash»ِ ایمن باشد، نه force-pushِ خام.
+
+    چرا این تست وجود دارد — با کنترلِ منفیِ اندازه‌گیری‌شده:
+      حالا که خروجی روی `main` منتشر می‌شود، همان شاخه‌ای است که کدِ
+      انسان‌نوشته رویش زندگی می‌کند. اگر روزی کسی `--force-with-lease` را به
+      `--force` ساده تنزل بدهد، کامیتِ مالک **نابود می‌شود**. این را در
+      exp/publish_verify.sh به‌صورتِ کنترلِ منفی اجرا کردم: با force-pushِ
+      ساده، تعدادِ کامیتِ مالک روی origin به صفر رسید.
+      پس این تست آن تنزل را از سطحِ «حادثهٔ تولید» به «شکستِ CI» می‌آورد.
+    """
+    repo = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    wf = os.path.join(repo, ".github", "workflows", "aggregate.yml")
+    doc = yaml.safe_load(open(wf, encoding="utf-8"))
+    top_env = doc.get("env") or {}
+    job = doc["jobs"][list(doc["jobs"])[0]]
+
+    pushes = [s for s in job["steps"] if "git push" in (s.get("run") or "")]
+    assert len(pushes) == 1
+    run = pushes[0]["run"]
+
+    # ۱) lease الزامی است؛ force ساده ممنوع.
+    assert "--force-with-lease=" in run, \
+        "publishing to the default branch REQUIRES --force-with-lease"
+    import re as _re
+    bare_force = [ln for ln in run.split("\n")
+                  if "git push" in ln and "--force " in f"{ln} "
+                  and "--force-with-lease" not in ln]
+    assert not bare_force, \
+        f"a bare --force push would destroy owner commits: {bare_force}"
+
+    # ۲) کامیت باید والد داشته باشد (rolling squash)، نه orphan.
+    assert "commit-tree" in run, "the step must build the commit with plumbing"
+    assert _re.search(r"commit-tree\s+\"?\$TREE\"?\s+-p\s+\"?\$ANCHOR\"?", run), \
+        "the output commit must be parented on the source anchor (-p $ANCHOR)"
+
+    # ۳) نشانگرِ خروجی باید تعریف و استفاده شده باشد تا anchor پیدا شود.
+    mark = top_env.get("OUT_MARK")
+    assert mark, "workflow must define OUT_MARK"
+    assert "$OUT_MARK" in run, "the step must mark its own commits with $OUT_MARK"
+    assert "grep -v -F \"$OUT_MARK\"" in run, \
+        "the anchor search must exclude commits carrying $OUT_MARK"
+
+    # ۴) گاردِ رگرسیونِ سورس باید وجود داشته باشد.
+    assert "is_output_path" in run, \
+        "the step must classify paths and refuse to regress source files"
+    assert "deepen" in run, \
+        "the step must deepen a shallow checkout, otherwise no anchor is found"
+
+    # ۵) گاردهای fail-closed باید سرِ جایشان باشند.
+    for guard in ("refusing to publish", "EMPTY tree", "MUST_EXIST"):
+        assert guard in run, f"missing fail-closed guard: {guard}"
+
+
+def test_remark_tag_is_content_derived_not_positional():
+    """برچسبِ انتهایِ remark باید تابعِ محتوا باشد، نه موقعیت.
+
+    باگِ واقعیِ اندازه‌گیری‌شده: برچسب قبلاً شمارندهٔ موقعیتی بود، پس
+    اضافه‌شدنِ **یک** کانفیگ در ابتدای لیست، remarkِ همهٔ خطوطِ بعدی را
+    جابه‌جا می‌کرد. نتیجه: دو کامیتِ پشت‌سرهمِ ربات از ۳۵۳۷ خط فقط ۹ خط
+    مشترک داشتند (با نادیده‌گرفتنِ remark: ۳۲۷۷) ⇒ delta compressionِ گیت
+    بی‌اثر می‌شد و تاریخ ۶۰۴ کیلوبایت در هر دور رشد می‌کرد.
+    """
+    line = "vless://11111111-2222-3333-4444-555555555555@1.2.3.4:443?type=tcp"
+
+    # همان کانفیگ، در دو موقعیتِ مختلف ⇒ باید برچسبِ یکسان بگیرد
+    a = core.brand_remark(line, 1)
+    b = core.brand_remark(line, 9999)
+    assert a == b, f"remark is positional:\n  idx=1    {a}\n  idx=9999 {b}"
+
+    # و برچسب باید از dedup_key مشتق شده باشد (پایدار و تکرارپذیر)
+    tag = core.stable_label(line)
+    assert tag in a, f"the stable tag {tag!r} is not in the remark {a!r}"
+    assert core.stable_label(line) == tag, "stable_label is not deterministic"
+    # طولِ ثابت و hex بزرگ
+    assert len(tag) == 6 and tag.upper() == tag, tag
+
+
+def test_country_label_is_locked_to_the_endpoint_not_the_source_remark():
+    """برچسبِ کشور باید به endpoint گره بخورد، نه به remarkِ سورس.
+
+    باگِ واقعیِ اندازه‌گیری‌شده: کشور فقط از remarkِ همان سورس خوانده می‌شد.
+    یک سرورِ واحد که در دو سورس با remarkِ متفاوت آمده بود، در یک دور
+    `RU 🇷🇺` و در دورِ بعد `US 🇺🇸` می‌شد — بسته به اینکه کدام سورس اول
+    fetch شده. این «چرخشِ برچسب» یکی از سه ریشهٔ رشدِ تاریخ بود.
+    """
+    core.reset_country_cache()
+
+    body = "vless://aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee@5.6.7.8:443?type=tcp"
+    # اولین تشخیصِ قاطع باید قفل شود
+    first  = core.brand_remark(body + "#RU Moscow")
+    second = core.brand_remark(body + "#US New York")
+    assert first == second, (
+        "the country label flips with the source remark:\n"
+        f"  first : {first}\n  second: {second}")
+
+    # endpoint_of باید مقصد را درست بیرون بکشد
+    assert core.endpoint_of(body) == "5.6.7.8"
+    assert core.endpoint_of("trojan://p@example.com:443#x") == "example.com"
+    assert core.endpoint_of("vless://u@[2001:db8::1]:443?type=tcp") == "2001:db8::1"
+
+    # reset باید واقعاً پاک کند (وگرنه تست‌های بعدی به هم می‌ریزند)
+    core.reset_country_cache()
+    third = core.brand_remark(body + "#US New York")
+    assert "US" in third, third
+    core.reset_country_cache()
+
+
+def test_output_order_is_deterministic():
+    """ترتیبِ خطوطِ خروجی باید قطعی باشد.
+
+    اگر ترتیب به ترتیبِ رسیدنِ سورس‌ها وابسته باشد، فایل در هر دور
+    جابه‌جا می‌شود و git هیچ deltaیی پیدا نمی‌کند — حتی اگر محتوا یکی باشد.
+    """
+    import aggregate
+
+    lines = [
+        "vless://cccccccc-cccc-cccc-cccc-cccccccccccc@3.3.3.3:443?type=tcp",
+        "vless://aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa@1.1.1.1:443?type=tcp",
+        "vless://bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb@2.2.2.2:443?type=tcp",
+    ]
+    core.reset_country_cache()
+    r1 = aggregate.process_category({"u": lines}, ["u"])
+    core.reset_country_cache()
+    r2 = aggregate.process_category({"u": list(reversed(lines))}, ["u"])
+    assert r1.unique == r2.unique, (
+        "output order depends on input order:\n"
+        f"  {r1.unique}\n  {r2.unique}")
+
+    # و باید واقعاً «مرتب» باشد، نه فقط «یکسان»: کلیدِ یکتاسازی صعودی
+    keys = [core.dedup_key(ln) or ln for ln in r1.unique]
+    assert keys == sorted(keys), \
+        f"output is stable but not sorted by dedup_key: {keys}"
+    core.reset_country_cache()
+
+
+def test_index_advertises_the_publish_branch_key():
+    """index.json باید شاخهٔ انتشار را با نامِ جدید و قدیمی اعلام کند."""
+    import aggregate
+
+    r = aggregate.CategoryResult()
+    r.unique = ["vless://x@1.2.3.4:443#a"]
+    results = {c: r for c in ("all", "heavy", "light")}
+    idx = aggregate.build_index(results, {"vless": 1}, 1.0)
+
+    assert idx.get("publish_branch") == aggregate.GH_BRANCH, \
+        "index.json must advertise publish_branch"
+    # کلیدِ قدیمی برای مصرف‌کننده‌های موجود حفظ می‌شود
+    assert idx.get("data_branch") == aggregate.GH_BRANCH, \
+        "the legacy data_branch key must still be present and aliased"
+    # نکتهٔ اندازه‌گیری‌شده: `primary_base` بدونِ اسلشِ انتهایی ساخته می‌شود
+    #   (".../Free-v2ray-Configs/main")، پس الگوی "/main/" در آن پیدا نمی‌شود.
+    #   assert را به همان شکلی می‌نویسیم که کد واقعاً تولید می‌کند.
+    assert idx["primary_base"].endswith(f"/{aggregate.GH_BRANCH}"), \
+        idx["primary_base"]
+    assert f"/{aggregate.GH_BRANCH}/" in idx["self_url"], idx["self_url"]
 
 
 # ──────────────────────────────────────────────────────────────────────────────

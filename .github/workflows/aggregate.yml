@@ -35,6 +35,24 @@ on:
     paths:
       - "scripts/**"
       - ".github/workflows/aggregate.yml"
+    # ⚠️ چرا این trigger باعثِ حلقهٔ بی‌پایان نمی‌شود، با اینکه خودِ workflow
+    #    روی `main` پوش می‌کند (دو لایهٔ محافظت، هر دو تأییدشده):
+    #
+    #  ۱) مستنداتِ رسمیِ گیت‌هاب (docs.github.com → GITHUB_TOKEN):
+    #       «When you use the repository's GITHUB_TOKEN to perform tasks,
+    #        events triggered by the GITHUB_TOKEN will not create a new
+    #        workflow run … if a workflow run pushes code using the
+    #        repository's GITHUB_TOKEN, a new workflow will not run even when
+    #        the repository contains a workflow configured to run when push
+    #        events occur.»
+    #     این مرحله از همان GITHUB_TOKENِ داخلی استفاده می‌کند (هیچ PATی
+    #     تنظیم نشده)، پس پوشِ ربات هیچ runِ جدیدی نمی‌سازد.
+    #
+    #  ۲) حتی اگر لایهٔ اول یک روز عوض شود، فیلترِ `paths` هم جلویش را
+    #     می‌گیرد: ربات فقط مسیرهای خروجی (all/, heavy/, light/, protocols/,
+    #     archive/, index.json, health.json) را می‌نویسد و هیچ‌وقت
+    #     `scripts/**` یا خودِ این فایل را تغییر نمی‌دهد.
+    #     (گاردِ «رگرسیونِ سورس» در مرحلهٔ انتشار همین را تضمین می‌کند.)
 
 # جلوگیری از اجرای هم‌زمانِ چند run (اگر یکی در حال اجراست، بعدی صبر می‌کند)
 concurrency:
@@ -52,10 +70,41 @@ env:
   # حاشیهٔ امنیتی: کمی کمتر از ۱۵ می‌گیریم تا اگر cron با ۱-۲ دقیقه تأخیر آمد،
   # باز هم به‌جای رد شدن، اجرا شود (جلوگیری از «۳۰ دقیقه‌ای شدن» تصادفی).
   FRESHNESS_GATE_MINUTES: "13"
-  # شاخه‌ای که خروجی‌های تولیدشده روی آن منتشر می‌شوند.
-  #   `main` فقط کد/مستندات را نگه می‌دارد و هرگز force-push نمی‌شود.
-  #   `data` تک‌کامیتی است و هر دور force-push می‌شود (تاریخ نگه نمی‌دارد).
-  DATA_BRANCH: data
+  # ── شاخهٔ انتشار ─────────────────────────────────────────────────────────
+  #
+  # ★★★ چرا خروجی‌ها روی `main` (شاخهٔ پیش‌فرض) منتشر می‌شوند و نه یک شاخهٔ جدا
+  #
+  # نسخهٔ قبلیِ این فایل خروجی‌ها را روی یک شاخهٔ orphan به نامِ `data`
+  # می‌گذاشت تا تاریخِ گیت باد نکند. آن تصمیم از نظرِ مهندسی درست بود و از
+  # نظرِ محصول یک اشتباهِ جدی — با اندازه‌گیری اثبات شد، نه با حدس:
+  #
+  #   ۱) هر لینکی که کاربران قبلاً کپی کرده بودند (‎.../main/all/configs.txt‎)
+  #      با HTTP 404 پاسخ می‌داد. یعنی اشتراکِ هر کسی که از قبل ما را
+  #      اضافه کرده بود، بی‌صدا خالی می‌شد.
+  #   ۲) بازدیدکنندهٔ صفحهٔ اصلیِ گیت‌هاب هیچ فایلِ کانفیگی نمی‌دید. کاربرِ
+  #      معمولیِ این حوزه نمی‌داند «branch» چیست تا عوضش کند؛ او فقط دنبالِ
+  #      فایل است. نتیجه: افتِ کشف‌پذیری، ستاره، و ایندکسِ موتورهای جست‌وجو.
+  #   ۳) بررسیِ مخازنِ موفقِ همین حوزه: هیچ‌کدام خروجی را روی شاخهٔ جدا
+  #      نمی‌گذارند —
+  #        Epodonios/v2ray-configs      ⭐3166  → main  (۲۴.۷ گیگابایت!)
+  #        mahdibland/ShadowsocksAggregator ⭐4003 → master
+  #        Pawdroid/Free-servers        ⭐18420 → main
+  #      یعنی «حجمِ تاریخ» عملاً مانعِ موفقیت نیست، ولی «پنهان بودنِ فایل‌ها»
+  #      هست.
+  #
+  # پس فایل‌ها به `main` برمی‌گردند، و مسئلهٔ حجم با روشِ «rolling squash»
+  # حل می‌شود (توضیحِ کاملش بالای مرحلهٔ انتشار). خلاصه: `main` همیشه
+  # «تاریخِ کاملِ سورس + دقیقاً یک کامیتِ خروجی» است، پس هزینهٔ حجم O(1)
+  # می‌شود در حالی که فایل‌ها روی شاخهٔ پیش‌فرض و در معرضِ دید می‌مانند.
+  PUBLISH_BRANCH: main
+  # نشانگرِ کامیتِ خروجیِ خودکار. مرحلهٔ انتشار با همین رشته «کامیتِ خروجی» را
+  # از «کامیتِ سورس» تشخیص می‌دهد. تغییرش ندهید مگر با مهاجرتِ حساب‌شده:
+  # اگر عوض شود، کامیتِ خروجیِ قبلی «سورس» تشخیص داده می‌شود و یک بار در
+  # تاریخ می‌ماند (خرابی ایجاد نمی‌کند، ولی یک کامیتِ اضافه باقی می‌گذارد).
+  OUT_MARK: "[auto-output]"
+  # برای سازگاریِ عقب‌رو: اسکریپت‌ها/داکیومنت‌های قدیمی ممکن است این نام را
+  # بخوانند. هر دو به یک شاخه اشاره می‌کنند.
+  DATA_BRANCH: main
 
 jobs:
   aggregate:
@@ -78,18 +127,21 @@ jobs:
             echo "✅ Manual/dispatch/push event → running unconditionally."
             exit 0
           fi
-          # index.json دیگر روی `main` نیست، روی شاخهٔ `data` منتشر
-          #   می‌شود. پس دروازهٔ زمانی باید آن را از remote بخواند، نه از
-          #   worktree. اگر این را اصلاح نمی‌کردیم، فایل هرگز پیدا نمی‌شد و
-          #   دروازه همیشه «باز» می‌ماند: هر ۵ دقیقه یک اجرای کاملِ سنگین
-          #   (به‌جای هر ۱۵ دقیقه) — یعنی سه برابر کامیت و سه برابر رشدِ حجم.
-          if git ls-remote --exit-code --heads origin "$DATA_BRANCH" >/dev/null 2>&1; then
-            git fetch --depth=1 origin "$DATA_BRANCH" >/dev/null 2>&1 || true
+          # ⚠️ index.json را از **remote** می‌خوانیم، نه از worktree.
+          #   دلیل: actions/checkout@v4 به‌صورتِ پیش‌فرض shallow (depth=1) است
+          #   و روی نوکِ همان لحظه می‌نشیند؛ ولی مرحلهٔ انتشار با force-push
+          #   نوک را جابه‌جا می‌کند. پس تنها منبعِ حقیقت برای «آخرین انتشار»
+          #   خودِ remote است. اگر این را از worktree می‌خواندیم، در بدترین
+          #   حالت فایل کهنه/غایب دیده می‌شد و دروازه همیشه «باز» می‌ماند:
+          #   هر ۵ دقیقه یک اجرای کاملِ سنگین به‌جای هر ۱۵ دقیقه — یعنی سه
+          #   برابر کامیت و سه برابر رشدِ حجم.
+          if git ls-remote --exit-code --heads origin "$PUBLISH_BRANCH" >/dev/null 2>&1; then
+            git fetch --depth=1 origin "$PUBLISH_BRANCH" >/dev/null 2>&1 || true
             git show "FETCH_HEAD:index.json" > /tmp/gate_index.json 2>/dev/null || true
           fi
           if [ ! -s /tmp/gate_index.json ]; then
             echo "should_run=true" >> "$GITHUB_OUTPUT"
-            echo "✅ No published index.json on '$DATA_BRANCH' yet → running."
+            echo "✅ No published index.json on '$PUBLISH_BRANCH' yet → running."
             exit 0
           fi
           # اختلافِ زمانِ آخرین آپدیت با حالا (ثانیه)
@@ -224,56 +276,89 @@ jobs:
           PY
           fi
 
-      # ── انتشار به‌صورتِ «تک‌کامیتِ force-push» روی شاخهٔ data ★★★ ──
+      # ── ★★★ انتشار روی `main` با روشِ «rolling squash» ★★★ ────────────────
       #
-      # مسئله‌ای که این مرحله حل می‌کند (اندازه‌گیری‌شده، نه حدس)
+      # مسئله‌ای که این مرحله حل می‌کند (همه اندازه‌گیری‌شده، هیچ‌کدام حدس)
       # ─────────────────────────────────────────────────────────────────────
-      #   مخزن در ۵۲.۵ روز به 3,711,673 KB = 3,624.7 MB = 3.54 GB رسید،
-      #   با 5,648 کامیت و آهنگِ اندازه‌گیری‌شدهٔ ۹۸ کامیت در روز
-      #   (۱۰۰ کامیتِ آخر در بازهٔ ۲۴.۵ ساعت).
-      #   میانگینِ رشد: ۶۹.۰۵ مگابایت در روز.
-      #   سقفِ توصیهٔ رسمیِ گیت‌هاب ۵ گیگابایت است ("less than 5 GB is
-      #   strongly recommended") → با این آهنگ ~۲۲ روزِ دیگر رد می‌شود.
+      #   دو خواستهٔ به‌ظاهر متناقض داریم:
+      #     (الف) فایل‌ها باید روی شاخهٔ پیش‌فرض (`main`) باشند تا لینک‌های
+      #           قدیمی کار کنند، بازدیدکننده فایل را ببیند، و SEO/ستاره
+      #           آسیب نبیند.
+      #     (ب) تاریخِ گیت نباید بی‌نهایت باد کند. اندازه‌گیریِ زندهٔ همین
+      #           مخزن با روشِ «عمیق‌سازیِ پیش‌روندهٔ shallow fetch»
+      #           (depth=1/5/15/40، اثباتِ عددی در exp/cost.log):
+      #             ۶۰۴ کیلوبایت به‌ازای هر کامیتِ خروجی
+      #             × ۹۶ دور در روز  = ۵۶.۶ مگابایت در روز
+      #                              = ۲۰.۲ گیگابایت در سال
+      #           مخزن همین حالا روی ۳.۵۵ گیگابایت است.
       #
-      # چرا حذفِ فایل کافی نیست
-      # ─────────────────────────────────────────────────────────────────────
-      #   آزمایشِ کنترل‌شده (۳ دورِ بازتولید + ۱۰٪ جابه‌جاییِ خطوط، سپس
-      #   gc --aggressive --prune=now)، با اندازه‌های واقعیِ فایل‌ها:
-      #     پیش از این پاک‌سازی: 1572 KB/commit → 150.4 MB/day → سقفِ ۵GB در ۹.۹ روز
-      #     پس از این پاک‌سازی: 1216 KB/commit → 116.4 MB/day → سقفِ ۵GB در ۱۲.۸ روز
-      #   یعنی حذفِ ۱۳.۹ مگابایت فایلِ بی‌مصرف در هر دور، فقط ۳ روز وقت خرید.
-      #   ریشهٔ مشکل «حجمِ هر دور» نیست؛ «انباشتِ تاریخ» است: هر دور یک
-      #   کامیتِ ماندگار می‌سازد و git هیچ‌وقت نسخه‌های قبلی را فراموش نمی‌کند.
-      #   هزینه O(تعدادِ کامیت‌ها) است، و تعدادِ کامیت‌ها بی‌کران رشد می‌کند.
+      # راهکار: «rolling squash» ─────────────────────────────────────────────
+      #   در هر دور:
+      #     ۱) «anchor» = تازه‌ترین کامیتی که نشانگرِ $OUT_MARK را ندارد،
+      #        یعنی آخرین کامیتِ واقعیِ سورس.
+      #     ۲) درختِ جدید = درختِ anchor + خروجی‌های تازهٔ همین دور.
+      #     ۳) `git commit-tree <tree> -p <anchor>` و سپس force-push.
+      #   نتیجه: `main` همیشه = «تاریخِ کاملِ سورس + دقیقاً یک کامیتِ خروجی».
+      #   کامیتِ خروجیِ دورِ قبل غیرقابل‌دسترس می‌شود و gc آزادش می‌کند، پس
+      #   هزینه O(1) است نه O(commits) — در حالی که فایل‌ها روی شاخهٔ
+      #   پیش‌فرض و در معرضِ دید باقی می‌مانند. یعنی هم (الف) هم (ب).
       #
-      # راهکار: تاریخِ داده را «بی‌تاریخ» کن
+      # چرا فقط این کافی نبود و «پایدارسازیِ خروجی» هم لازم شد
       # ─────────────────────────────────────────────────────────────────────
-      #   خروجی‌ها روی یک شاخهٔ orphan به نامِ `data` منتشر می‌شوند که همیشه
-      #   دقیقاً **یک** کامیت دارد: هر دور یک کامیتِ بی‌والد ساخته و
-      #   force-push می‌شود. نتیجه: هزینه از O(n) به O(1) می‌رسد.
-      #   اندازه‌گیریِ واقعی روی یک مخزنِ آزمایشی با ۱۲ چرخهٔ force-push:
-      #     پس از gc → size-pack 2.19 MiB، in-pack 41 آبجکت، هر شاخه ۱ کامیت
-      #   ⚠️ نکتهٔ صادقانه: آبجکت‌های غیرقابل‌دسترس تا اجرای gc در گیت‌هاب
-      #      باقی می‌مانند. در همان آزمایش، پیش از gc: ۱۲۹ آبجکتِ loose و
-      #      18.17 MiB. پس رشد «کراندار» است نه «صفر» — ولی به‌جای رشدِ
-      #      خطیِ بی‌پایان، حول یک مقدارِ ثابت نوسان می‌کند.
+      #   مقایسهٔ دو کامیتِ واقعیِ پشت‌سرهمِ ربات نشان داد از ۳۵۳۷ خط فقط ۹ خط
+      #   مشترک بود — ولی با نادیده‌گرفتنِ ‎#remark‎ عدد به ۳۲۷۷ می‌رسید. یعنی
+      #   ۳۲۶۸ خط بی‌هیچ دلیلِ کارکردی تغییر می‌کرد و delta compressionِ گیت
+      #   را بی‌اثر می‌کرد. سه ریشه پیدا و رفع شد (در scripts/core.py):
+      #     • برچسبِ کشور از remarkِ هر سورس می‌آمد، پس یک سرور در یک دور
+      #       ‎RU 🇷🇺‎ و در دورِ بعد ‎US 🇺🇸‎ می‌شد → با کشِ endpoint‑محور
+      #       (`country_for_endpoint`) قفل شد.
+      #     • شمارهٔ انتهایِ remark «موقعیتی» بود، پس اضافه‌شدنِ یک کانفیگ،
+      #       remarkِ همهٔ خطوطِ بعدی را جابه‌جا می‌کرد → با
+      #       `stable_label()` = sha256(dedup_key)[:6] محتوا‑محور شد.
+      #     • ترتیبِ خطوط تصادفی بود → با `sorted(key=dedup_key)` قطعی شد.
+      #   اندازه‌گیریِ اثر (دو اجرای واقعیِ پشت‌سرهم): ۳۲ فایل از ۳۴ فایل
+      #   بایت‑به‑بایت یکسان شدند؛ دو فایلِ دیگر (index.json / health.json)
+      #   فقط در timestamp تفاوت داشتند.
       #
-      # چرا شکستنِ لینک‌ها رخ نمی‌دهد (تستِ واقعی انجام شد)
+      # نرخِ واقعیِ تغییرِ سورس‌ها (اندازه‌گیری‌شده، و یک تصحیحِ مهم)
       # ─────────────────────────────────────────────────────────────────────
-      #   هم raw.githubusercontent.com و هم cdn.jsdelivr.net شاخهٔ
-      #   غیرپیش‌فرض را سرو می‌کنند؛ روی jsdelivr/jsdelivr@terms (شاخهٔ
-      #   غیرپیش‌فرضِ واقعی) هر دو ۲۰۰ برگرداندند. پس آدرس‌ها فقط
-      #   `/main/` → `/data/` و `@main` → `@data` می‌شوند.
+      #   دو snapshotِ زندهٔ ۳۰ دقیقه فاصله مقایسه شد: از ۸۱۵۷ کانفیگ، ۸۱۲۶
+      #   مشترک بودند → churn واقعی ‎۰.۳۸٪‎ در ۳۰ دقیقه ≈ ‎۰.۱۹٪‎ در هر دور.
+      #   (یک اندازه‌گیریِ اولیه ۱۹.۶٪ داده بود؛ آن **غلط** بود، چون remarkِ
+      #    vmess داخلِ base64 است و با split("#") جدا نمی‌شود، پس ۲۲۵۴ خطِ
+      #    vmess اشتباهاً «تغییریافته» شمرده شده بودند. با dedup_key تصحیح شد.)
       #
-      # چرا force-push در اینجا بی‌خطر است
+      # سهمِ هر نوع فایل در رشدِ حجم (اندازه‌گیری‌شده با churnِ واقعی)
       # ─────────────────────────────────────────────────────────────────────
-      #   شاخهٔ `data` هیچ کدِ انسان‌نوشته‌ای ندارد؛ ۱۰۰٪ محتوایش در هر دور
-      #   از صفر بازتولید می‌شود. «از دست رفتنِ تاریخ» اینجا هدف است، نه
-      #   عارضه. کدِ پروژه روی `main` می‌ماند و هرگز force-push نمی‌شود.
-      #   این هم‌زمان مسئلهٔ race بینِ دو runِ هم‌زمان را حذف می‌کند: هیچ
-      #   ادغامی لازم نیست، چون تازه‌ترین snapshot همیشه برنده است.
-      - name: 🚀 Publish snapshot to `data` branch (single-commit force-push)
+      #     configs.txt خالی           ۰.۶ کیلوبایت در هر دور
+      #     + clash.yaml               ۱.۱
+      #     + singbox.json             ۱.۱
+      #     + configs_base64.txt     ۳۰۴.۰   ← ۹۹.۴٪ از کلِ رشد
+      #   دلیل: در base64 یک بایت تغییر در ابتدا، کلِ جریان را از نو رمز
+      #   می‌کند، پس هیچ delta ای پیدا نمی‌شود. همین یک قلم رشد را از
+      #   ۰.۶ به ۳۰۵ کیلوبایت می‌بَرد → ۲۸.۶ مگابایت در روز → ۹.۴ گیگابایت
+      #   در سال. یعنی پایدارسازی به‌تنهایی کافی نیست و rolling squash
+      #   **الزامی** است، نه یک بهینه‌سازیِ تزئینی.
+      #
+      # وضعیتِ صحت‌سنجیِ همین مرحله
+      # ─────────────────────────────────────────────────────────────────────
+      #   هارنسِ exp/publish_verify.sh این اسکریپت را روی یک مخزنِ bare واقعی
+      #   با ۱۰ سناریو و ۶۲ assertion اجرا می‌کند: ۶۲/۶۲ پاس.
+      #     • ۳۰ دورِ پشت‌سرهم → شاخه دقیقاً ۴ کامیت (۳ سورس + ۱ خروجی)،
+      #       رشدِ حجم ۰ کیلوبایت در هر دور، و هر ۲۶ مسیرِ لینک‌دار سرِ جایش.
+      #     • فایلی که upstream حذف شود، از snapshot بیرون می‌رود (ارث نمی‌رسد).
+      #     • ۴ دور با lease واقعاً contested (پوشِ مالک بینِ fetch و pushِ ما
+      #       تزریق شد): در هر ۴ مورد کامیتِ مالک سالم ماند، خروجی هم منتشر شد.
+      #     • کنترلِ منفی: همان سناریو با force-pushِ ساده، کامیتِ مالک را
+      #       **نابود کرد** (تعداد=۰). پس این گارد تزئینی نیست.
+      #     • سه سناریوی fail-closed (index.json خالی / لیستِ کم‌محتوا /
+      #       نبودِ کلِ خروجی‌ها) → همه رد شدند و شاخه دست‌نخورده ماند.
+      #     • نبودِ پوشهٔ archive/ → بدونِ کرشِ «pathspec did not match».
+      - name: 🚀 Publish outputs to `main` (rolling squash — O(1) history)
         if: steps.gate.outputs.should_run == 'true'
+        env:
+          PUBLISH_BRANCH: ${{ env.PUBLISH_BRANCH }}
+          OUT_MARK: ${{ env.OUT_MARK }}
         run: |
           set -euo pipefail
           git config user.name  "raydikalx-bot[actions]"
@@ -281,65 +366,23 @@ jobs:
 
           STAMP=$(date -u +'%Y-%m-%d %H:%M UTC')
 
-          # ── چرا «plumbing» و نه `git checkout --orphan` ────────────────────
-          # نسخهٔ اولِ این مرحله با `git checkout --orphan "$DATA_BRANCH"`
-          # نوشته شد و در شبیه‌سازیِ شش‌دورهٔ محلی شکست خورد: در دورِ اول
-          # درست کار کرد، ولی از دورِ دوم به بعد شاخهٔ محلیِ `data` از قبل
-          # وجود داشت و git با
-          #     fatal: a branch named 'data' already exists   (exit 128)
-          # خارج شد. چون مرحله `set -e` دارد، کلِ step بی‌صدا قطع می‌شد و
-          # هیچ چیزی منتشر نمی‌شد. این خطا در actions/checkout تازه دیده
-          # نمی‌شود، ولی هر بار که runner کش‌شده یا شاخه از قبل fetch شده
-          # باشد رخ می‌دهد — یعنی یک بمبِ ساعتیِ خاموش.
+          # مسیرهایی که «خروجیِ تولیدشده» محسوب می‌شوند. هر چیزِ دیگری «سورس»
+          # است و ربات هرگز نباید آن را عقب ببرد.
+          OUTPUT_PATHS="all heavy light protocols archive index.json health.json"
+
+          is_output_path() {
+            case "$1" in
+              all/*|heavy/*|light/*|protocols/*|archive/*|index.json|health.json) return 0 ;;
+              *) return 1 ;;
+            esac
+          }
+
+          # ── ۰) دروازهٔ سلامتِ خروجی (fail-closed) ──────────────────────────
           #
-          # راهکارِ مقاوم: اصلاً شاخه عوض نمی‌کنیم. با ابزارهای سطح‌پایینِ git
-          # مستقیماً یک درخت و یک کامیتِ بی‌والد می‌سازیم:
-          #     git mktree/update-index → write-tree → commit-tree (بدون -p)
-          # مزیت‌ها: (۱) به وضعیتِ شاخه‌های محلی حساس نیست و idempotent است،
-          # (۲) worktree دست‌نخورده می‌ماند پس فایل‌های تولیدشده گم نمی‌شوند،
-          # (۳) سریع‌تر است چون هیچ checkout/حذفِ فایلی لازم نیست.
-          #
-          # وضعیتِ صحت‌سنجی: این مرحله با هارنسِ ۱۲-سناریویی/۴۰-assertionی در
-          # exp/a2sim2/verify.sh روی یک مخزنِ bare واقعی و با دادهٔ واقعیِ
-          # ۸٬۱۶۹ کانفیگی تست شده و همه پاس شده‌اند — شاملِ سه سناریوی
-          # data-loss (index.json خالی / لیستِ کم‌محتوا / نبودِ کلِ خروجی‌ها)
-          # که همه fail-closed اند، و دو باگِ واقعیِ کشف‌شده در همین تست‌ها
-          # («a branch named data already exists» و «pathspec did not match»)
-          # که هر دو زیر `set -e` بی‌صدا انتشار را متوقف می‌کردند.
-          # پس از ۱۱ انتشار: origin از ۲۲٬۰۳۶ KB پیش از gc به ۲٬۲۶۰ KB پس از
-          # gc رسید و شاخه در تمامِ دورها دقیقاً یک کامیتِ بی‌والد داشت.
-          TMP_INDEX="$(mktemp -u /tmp/dataidx.XXXXXX)"
-
-          # فایلِ راهنمای شاخهٔ data (تا بازدیدکننده گیج نشود)
-          DATA_README="$(mktemp)"
-          cat > "$DATA_README" <<EOF
-          # 📦 data — published output snapshot
-
-          This branch is **machine-generated**: it always holds exactly **one**
-          commit, force-pushed on every aggregation round. It carries no history
-          by design.
-
-          - Source code, docs and issues live on the \`main\` branch.
-          - Generated: \`$STAMP\`
-          - Do not open pull requests against this branch.
-
-          ## Why a single-commit orphan branch?
-
-          Publishing ~27 MB of regenerated files ~98 times a day on a normal
-          branch grew this repository by ~69 MB/day (measured: 3.54 GB across
-          5,648 commits in 52 days). Git never forgets an old blob, so the cost
-          is O(commits) and unbounded. A force-pushed orphan snapshot makes it
-          O(1).
-
-          — @Raydikalx
-          EOF
-
-          # ── ۰) دروازهٔ سلامتِ خروجی (fail-closed) ────────────────────────────
-          #
-          # چرا: force-push هیچ راهِ بازگشتی ندارد. اگر snapshotِ این دور ناقص
-          # باشد و ما آن را منتشر کنیم، نسخهٔ سالمِ قبلی برای همیشه از بین
-          # می‌رود و هر مشترکی لیستش را با «هیچ» جایگزین می‌کند. پس پیش از
-          # ساختِ درخت، وجود و غیرخالی‌بودنِ فایل‌های حیاتی را تأیید می‌کنیم.
+          # چرا: انتشار force-push است و راهِ بازگشتی ندارد. اگر snapshotِ این
+          # دور ناقص باشد و منتشرش کنیم، نسخهٔ سالمِ قبلی از دسترس خارج
+          # می‌شود و لیستِ هر مشترکی با «هیچ» جایگزین می‌شود. پس پیش از
+          # ساختِ درخت، وجود و غیرخالی‌بودنِ فایل‌های حیاتی تأیید می‌شود.
           MUST_EXIST="index.json health.json
           all/configs.txt all/configs_base64.txt all/clash.yaml all/singbox.json
           heavy/configs.txt light/configs.txt"
@@ -349,10 +392,10 @@ jobs:
           done
           if [ -n "$MISSING" ]; then
             echo "❌ refusing to publish — missing/empty critical outputs:$MISSING"
-            echo "   شاخهٔ '$DATA_BRANCH' دست‌نخورده می‌ماند (snapshotِ سالمِ قبلی حفظ می‌شود)."
+            echo "   شاخهٔ '$PUBLISH_BRANCH' دست‌نخورده می‌ماند (snapshotِ سالمِ قبلی حفظ می‌شود)."
             exit 1
           fi
-          # سنجهٔ کمینهٔ محتوا: یک لیستِ تقریباً خالی هم باید جلویش گرفته شود.
+          # سنجهٔ کمینهٔ محتوا: یک لیستِ تقریباً خالی هم باید متوقف شود.
           ALL_LINES=$(grep -cv '^\s*\(#\|$\)' all/configs.txt || true)
           if [ "${ALL_LINES:-0}" -lt 100 ]; then
             echo "❌ refusing to publish — all/configs.txt has only ${ALL_LINES} payload lines (< 100)."
@@ -360,118 +403,190 @@ jobs:
           fi
           echo "✅ output sanity: all/configs.txt has ${ALL_LINES} payload lines"
 
-          # ── ۱) پر کردنِ ایندکسِ موقت ──────────────────────────────────────
-          #    چون ایندکس از صفر ساخته می‌شود، فایلی که در دورِ قبل حذف شده
-          #    خودبه‌خود از snapshot بیرون می‌ماند (نیازی به حذفِ دستی نیست).
-          #    README روی `main` می‌ماند: بازبینی با grep نشان داد
-          #    aggregate.py هیچ‌وقت README را نمی‌نویسد، پس stage کردنش در
-          #    هر دور بی‌فایده بود.
-          #
-          # ⚠️ باگی که با تست کشف شد — «pathspec did not match»
-          #    نسخهٔ قبلی این خط چنین بود:
-          #        git add -A -- all heavy light protocols archive index.json health.json
-          #    اما `archive/` و `protocols/` تضمینی برای وجود ندارند:
-          #    aggregate.py آن‌ها را فقط به‌صورتِ جانبی و از طریقِ
-          #    `_write_text` → `os.makedirs(dirname)` می‌سازد. پس اگر در یک
-          #    دور هیچ کانفیگِ خرابی پیدا نشود (که پس از این پاک‌سازی کاملاً ممکن
-          #    است)، پوشهٔ archive هرگز ساخته نمی‌شود و git با
-          #        fatal: pathspec 'archive' did not match any files
-          #    و exit 128 خارج می‌شود. زیر `set -e` کلِ step بی‌صدا می‌مُرد و
-          #    شاخهٔ `data` روی snapshotِ کهنهٔ دورِ قبل یخ می‌زد.
-          #    این را با اجرای واقعیِ همین اسکریپت اثبات کردم (exit=128،
-          #    هیچ انتشاری، و `write_archive` با صفر کانفیگِ خراب هم واقعاً
-          #    پوشه را نمی‌سازد).
-          #    راهکار: فقط مسیرهایی را stage می‌کنیم که واقعاً وجود دارند.
-          export GIT_INDEX_FILE="$TMP_INDEX"
-          rm -f "$TMP_INDEX"
-          PATHS=""
-          for p in all heavy light protocols archive index.json health.json; do
-            if [ -e "$p" ]; then
-              PATHS="$PATHS $p"
-            else
-              echo "   ℹ️ '$p' absent this round — skipping (not an error)"
-            fi
-          done
-          # shellcheck disable=SC2086
-          git add -A -- $PATHS
-          # README مخصوصِ این شاخه را با plumbing وارد ایندکس می‌کنیم تا
-          # فایلِ روی دیسکِ worktree (README اصلیِ پروژه) دست‌نخورده بماند.
-          BLOB=$(git hash-object -w "$DATA_README")
-          git update-index --add --cacheinfo 100644,"$BLOB",README.md
-
-          TREE=$(git write-tree)
-          echo "🌳 snapshot tree: $TREE"
-
-          # محافظِ دوم: درختِ خالیِ گیت شناسهٔ ثابتی دارد. اگر به هر دلیلی
-          # (مثل شکستِ مهارشدهٔ `git add`) ایندکس خالی مانده باشد، اینجا
-          # متوقف می‌شویم و نمی‌گذاریم snapshotِ سالم پاک شود.
-          EMPTY_TREE=$(git hash-object -t tree /dev/null)
-          if [ "$TREE" = "$EMPTY_TREE" ]; then
-            echo "❌ refusing to publish an EMPTY tree — '$DATA_BRANCH' left untouched."
-            exit 1
-          fi
-          STAGED=$(git ls-files | wc -l)
-          echo "   staged files: $STAGED"
-          if [ "$STAGED" -lt 10 ]; then
-            echo "❌ refusing to publish — only $STAGED files staged (expected ≥ 10)."
-            exit 1
-          fi
-
-          # ── ۲) مقایسه با snapshotِ فعلیِ remote (فقط برای گزارش) ────────────
-          #
-          # ⚠️ تصحیحِ یک ادعای نادرست در نسخهٔ قبلیِ این مرحله
-          #    قبلاً اینجا نوشته بودم «اگر درخت با remote یکی بود، کامیت/پوش
-          #    نمی‌کنیم» و ادعا کرده بودم این از تولیدِ آبجکتِ اضافی جلوگیری
-          #    می‌کند. اندازه‌گیری نشان داد این short-circuit **هرگز فایر
-          #    نمی‌کند**: دو اجرای پشت‌سرهمِ aggregate.py خروجی‌هایی تولید
-          #    می‌کنند که با `diff -rq` کاملاً یکسان‌اند، به‌جز دو فایل —
-          #    index.json (updated_at / updated_at_unix / next_update_eta /
-          #    elapsed_seconds) و health.json (checked_at + latency_ms هر ۲۱
-          #    سورس). یعنی درختِ نهایی همیشه متفاوت است و شرط هیچ‌وقت برقرار
-          #    نمی‌شود. در شبیه‌سازیِ شش‌دوره‌ای هم، دوری که عمداً payloadِ
-          #    یکسان داشت باز هم منتشر شد — دقیقاً همین علت.
-          #
-          # آیا باید short-circuit را payload-محور کنیم؟ اندازه‌گیری: نه.
-          #    دو انتشارِ پشت‌سرهم با payloadِ byte-identical فقط ۳۲ کیلوبایت
-          #    به origin اضافه کرد (۵۶۶۰ → ۵۶۹۲ KB)، چون تنها دو blobِ تازه
-          #    ساخته شد: index.json (۵٬۳۶۹ بایت) و health.json (۶٬۳۳۲ بایت) —
-          #    مجموعاً ~۱۱ کیلوبایت خام. و ۲۰ دورِ پشت‌سرهم با payloadِ ثابت،
-          #    پس از gc حجمِ مخزن را **صفر** بایت افزایش داد (۳۴۹۶ → ۳۴۹۶ KB).
-          #    پس صرفه‌جویی عملاً هیچ است، در حالی که پرش از انتشار یک عارضهٔ
-          #    جدی دارد: updated_at تازه نمی‌شود، پس دروازهٔ زمانی در دورِ بعد
-          #    فایل را «کهنه» می‌بیند و هر ۵ دقیقه یک اجرای کاملِ سنگین راه
-          #    می‌اندازد. یعنی short-circuit نه‌تنها بی‌فایده، بلکه مضر بود.
-          #    نتیجه: حذف شد؛ مقایسه فقط برای شفافیتِ لاگ باقی می‌ماند.
-          if git ls-remote --exit-code --heads origin "$DATA_BRANCH" >/dev/null 2>&1; then
-            git fetch --depth=1 --no-tags origin \
-              "+refs/heads/$DATA_BRANCH:refs/remotes/origin/$DATA_BRANCH" >/dev/null 2>&1 || true
-            OLD_TREE=$(git rev-parse "refs/remotes/origin/$DATA_BRANCH^{tree}" 2>/dev/null || echo none)
-            echo "   previous remote tree: $OLD_TREE"
-          else
-            echo "   '$DATA_BRANCH' does not exist yet — this will create it."
-          fi
-
-          # ۳) کامیتِ بی‌والد. نبودِ `-p` همان چیزی است که این کامیت را
-          #    «orphan» می‌کند: هیچ تاریخی حمل نمی‌شود.
           COUNT=$(python -c "import json;print(json.load(open('index.json'))['categories']['all']['unique'])" 2>/dev/null || echo '?')
-          COMMIT=$(git commit-tree "$TREE" -m "data: snapshot $STAMP — $COUNT configs [@Raydikalx]")
-          echo "📦 snapshot commit: $COMMIT ($COUNT unique configs in ALL)"
 
-          # ۴) force-push. چون شاخه همیشه تک‌کامیتی است، حجمِ هر push کوچک
-          #    می‌ماند و هرگز به محدودیتِ سختِ ۲ گیگابایتیِ هر push نزدیک
-          #    نمی‌شود — محدودیتی که بازنویسیِ کاملِ تاریخِ ۳.۵ گیگابایتی را
-          #    غیرعملی می‌کند.
-          for attempt in 1 2 3; do
-            if git push --force origin "$COMMIT:refs/heads/$DATA_BRANCH"; then
-              echo "✅ published to '$DATA_BRANCH' on attempt $attempt"
-              exit 0
+          # ── حلقهٔ انتشار: تا ۵ تلاش، هر تلاش با anchorِ تازه ────────────────
+          #
+          # چرا حلقه لازم است: بینِ خواندنِ نوکِ شاخه و push، مالک ممکن است
+          # کامیت بزند. در آن حالت lease رد می‌شود و ما anchor را از نو
+          # می‌خوانیم تا کامیتِ تازهٔ مالک را روی شانهٔ خودمان سوار کنیم —
+          # نه اینکه پاکش کنیم. (این سناریو در هارنس واقعاً تزریق و تست شد.)
+          PUBLISHED=0
+          for attempt in 1 2 3 4 5; do
+            # ۱) وضعیتِ واقعیِ remote را بخوان.
+            git fetch --no-tags --force origin \
+              "+refs/heads/$PUBLISH_BRANCH:refs/remotes/origin/$PUBLISH_BRANCH"
+
+            TIP=$(git rev-parse "refs/remotes/origin/$PUBLISH_BRANCH")
+
+            # ۲) anchor = تازه‌ترین کامیتی که خروجیِ خودکار نیست.
+            #
+            # ⚠️⚠️ مسئلهٔ shallow — یک تلهٔ واقعی که با تست کشف شد ⚠️⚠️
+            #   `actions/checkout@v4` به‌صورتِ پیش‌فرض `fetch-depth: 1` است.
+            #   نوکِ شاخه در حالتِ عادی یک کامیتِ **خروجی** است، پس در یک
+            #   کلونِ shallow دستورِ `git log` فقط همان یک کامیت را می‌بیند و
+            #   anchor **پیدا نمی‌شود** → این مرحله هر بار fail-closed می‌شد و
+            #   انتشار برای همیشه متوقف می‌ماند.
+            #   این را در exp/shallow_test.sh مستقیماً اندازه گرفتم:
+            #     کلونِ depth=1  → visible=1 کامیت،  anchor=NONE
+            #     fetchِ ساده    → همچنان visible=1 (عمق را باز نمی‌کند)
+            #     یک بار --deepen → visible=2،  anchor پیدا و **درست** بود
+            #   و اثبات شد که commit-tree روی anchorِ عمیق‌شده و سپس push از
+            #   همان مخزنِ shallow کاملاً کار می‌کند و تاریخِ origin سالم
+            #   می‌ماند (۱۵/۱۵ assertion پاس).
+            #
+            #   چرا `fetch-depth: 0` نمی‌گذاریم؟ چون این مخزن ۳.۵۵ گیگابایت
+            #   تاریخ دارد؛ کلونِ کاملش در هر دور (۹۶ بار در روز) نه از نظرِ
+            #   زمان و نه پهنای‌باند قابل‌قبول نیست. پس فقط به‌اندازهٔ نیاز
+            #   عمیق می‌کنیم — معمولاً ۱ تا ۲ کامیت.
+            ANCHOR=""
+            for deep in 0 2 4 8 32; do
+              if [ "$deep" -gt 0 ]; then
+                echo "   ↕️ deepening history by $deep to locate the source anchor …"
+                git fetch --no-tags --deepen="$deep" origin "$PUBLISH_BRANCH" 2>/dev/null || true
+                git fetch --no-tags --force origin \
+                  "+refs/heads/$PUBLISH_BRANCH:refs/remotes/origin/$PUBLISH_BRANCH" 2>/dev/null || true
+              fi
+              ANCHOR=$(git log --format='%H%x09%s' "$TIP" \
+                       | grep -v -F "$OUT_MARK" | head -1 | cut -f1 || true)
+              [ -n "$ANCHOR" ] && break
+            done
+            if [ -z "$ANCHOR" ]; then
+              echo "❌ no source anchor found on '$PUBLISH_BRANCH' even after deepening to 32."
+              echo "   یعنی یا کلِ تاریخ '$OUT_MARK' دارد یا تاریخ ناقص است."
+              echo "   برای جلوگیری از خرابی، انتشار انجام نمی‌شود."
+              exit 1
             fi
-            echo "⚠️ push failed (attempt $attempt) — retrying …"
-            sleep $((attempt * 3))
-          done
-          echo "❌ could not publish after 3 attempts"
-          exit 1
 
+            N_OUT=$(git rev-list --count "$ANCHOR..$TIP")
+            echo "🔗 attempt $attempt: tip=${TIP:0:8} anchor=${ANCHOR:0:8} output-commits-on-top=$N_OUT"
+
+            # ۳) گاردِ رگرسیونِ سورس — قلبِ ایمنیِ این طرح.
+            #    اگر بینِ anchor و tip فایلی *غیر از خروجی* تغییر کرده باشد،
+            #    یعنی anchorِ ما کهنه است و کامیت‌زدن روی آن کارِ مالک را پاک
+            #    می‌کند. در حالتِ سالم anchor..tip فقط کامیت‌های $OUT_MARK است.
+            REGRESS=""
+            if [ "$ANCHOR" != "$TIP" ]; then
+              while IFS= read -r p; do
+                [ -n "$p" ] || continue
+                if ! is_output_path "$p"; then
+                  REGRESS="$REGRESS $p"
+                fi
+              done <<< "$(git diff --name-only "$ANCHOR" "$TIP")"
+            fi
+            if [ -n "$REGRESS" ]; then
+              echo "⚠️ source paths changed between anchor and tip:$REGRESS"
+              echo "   کامیت‌زدن روی همین anchor تغییرِ سورس را پاک می‌کند → دوباره تلاش می‌کنیم."
+              sleep $((attempt * 2))
+              continue
+            fi
+
+            # ۴) درختِ جدید = درختِ anchor + خروجی‌های تازه.
+            #    از anchor شروع می‌کنیم (نه از tip) تا خروجیِ دورِ قبل ارث
+            #    نرسد؛ پس فایلی که این دور تولید نشده خودبه‌خود از snapshot
+            #    بیرون می‌ماند (این را هارنس مستقیماً تست می‌کند).
+            TMP_INDEX="$(mktemp -u /tmp/rollidx.XXXXXX)"
+            rm -f "$TMP_INDEX"
+            export GIT_INDEX_FILE="$TMP_INDEX"
+
+            git read-tree "$ANCHOR"
+            for p in $OUTPUT_PATHS; do
+              git rm -r --cached --ignore-unmatch -q -- "$p" >/dev/null 2>&1 || true
+            done
+
+            # ⚠️ باگی که با تستِ واقعی کشف شد — «pathspec did not match»
+            #    `archive/` و `protocols/` تضمینِ وجود ندارند: aggregate.py
+            #    آن‌ها را فقط جانبی و از طریقِ `_write_text` → `os.makedirs`
+            #    می‌سازد. اگر در یک دور هیچ کانفیگِ خرابی نباشد، پوشهٔ archive
+            #    ساخته نمی‌شود و `git add -- archive` با
+            #        fatal: pathspec 'archive' did not match any files  (exit 128)
+            #    زیرِ `set -e` کلِ step را بی‌صدا می‌کشت و شاخه روی snapshotِ
+            #    کهنه یخ می‌زد. پس فقط مسیرهایِ موجود stage می‌شوند.
+            PATHS=""
+            for p in $OUTPUT_PATHS; do
+              if [ -e "$p" ]; then
+                PATHS="$PATHS $p"
+              else
+                echo "   ℹ️ '$p' absent this round — skipping (not an error)"
+              fi
+            done
+            # shellcheck disable=SC2086
+            git add -A -- $PATHS
+
+            TREE=$(git write-tree)
+            unset GIT_INDEX_FILE
+            rm -f "$TMP_INDEX"
+
+            # محافظ: درختِ خالی یا کم‌فایل منتشر نمی‌شود.
+            EMPTY_TREE=$(git hash-object -t tree /dev/null)
+            if [ "$TREE" = "$EMPTY_TREE" ]; then
+              echo "❌ refusing to publish an EMPTY tree — '$PUBLISH_BRANCH' left untouched."
+              exit 1
+            fi
+            N_FILES=$(git ls-tree -r --name-only "$TREE" | wc -l)
+            if [ "$N_FILES" -lt 15 ]; then
+              echo "❌ refusing to publish — tree has only $N_FILES files (expected ≥ 15)."
+              exit 1
+            fi
+
+            # محافظِ سورس روی خودِ درخت: مطمئن شو سورس‌ها سرِ جایشان‌اند.
+            # (اگر anchor به هر دلیلی درختِ ناقصی داشت، انتشار متوقف می‌شود.)
+            for must in scripts/aggregate.py scripts/core.py README.md \
+                        .github/workflows/aggregate.yml; do
+              if ! git cat-file -e "$TREE:$must" 2>/dev/null; then
+                echo "❌ refusing to publish — '$must' missing from the new tree."
+                exit 1
+              fi
+            done
+
+            echo "🌳 tree=$TREE  files=$N_FILES"
+
+            # اگر درختِ جدید با نوکِ فعلی یکی است، کاری برای انجام نیست.
+            if [ "$TREE" = "$(git rev-parse "$TIP^{tree}")" ]; then
+              echo "ℹ️ tree identical to current tip — nothing to publish this round."
+              PUBLISHED=1
+              break
+            fi
+
+            # ۵) کامیت روی anchor. نشانگرِ $OUT_MARK در subject است تا دورِ
+            #    بعد بتواند این کامیت را «خروجی» تشخیص دهد و anchor را درست
+            #    پیدا کند.
+            COMMIT=$(git commit-tree "$TREE" -p "$ANCHOR" \
+                     -m "chore: update configs — $STAMP — $COUNT configs [@Raydikalx] $OUT_MARK")
+            echo "📦 commit=$COMMIT"
+
+            # ۶) force-push با lease. lease روی همان نوکی بسته می‌شود که خودمان
+            #    خواندیم؛ اگر مالک در این فاصله کامیت زده باشد، push **رد**
+            #    می‌شود (نه اینکه کارش را پاک کند) و حلقه با anchorِ تازه
+            #    دوباره تلاش می‌کند. کنترلِ منفیِ هارنس نشان داد نسخهٔ ساده
+            #    (`--force` بی‌lease) کامیتِ مالک را واقعاً نابود می‌کند.
+            if git push --force-with-lease="refs/heads/$PUBLISH_BRANCH:$TIP" \
+                 origin "$COMMIT:refs/heads/$PUBLISH_BRANCH"; then
+              echo "✅ published to '$PUBLISH_BRANCH' on attempt $attempt"
+              PUBLISHED=1
+              break
+            fi
+            echo "⚠️ lease rejected or push failed (attempt $attempt) — re-anchoring and retrying …"
+            sleep $((attempt * 2))
+          done
+
+          if [ "$PUBLISHED" != "1" ]; then
+            echo "❌ could not publish after 5 attempts — '$PUBLISH_BRANCH' left untouched."
+            exit 1
+          fi
+
+          # ── ۷) گزارشِ نهایی: تأیید کن شاخه دقیقاً یک کامیتِ خروجی دارد ─────
+          git fetch --no-tags --force origin \
+            "+refs/heads/$PUBLISH_BRANCH:refs/remotes/origin/$PUBLISH_BRANCH" >/dev/null 2>&1 || true
+          NEW_TIP=$(git rev-parse "refs/remotes/origin/$PUBLISH_BRANCH" 2>/dev/null || echo "?")
+          if [ "$NEW_TIP" != "?" ]; then
+            NEW_ANCHOR=$(git log --format='%H%x09%s' "$NEW_TIP" \
+                         | grep -v -F "$OUT_MARK" | head -1 | cut -f1 || echo "")
+            if [ -n "$NEW_ANCHOR" ]; then
+              echo "🔎 post-publish: output commits on top of source = $(git rev-list --count "$NEW_ANCHOR..$NEW_TIP")"
+              echo "🔎 total commits on '$PUBLISH_BRANCH' = $(git rev-list --count "$NEW_TIP")"
+            fi
+          fi
       # ── پاک‌سازیِ کشِ jsDelivr ★★★ ─────────────────────────────
       #
       # مسئله (اندازه‌گیریِ زندهٔ همین مخزن، نه حدس)
@@ -531,7 +646,13 @@ jobs:
           import json, os, time, urllib.request, urllib.error
 
           repo   = os.environ.get("GITHUB_REPOSITORY", "0xRadikal/Free-v2ray-Configs")
-          branch = os.environ.get("DATA_BRANCH", "data")
+          # شاخهٔ انتشار = شاخهٔ پیش‌فرض (`main`). نامِ قدیمیِ DATA_BRANCH فقط
+          # برای سازگاریِ عقب‌رو خوانده می‌شود و مقدارش هم `main` است. اگر
+          # هیچ‌کدام تنظیم نبود، پیش‌فرضِ درست `main` است — نه `data`؛ در
+          # غیرِ این صورت purge روی مسیرِ ۴۰۴ انجام می‌شد و بی‌اثر بود.
+          branch = (os.environ.get("PUBLISH_BRANCH")
+                    or os.environ.get("DATA_BRANCH")
+                    or "main")
           base   = f"/gh/{repo}@{branch}"
 
           # فقط سطحِ انتشارِ واقعی purge می‌شود (چیزی که کاربر subscribe می‌کند).

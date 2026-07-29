@@ -19,6 +19,7 @@ core.py — Self-contained V2Ray config processing engine for the aggregator.
 from __future__ import annotations
 
 import base64
+import hashlib
 import json
 import re
 import urllib.parse
@@ -225,6 +226,88 @@ def detect_country_from_remark(remark: str) -> Tuple[str, str]:
 
 
 # ──────────────────────────────────────────────────────────────────────────────
+# پایداریِ برچسبِ کشور
+#
+# چرا این بخش وجود دارد: برچسبِ کشور تا پیش از این فقط از متنِ ریمارکِ منبع
+# خوانده می‌شد. هر منبع برای یک سرورِ یکسان ریمارکِ متفاوتی می‌دهد، پس یک
+# کانفیگِ ثابت در اجرای اول «RU 🇷🇺» و در اجرای بعدی «US 🇺🇸» برچسب می‌خورد.
+# پیامدِ عملی: ۳۲۶۸ خط از ۳۵۳۷ خط در هر اجرا فقط به‌خاطرِ ریمارک تغییر می‌کرد
+# (بدنهٔ فنی دست‌نخورده)، پس هر انتشار تقریباً کل فایل را از نو می‌نوشت.
+#
+# راهکار: برچسب به «مقصدِ اتصال» گره می‌خورد، نه به متنِ منبع. برای یک
+# host/IP یکسان همیشه یک برچسب تولید می‌شود، مستقل از این‌که کدام منبع آن را
+# آورده باشد. اگر هیچ منبعی کشور را نگوید، «Global 🌐» می‌ماند.
+# ──────────────────────────────────────────────────────────────────────────────
+
+_HOST_COUNTRY_CACHE: dict = {}
+
+
+def endpoint_of(line: str) -> str:
+    """آدرسِ مقصدِ کانفیگ (host یا IP) بدونِ پورت. برای vmess از JSON خوانده می‌شود."""
+    line = (line or "").strip()
+    if not line:
+        return ""
+    try:
+        if line.startswith("vmess://"):
+            b64 = line[8:].split("#")[0].strip()
+            b64 += "=" * ((4 - len(b64) % 4) % 4)
+            obj = json.loads(base64.b64decode(b64).decode("utf-8", errors="ignore"))
+            return str(obj.get("add") or obj.get("host") or "").strip().lower()
+        # سایر پروتکل‌ها: scheme://[userinfo@]host[:port][?query][#fragment]
+        rest = line.split("://", 1)[1] if "://" in line else line
+        rest = rest.split("#", 1)[0].split("?", 1)[0]
+        if "@" in rest:
+            rest = rest.rsplit("@", 1)[1]
+        rest = rest.split("/", 1)[0]
+        if rest.startswith("["):                      # IPv6 literal
+            return rest.split("]", 1)[0][1:].lower()
+        return rest.rsplit(":", 1)[0].lower() if ":" in rest else rest.lower()
+    except Exception:
+        return ""
+
+
+def country_for_endpoint(endpoint: str, remark_hint: str = "") -> Tuple[str, str]:
+    """
+    برچسبِ پایدارِ کشور برای یک مقصد.
+
+    نخستین باری که یک host دیده می‌شود، اگر ریمارکِ همراهش کشور را نشان دهد
+    همان ثبت و برای همیشه (در همان اجرا و اجراهای بعدی) به آن host چسبانده
+    می‌شود. بارهای بعد، حتی اگر منبعِ دیگری ریمارکِ متفاوتی بدهد، برچسب عوض
+    نمی‌شود. نتیجه: خروجی بین اجراها پایدار می‌ماند.
+    """
+    ep = (endpoint or "").strip().lower()
+    if not ep:
+        return detect_country_from_remark(remark_hint)
+    cached = _HOST_COUNTRY_CACHE.get(ep)
+    if cached is not None:
+        return cached
+    info = detect_country_from_remark(remark_hint)
+    # فقط نتیجهٔ قاطع را قفل می‌کنیم؛ «Global» یعنی هنوز نمی‌دانیم، پس اگر
+    # منبعِ بعدی کشور را گفت اجازهٔ ارتقا می‌دهیم.
+    if info[0] != "Global":
+        _HOST_COUNTRY_CACHE[ep] = info
+    return info
+
+
+def reset_country_cache() -> None:
+    """پاک‌سازیِ حافظهٔ برچسب‌ها (برای تست‌های مستقل)."""
+    _HOST_COUNTRY_CACHE.clear()
+
+
+def stable_label(line: str) -> str:
+    """
+    شناسهٔ پایدارِ کانفیگ برای انتهای ریمارک.
+
+    پیش از این شماره از موقعیتِ خط می‌آمد (enumerate)، پس افزودن یا حذفِ یک
+    کانفیگ، شمارهٔ همهٔ خطوطِ بعدی را جابه‌جا می‌کرد و باعثِ تغییرِ سراسریِ فایل
+    می‌شد. اکنون شناسه از خودِ محتوای کانفیگ مشتق می‌شود، پس تا وقتی کانفیگ
+    عوض نشود شناسه‌اش هم عوض نمی‌شود.
+    """
+    key = dedup_key(line) or (line or "").strip()
+    return hashlib.sha256(key.encode("utf-8")).hexdigest()[:6].upper()
+
+
+# ──────────────────────────────────────────────────────────────────────────────
 # dedup key (vendored از freeconfigs._dedup_key)
 # ──────────────────────────────────────────────────────────────────────────────
 
@@ -384,11 +467,20 @@ def is_dummy_config(config: str) -> bool:
 # برندینگ ریمارک (vendored از freeconfigs._rename_free_config_remark)
 # ──────────────────────────────────────────────────────────────────────────────
 
-def brand_remark(line: str, idx: int) -> str:
-    """برندینگ: «{CC} {flag} | @Raydikalx | {idx}»."""
+def brand_remark(line: str, idx=None) -> str:
+    """
+    برندینگ: «{CC} {flag} | @Raydikalx | {tag}».
+
+    `tag` از محتوای کانفیگ مشتق می‌شود، نه از موقعیتِ خط. پارامترِ `idx` برای
+    سازگاری با فراخوان‌های قدیمی پذیرفته می‌شود ولی در برچسب به کار نمی‌رود؛
+    اگر شماره‌گذاریِ موقعیتی به ریمارک برگردد، افزودنِ یک کانفیگ ریمارکِ همهٔ
+    خطوطِ بعدی را جابه‌جا می‌کند و فایل در هر انتشار از نو نوشته می‌شود.
+    """
     line = line.strip()
     if not line:
         return line
+
+    tag = stable_label(line)
 
     if line.startswith("vmess://"):
         try:
@@ -399,9 +491,9 @@ def brand_remark(line: str, idx: int) -> str:
             b64 += "=" * ((4 - len(b64) % 4) % 4)
             obj = json.loads(base64.b64decode(b64).decode("utf-8", errors="ignore"))
             old_ps = str(obj.get("ps") or obj.get("name") or "")
-            code, flag = detect_country_from_remark(old_ps)
+            code, flag = country_for_endpoint(endpoint_of(line), old_ps)
             label = "Global 🌐" if code == "Global" else f"{code} {flag}"
-            new_ps = f"{label} | {BRAND_CHANNEL} | {idx}"
+            new_ps = f"{label} | {BRAND_CHANNEL} | {tag}"
             obj["ps"] = new_ps
             if "name" in obj:
                 obj["name"] = new_ps
@@ -422,9 +514,9 @@ def brand_remark(line: str, idx: int) -> str:
         core = line
         old_remark = ""
 
-    code, flag = detect_country_from_remark(old_remark)
+    code, flag = country_for_endpoint(endpoint_of(line), old_remark)
     label = "Global 🌐" if code == "Global" else f"{code} {flag}"
-    new_remark = f"{label} | {BRAND_CHANNEL} | {idx}"
+    new_remark = f"{label} | {BRAND_CHANNEL} | {tag}"
     return f"{core}#{new_remark}"
 
 
