@@ -31,6 +31,7 @@ import converters  # noqa: E402
 import core  # noqa: E402
 import filters  # noqa: E402
 import reachability  # noqa: E402
+import realtest  # noqa: E402
 import validate  # noqa: E402
 
 
@@ -2288,6 +2289,596 @@ def test_workflow_caches_xray_knife_keyed_by_its_checksum():
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     with open(os.path.join(root, ".gitignore"), encoding="utf-8") as f:
         assert ".cache/" in f.read(), ".cache/ must stay gitignored"
+
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# B4 — لایهٔ L3 (`realtest.py`): داوریِ سطر، تجزیهٔ CSV، و بستنِ مسیرهای قفل
+#
+# هر تستِ زیر به یک **سنجشِ زنده** گره خورده، نه به یک حدس. مرجعِ عددها
+# سرشماریِ کاملِ ۳٬۸۴۵ سطری است (۴۴۹ passed · ۵۵ semi-passed · ۳٬۲۵۴ failed ·
+# ۸۷ broken = ۵۰۴ موفق).
+# ──────────────────────────────────────────────────────────────────────────────
+
+#: سرآیندِ راستینِ CSV، برای ساختنِ ورودیِ تستی
+_L3_HEADER = ("link,status,reason,tls,ip,delay,code,download,upload,"
+              "location,ttfb,connect_time,success,total,endpoints")
+
+
+class _FakeXk:
+    """
+    یک «xray-knife»ِ قلابی برای آزمونِ **رفتاریِ** آفلاین.
+
+    چرا لازم است؟ چون آزمونِ جهش (m12/m17/m21) نشان داد تست‌هایی که فقط
+    متنِ کد را می‌خوانند توخالی‌اند: با `if False:` رشتهٔ موردِ نظر هنوز در
+    کد هست و تست سبز می‌ماند. تنها راهِ اثباتِ *رفتار*، اجرای واقعیِ
+    `run_test` است — ولی بی نیاز به شبکه و بی نیاز به باینریِ ۵۷ مگابایتی.
+
+    این شیم یک اسکریپتِ پوسته است که:
+      • آرگومان‌های خود را در `argv.log` می‌نویسد (برای بازرسیِ پرچم‌ها)
+      • اگر `csv_text` داده شده باشد، آن را در مسیرِ `-o` می‌نویسد
+      • اگر `csv_text` تهی باشد، **هیچ فایلی نمی‌سازد** ولی `rc=0` می‌دهد —
+        یعنی همان رفتارِ سنجیده‌شدهٔ «پوشهٔ والدِ ناموجود»
+      • اگر `dedup_to` داده شود، فقط همان تعداد سطر می‌نویسد — یعنی همان
+        رفتارِ سنجیده‌شدهٔ `--max-passed` (خروجیِ ناقص)
+    """
+
+    def __init__(self, csv_text: str = None, rc: int = 0,
+                 rows_from_input: bool = False) -> None:
+        self.csv_text = csv_text
+        self.rc = rc
+        self.rows_from_input = rows_from_input
+        self.dir = ""
+        self.binary = ""
+
+    def __enter__(self) -> "_FakeXk":
+        import stat
+        import tempfile
+        self.dir = tempfile.mkdtemp(prefix="fakexk_")
+        self.binary = os.path.join(self.dir, "xray-knife")
+        payload = os.path.join(self.dir, "payload.csv")
+        if self.csv_text is not None:
+            with open(payload, "w", encoding="utf-8") as fh:
+                fh.write(self.csv_text)
+        # اسکریپت عمداً ساده است: هرچه کمتر منطق، کمتر جای اشتباهِ خودِ شیم
+        script = [
+            "#!/bin/sh",
+            'printf "%s\\n" "$@" > "$(dirname "$0")/argv.log"',
+            "OUT=''",
+            "while [ $# -gt 0 ]; do",
+            '  if [ "$1" = "-o" ]; then OUT="$2"; fi',
+            '  if [ "$1" = "-f" ]; then IN="$2"; fi',
+            "  shift",
+            "done",
+            'echo "🎉 Results have been saved to $OUT"',
+        ]
+        if self.csv_text is not None:
+            if self.rows_from_input:
+                # یک سطرِ CSV برای هر لینکِ *یکتای* ورودی — همان کاری که
+                # ابزارِ واقعی می‌کند («Removed N duplicate config link(s)»)
+                script += [
+                    f'head -1 "{payload}" > "$OUT"',
+                    'sort -u "$IN" | while IFS= read -r L; do',
+                    '  [ -n "$L" ] || continue',
+                    '  printf "%s,passed,,tls,9.9.9.9,120,204,0,0,US,119,8,'
+                    '1,1,cp.cloudflare.com=ok(120ms)\\n" "$L" >> "$OUT"',
+                    "done",
+                ]
+            else:
+                script += [f'cp "{payload}" "$OUT"']
+        script += [f"exit {int(self.rc)}"]
+        with open(self.binary, "w", encoding="utf-8") as fh:
+            fh.write("\n".join(script) + "\n")
+        os.chmod(self.binary, os.stat(self.binary).st_mode | stat.S_IEXEC)
+        return self
+
+    def __exit__(self, *exc: object) -> None:
+        import shutil as _shutil
+        _shutil.rmtree(self.dir, ignore_errors=True)
+
+    def input(self, *links: str) -> str:
+        """یک فایلِ ورودی با لینک‌های داده‌شده می‌سازد و مسیرش را می‌دهد."""
+        path = os.path.join(self.dir, "in.txt")
+        with open(path, "w", encoding="utf-8") as fh:
+            for link in links:
+                fh.write(link + "\n")
+        return path
+
+    def argv(self) -> list:
+        """آرگومان‌هایی که واقعاً به فرزند رسیدند."""
+        path = os.path.join(self.dir, "argv.log")
+        if not os.path.isfile(path):
+            return []
+        with open(path, encoding="utf-8") as fh:
+            return [ln.rstrip("\n") for ln in fh if ln.strip()]
+
+
+def _l3_row(link: str = "vless://x@1.2.3.4:443#a", status: str = "passed",
+            reason: str = "", tls: str = "tls", ip: str = "9.9.9.9",
+            delay: str = "120", code: str = "204", location: str = "US",
+            ttfb: str = "119", connect_time: str = "8",
+            success: str = "1", total: str = "1",
+            endpoints: str = "cp.cloudflare.com=ok(120ms)") -> str:
+    """یک سطرِ CSV با شکلِ *دقیقاً* سنجیده‌شده؛ هر ستون قابلِ بازنویسی."""
+    import csv as _csv
+    import io as _io
+    buf = _io.StringIO()
+    _csv.writer(buf, lineterminator="").writerow(
+        [link, status, reason, tls, ip, delay, code, "0", "0", location,
+         ttfb, connect_time, success, total, endpoints])
+    return buf.getvalue()
+
+
+def _l3_csv(*rows: str) -> str:
+    return _L3_HEADER + "\n" + "\n".join(rows) + "\n"
+
+
+def test_realtest_accepts_semi_passed_because_it_means_rip_failed() -> None:
+    """
+    `semi-passed` باید **پذیرفته** شود — و این اصلاحِ پلنِ خودِ ما است.
+
+    پلنِ اولیه ردکردنش را خواسته بود، بر پایهٔ متنِ راهنما نه داده. سنجشِ
+    ۵۵ سطرِ `semi-passed` در سرشماریِ کامل، با صفر استثنا: `success == total`،
+    `code == 204`، `endpoints=...ok(NNNms)`، `reason == "ip_info_failed"`،
+    و `ip`/`location` برابرِ رشتهٔ `null`. یعنی پروکسی کامل کار کرده و فقط
+    جست‌وجویِ *اختیاریِ* اطلاعاتِ IP شکست خورده. ردکردنش ۵۵ کانفیگِ سالم
+    (۱۰٫۹٪ از خروجیِ نهایی) را خاموشانه دور می‌ریخت.
+    """
+    semi = {"status": "semi-passed", "reason": "ip_info_failed",
+            "ip": "null", "location": "null", "delay": "101", "code": "204",
+            "success": "1", "total": "1",
+            "endpoints": "cp.cloudflare.com=ok(101ms)"}
+    assert realtest.is_row_genuinely_ok(semi), (
+        "semi-passed must be accepted: measured on 55/55 rows it means the "
+        "proxy worked and only the optional --rip lookup failed")
+    assert "semi-passed" in realtest.OK_STATUSES, \
+        "OK_STATUSES must carry semi-passed, not only passed"
+    # و location برای این سطرها None است، نه رشتهٔ "null"
+    assert realtest.row_location(semi) is None, \
+        "the literal string 'null' must not leak out as a country code"
+
+
+def test_realtest_rejects_broken_rows_whose_success_equals_total() -> None:
+    """
+    سوراخِ واقعیِ قفل: سطرهای `broken` مقدارِ `success=0, total=0` دارند، پس
+    شرطِ `success == total` برایشان **درست** است (۰ == ۰).
+
+    سنجش: هر ۸۷ سطرِ `broken` در سرشماری این شرط را برآورده می‌کنند. بی
+    شرطِ `total >= 1` همه‌شان «موفق» شمرده می‌شدند. این تست همان سوراخ را
+    قفل می‌کند.
+    """
+    broken = {"status": "broken",
+              "reason": "infra/conf: failed to build outbound handler",
+              "ip": "null", "location": "null", "delay": "-1", "code": "-1",
+              "success": "0", "total": "0", "endpoints": ""}
+    assert broken["success"] == broken["total"], \
+        "this fixture must reproduce the real hole: success == total (0 == 0)"
+    assert not realtest.is_row_genuinely_ok(broken), (
+        "a broken row satisfies success == total; only `total >= 1` keeps it "
+        "out. All 87 broken rows in the census have total=0")
+    # و همان سطر با total=0 ولی status موفق هم باید رد شود
+    sneaky = dict(broken, status="passed", code="204")
+    assert not realtest.is_row_genuinely_ok(sneaky), \
+        "total=0 must be rejected regardless of the status label"
+
+
+def test_realtest_requires_a_successful_http_code() -> None:
+    """
+    کدِ HTTP باید در بازهٔ موفق باشد. سنجش: تنها دو مقدار در سرشماری دیده
+    شد — `204` روی هر ۵۰۴ سطرِ موفق و `-1` روی هر ۳٬۳۴۱ سطرِ ناموفق.
+    """
+    ok = {"status": "passed", "success": "1", "total": "1", "code": "204"}
+    assert realtest.is_row_genuinely_ok(ok)
+    for bad_code in ("-1", "0", "403", "500", "null", "", "abc"):
+        row = dict(ok, code=bad_code)
+        assert not realtest.is_row_genuinely_ok(row), \
+            f"code={bad_code!r} is not a successful response"
+
+
+def test_realtest_rejects_partial_endpoint_success() -> None:
+    """
+    اگر بخشی از نقاطِ پایانی موفق شده باشند (`success < total`) سطر پذیرفته
+    نمی‌شود. سنجش: هر ۳٬۲۵۴ سطرِ `failed` الگویِ `success=0, total=1` دارند.
+    """
+    row = {"status": "passed", "success": "1", "total": "3", "code": "204"}
+    assert not realtest.is_row_genuinely_ok(row), \
+        "success must equal total; 1 of 3 endpoints is not a working config"
+    assert realtest.is_row_genuinely_ok(dict(row, success="3"))
+
+
+def test_realtest_guard_reproduces_the_measured_census_exactly() -> None:
+    """
+    قفلِ عددی باید دقیقاً همان مجموعه‌ای را بپذیرد که برچسبِ وضعیت می‌گوید —
+    نه سخت‌گیرتر، نه سست‌تر.
+
+    سنجشِ مرجع روی ۳٬۸۴۵ سطر: قفل ۵۰۴ سطر را پذیرفت و مجموعه‌اش با
+    مجموعهٔ `status ∈ {passed, semi-passed}` اختلافِ دوسویهٔ صفر داشت. این
+    تست همان هم‌ارزی را روی نمونه‌ای که هر چهار وضعیت را دارد بازآزمایی
+    می‌کند.
+    """
+    rows = realtest.parse_csv(_l3_csv(
+        _l3_row(link="p1", status="passed"),
+        _l3_row(link="s1", status="semi-passed", reason="ip_info_failed",
+                ip="null", location="null"),
+        _l3_row(link="f1", status="failed", reason="Get ...: refused",
+                ip="null", location="null", delay="-1", code="-1",
+                ttfb="0", connect_time="0", success="0", total="1",
+                endpoints="cp.cloudflare.com=error"),
+        _l3_row(link="b1", status="broken", reason="parse protocol: ...",
+                tls="", ip="null", location="null", delay="-1", code="-1",
+                ttfb="0", connect_time="0", success="0", total="0",
+                endpoints=""),
+    ))
+    by_guard = {r["link"] for r in rows if realtest.is_row_genuinely_ok(r)}
+    by_label = {r["link"] for r in rows
+                if r["status"] in realtest.OK_STATUSES}
+    assert by_guard == by_label == {"p1", "s1"}, (
+        f"the numeric guard and the status label must agree; guard={by_guard} "
+        f"label={by_label}")
+
+    res = realtest.classify(rows)
+    assert res["stats"]["ok"] == 2
+    assert res["stats"]["failed"] == 1
+    assert res["stats"]["broken"] == 1
+    assert res["stats"]["by_status"] == {
+        "passed": 1, "semi-passed": 1, "failed": 1, "broken": 1}
+    # broken جدا از failed شمرده می‌شود: broken دادهٔ بد است (در سرچشمه قابلِ
+    # تعمیر)، failed سرورِ مرده است (طبیعی و گذرا)
+    assert res["broken"] == ["b1"] and res["failed"] == ["f1"], \
+        "broken and failed are different problems and must stay separate"
+
+
+def test_realtest_parses_csv_with_commas_inside_quoted_fields() -> None:
+    """
+    تجزیه باید با ماژولِ `csv` باشد، نه `split(",")`.
+
+    سنجش روی سرشماریِ ۳٬۸۴۵ سطری: **۲۳۶ سطر** با تفکیکِ سادهٔ کاما تعدادِ
+    ستونِ اشتباه می‌دادند (۱۸۲ لینک خودشان کاما دارند و ۳٬۳۲۱ سطر
+    گیومه‌گذاری‌شده‌اند). یعنی تفکیکِ ساده ~۶٪ داده را خراب می‌کرد.
+    """
+    link = "vless://u@1.2.3.4:443?type=tcp#remark, with comma"
+    reason = 'https://x: Get "https://x": bad, very bad'
+    text = _l3_csv(_l3_row(link=link, status="failed", reason=reason,
+                           ip="null", location="null", delay="-1", code="-1",
+                           success="0", total="1",
+                           endpoints="cp.cloudflare.com=error"))
+    # پیش‌شرط: این سطر واقعاً تله‌ی کاما دارد
+    data_line = text.splitlines()[1]
+    assert len(data_line.split(",")) != 15, \
+        "this fixture must actually break a naive split(',')"
+
+    rows = realtest.parse_csv(text)
+    assert len(rows) == 1
+    assert rows[0]["link"] == link, \
+        "the link must survive parsing byte-for-byte, commas included"
+    assert rows[0]["reason"] == reason
+    assert rows[0]["endpoints"] == "cp.cloudflare.com=error", \
+        "the last column must not absorb a shifted field"
+
+
+def test_realtest_raises_on_a_changed_csv_schema() -> None:
+    """
+    اگر بالادست شِما را عوض کند باید **بلند** بشکنیم. خواندنِ خاموشِ ستونِ
+    اشتباه یعنی داوریِ غلط روی هر کانفیگ.
+    """
+    assert len(realtest.CSV_COLUMNS) == 15, \
+        "the measured contract is exactly 15 columns"
+    for bad, label in (
+            ("link,status\nx,passed\n", "too few columns"),
+            (_L3_HEADER + ",extra\n", "an added column"),
+            ("a,b,c,d,e,f,g,h,i,j,k,l,m,n,o\n", "renamed columns"),
+    ):
+        try:
+            realtest.parse_csv(bad)
+        except realtest.MalformedCsv:
+            pass
+        else:
+            raise AssertionError(
+                f"{label} must raise MalformedCsv, not parse silently")
+    # ورودیِ تهی خطا نیست — صفر سطر است
+    assert realtest.parse_csv("") == []
+    assert realtest.parse_csv("   \n") == []
+
+
+def test_realtest_refuses_an_empty_input_that_would_hang_the_job() -> None:
+    """
+    ★ مسیرِ قفل‌شدنِ CI، بسته‌شده پیش از فراخوانی.
+
+    سنجشِ زنده زیرِ شرطِ واقعیِ CI (stdin یک FIFO که بسته نمی‌شود):
+
+        فایلِ تهی     + stdin باز    → rc=124 (قفل روی «Please enter a config link»)
+        فایلِ ناموجود  + stdin باز    → rc=124 (قفل)
+        فایلِ تهی     + `</dev/null` → rc=1   (شکستِ پاک)
+
+    در CI ورودیِ استاندارد بسته نمی‌شود، پس job تا سقفِ ۶ ساعتِ GitHub
+    می‌سوزد و `concurrency: group: aggregate` هر اجرایِ بعدی را هم در صف
+    نگه می‌دارد. حالتِ «فایلِ تهی» واقع‌بینانه است: هر بار که L2 صفر نقطهٔ
+    بازِ باقی بگذارد همین رخ می‌دهد.
+
+    ★ نکتهٔ حیاتیِ طراحیِ تست (اصلاحیهٔ جهشِ m21): هر فراخوانی در این‌جا
+    یک `binary=` **عمداً ناموجود** می‌فرستد. دلیل: اگر `run_test` روزی
+    باینری را **پیش از** ورودی resolve کند، روی ماشینی که ابزار نصب است
+    (مثلِ CI و مثلِ محیطِ جهش‌سنجی که `L3_XK_BIN` را ست می‌کند) خطا هم‌چنان
+    `EmptyInput` می‌شود و تست الکی سبز می‌ماند — یعنی تست توخالی است.
+    با باینریِ ناموجود، ترتیبِ غلط ناچار `XrayKnifeMissing` می‌دهد و شاخهٔ
+    `except` زیر آن را به‌عنوان شکست اعلام می‌کند. این تست باید بدونِ
+    هیچ ابزارِ نصب‌شده‌ای و **مستقل از محیط** معنا داشته باشد.
+    """
+    import tempfile as _tf
+    absent_xk = os.path.join(_tf.mkdtemp(prefix="l3_noxk_"), "xray-knife")
+    assert not os.path.exists(absent_xk), "the shim path must not exist"
+
+    missing = os.path.join(_tf.mkdtemp(prefix="l3_none_"), "nope.txt")
+    try:
+        realtest.run_test(missing, binary=absent_xk)
+    except realtest.EmptyInput:
+        pass
+    except realtest.XrayKnifeMissing:
+        raise AssertionError(
+            "the input check must come BEFORE the binary lookup, otherwise a "
+            "machine without the tool never exercises the hang guard")
+    else:
+        raise AssertionError("a missing input file must raise EmptyInput")
+
+    for content, label in (("", "a zero-byte file"),
+                           ("\n   \n\t\n", "a whitespace-only file")):
+        path = os.path.join(_tf.mkdtemp(prefix="l3_empty_"), "in.txt")
+        with open(path, "w", encoding="utf-8") as fh:
+            fh.write(content)
+        try:
+            realtest.run_test(path, binary=absent_xk)
+        except realtest.EmptyInput:
+            pass
+        except realtest.XrayKnifeMissing:
+            raise AssertionError(
+                f"{label}: the input check must come BEFORE the binary lookup")
+        else:
+            raise AssertionError(
+                f"{label} must raise EmptyInput; measured rc=124 otherwise")
+
+
+def test_realtest_never_lets_the_subprocess_inherit_stdin() -> None:
+    """
+    لایهٔ دومِ دفاع در برابرِ قفل: حتی اگر بررسیِ ورودی روزی دور زده شود،
+    فرزند نباید ورودیِ استاندارد را به ارث ببرد.
+
+    این تست به **کدِ اجرایی** نگاه می‌کند نه به مستندات، چون یک رشتهٔ درستِ
+    داخلِ توضیحات هیچ چیزی را تضمین نمی‌کند (درسِ بندِ B3: تستی که با یک
+    کامنت سبز می‌شود توخالی است).
+    """
+    import inspect as _inspect
+    import re as _re
+    src = _inspect.getsource(realtest.run_test)
+    code = "\n".join(ln for ln in src.splitlines()
+                     if not ln.strip().startswith("#"))
+    assert _re.search(r"stdin\s*=\s*subprocess\.DEVNULL", code), \
+        "run_test must pass stdin=subprocess.DEVNULL in real code"
+    assert _re.search(r"timeout\s*=\s*limit", code), \
+        "run_test must pass a hard timeout to subprocess.run"
+
+
+def test_realtest_deletes_a_stale_output_before_running() -> None:
+    """
+    ★ خطرناک‌ترین موردِ سنجیده‌شده: خروجیِ کهنه زنده می‌ماند.
+
+    سنجش: CSVای با سطرِ `STALE_MARKER,passed` ساختیم و اجرایِ شکست‌خورده
+    (فایلِ تهی) را با همان `-o` صدا زدیم؛ نتیجه `rc=1` بود و
+    `STALE_MARKER` **دست‌نخورده باقی ماند**. بی حذفِ پیش از اجرا، دادهٔ
+    دفعهٔ قبل «نتیجهٔ تازه» خوانده می‌شود.
+
+    این تست **رفتاری** است، نه متنی: با یک باینریِ قلابی اجرا می‌شود.
+    نسخهٔ اولش فقط `"OutputNotWritten" in code` را می‌سنجید و آزمونِ جهش
+    (m12) نشانش داد توخالی است — با `if False: raise OutputNotWritten` آن
+    رشته هنوز در کد بود و تست سبز می‌ماند. درسِ تکراریِ بندِ B3: «رشته
+    حاضر است» هیچ چیزی را اثبات نمی‌کند.
+    """
+    stale = _l3_csv(_l3_row(link="STALE_MARKER_LINK", status="passed"))
+    fresh = _l3_csv(_l3_row(link="FRESH_LINK", status="passed"))
+
+    # ۱) خروجیِ کهنه باید ناپدید شود، نه این‌که با نتیجهٔ تازه قاطی شود
+    with _FakeXk(csv_text=fresh) as fake:
+        out = os.path.join(fake.dir, "out.csv")
+        with open(out, "w", encoding="utf-8") as fh:
+            fh.write(stale)
+        res = realtest.run_test(fake.input("l1"), out_path=out,
+                                binary=fake.binary)
+        assert "STALE_MARKER_LINK" not in res["rows"], (
+            "the previous run's rows were read as fresh results; measured: a "
+            "failed run leaves the old CSV fully intact")
+        assert "FRESH_LINK" in res["rows"]
+
+    # ۱ب) موردِ **تمیزکنندهٔ** واقعی: اجرایی که هیچ فایلی نمی‌نویسد ولی
+    #     rc=0 می‌دهد (رفتارِ سنجیده‌شدهٔ «پوشهٔ والدِ ناموجود»). اگر حذفِ
+    #     پیش از اجرا نباشد، CSVِ کهنه سرِ جایش می‌ماند و بی هیچ هشداری
+    #     «نتیجهٔ تازه» خوانده می‌شود — دقیقاً همان چیزی که سنجیدیم.
+    #     زیرموردِ ۱ به‌تنهایی این را نمی‌گیرد، چون در آن اجرا خروجیِ تازه
+    #     روی فایلِ کهنه بازنویسی می‌شود و اثرِ حذف دیده نمی‌شود.
+    with _FakeXk(csv_text=None) as fake:
+        out = os.path.join(fake.dir, "out.csv")
+        with open(out, "w", encoding="utf-8") as fh:
+            fh.write(stale)
+        try:
+            res = realtest.run_test(fake.input("l1b"), out_path=out,
+                                    binary=fake.binary)
+        except realtest.OutputNotWritten:
+            pass
+        else:
+            raise AssertionError(
+                "the stale CSV was not deleted before the run, so a run that "
+                "wrote nothing returned the previous run's rows as fresh "
+                f"results: {sorted(res['rows'])!r}")
+
+    # ۲) پوشهٔ والدِ ناموجود باید ساخته شود، وگرنه دادهٔ کامل گم می‌شود
+    with _FakeXk(csv_text=fresh) as fake:
+        out = os.path.join(fake.dir, "no", "such", "dir", "out.csv")
+        res = realtest.run_test(fake.input("l2"), out_path=out,
+                                binary=fake.binary)
+        assert os.path.isfile(out), (
+            "run_test must create the output parent; measured: xray-knife "
+            "exits 0 and prints 'Results have been saved to ...' while "
+            "creating nothing")
+        assert "FRESH_LINK" in res["rows"]
+
+    # ۳) rc=0 بدونِ فایل باید **بلند** بشکند، نه «صفر کانفیگِ سالم» بدهد
+    with _FakeXk(csv_text=None) as fake:          # موفق می‌شود، ولی نمی‌نویسد
+        out = os.path.join(fake.dir, "never.csv")
+        try:
+            realtest.run_test(fake.input("l3"), out_path=out,
+                              binary=fake.binary)
+        except realtest.OutputNotWritten:
+            pass
+        else:
+            raise AssertionError(
+                "exit code 0 with no output file must raise OutputNotWritten; "
+                "silently reporting zero working configs hides total data loss")
+
+
+def test_realtest_pins_the_test_url_instead_of_trusting_the_default() -> None:
+    """
+    نشانیِ آزمون یک متغیرِ پنهان بود.
+
+    سنجش: اجراهای مرجعِ ما HTTP 204 ثبت کرده‌اند چون
+    `https://cp.cloudflare.com/generate_204` را داده بودند؛ ولی پیش‌فرضِ
+    v10.1.1 یعنی `https://cloudflare.com/cdn-cgi/trace` که HTTP 200 می‌دهد.
+    بی تثبیتِ صریح، نتایجِ دو اجرا قابلِ مقایسه نیستند.
+    """
+    assert realtest.TEST_URL == "https://cp.cloudflare.com/generate_204", \
+        "the reference URL must stay pinned to the one that was measured"
+    argv = realtest.build_argv("in.txt", "out.csv", binary="xk")
+    assert "-u" in argv, "the URL must be passed explicitly, never defaulted"
+    assert argv[argv.index("-u") + 1] == realtest.TEST_URL
+    # و `--rip` نباید خاموش شود: سنجشِ A/B نشان داد با `--rip=false` ستونِ
+    # location در صفر سطر پر می‌شود، که بندِ B6b را ناممکن می‌کند
+    joined = " ".join(argv)
+    assert "--rip=false" not in joined and "-r=false" not in joined, \
+        "--rip must stay on; measured: with --rip=false, location is never set"
+    # پرچم‌های سنجیده‌شده و ردشده نباید به‌طورِ پیش‌فرض حاضر باشند
+    assert "--retries" not in joined, \
+        "--retries hides the measured 32.7% flakiness inside a single run"
+    assert "--max-passed" not in joined, \
+        "--max-passed yields partial output; absence must never mean failure"
+    assert "--prescan" not in joined, "--prescan was measured and rejected"
+
+
+def test_realtest_marks_partial_output_but_not_mere_deduplication() -> None:
+    """
+    نبودِ یک لینک در CSV هرگز «شکست خورد» نیست.
+
+    دو سنجشِ جدا: (الف) `--max-passed 2 -t 5` پنج سطر داد (۲ موفق + ۳
+    نیمه‌کاره) — یعنی خروجی ناقص است. (ب) خودِ ابزار تکراری‌ها را حذف
+    می‌کند («Removed 2 duplicate config link(s). Testing 1 unique configs»)
+    — یعنی کمتربودنِ سطرها از *سطرهای ورودی* به‌تنهایی نشانهٔ نقص نیست.
+    پس مقایسه باید با لینک‌های **یکتا** باشد، نه با تعدادِ سطرها.
+
+    این تست **رفتاری** است. نسخهٔ اولش فقط `"unique" in code` را می‌سنجید و
+    آزمونِ جهش (m17) نشانش داد توخالی است: با مقایسهٔ اشتباه در برابرِ
+    تعدادِ سطرهای خام، آن واژه هنوز جایی در کد بود و تست سبز می‌ماند.
+    """
+    row = _l3_row(link="LINK_A", status="passed")
+
+    # (الف) ورودیِ دارای تکرار: ۳ سطر، ۱ لینکِ یکتا، ۱ سطرِ CSV.
+    #       این **ناقص نیست** — خودِ ابزار تکراری‌ها را حذف می‌کند.
+    with _FakeXk(csv_text=_l3_csv(row)) as fake:
+        path = fake.input("LINK_A", "LINK_A", "LINK_A")
+        res = realtest.run_test(path, out_path=os.path.join(fake.dir, "o.csv"),
+                                binary=fake.binary)
+        assert res["stats"]["lines_in"] == 3
+        assert res["stats"]["unique_in"] == 1
+        assert res["partial"] is False, (
+            "deduplication is not partial output; comparing against raw line "
+            "count would mislabel every input that repeats a link, and the "
+            "tool itself prints 'Removed N duplicate config link(s)'")
+
+    # (ب) خروجیِ واقعاً ناقص: ۲ لینکِ یکتا، ولی CSV تنها یکی را دارد.
+    #     سنجش: `--max-passed 2 -t 5` پنج سطر داد از ۲۰ لینک — پس نبودِ یک
+    #     لینک هرگز «شکست خورد» نیست.
+    with _FakeXk(csv_text=_l3_csv(row)) as fake:
+        path = fake.input("LINK_A", "LINK_B")
+        res = realtest.run_test(path, out_path=os.path.join(fake.dir, "o.csv"),
+                                binary=fake.binary)
+        assert res["stats"]["unique_in"] == 2 and len(res["rows"]) == 1
+        assert res["partial"] is True, (
+            "a link missing from the CSV must mark the result partial, never "
+            "be silently counted as a failure")
+        assert "LINK_B" not in res["failed"], \
+            "an untested link must not appear in the failed bucket"
+
+    # قراردادِ خروجی: کلیدهایی که بندهای B5/B6/B7/B13 روی آن‌ها حساب می‌کنند
+    res = realtest.classify(realtest.parse_csv(_l3_csv(
+        _l3_row(link="p1"),
+        _l3_row(link="f1", status="failed", success="0", total="1",
+                code="-1", delay="-1"))))
+    for key in ("ok", "failed", "broken", "rows", "stats"):
+        assert key in res, f"the B5/B6/B7/B13 contract needs the {key!r} key"
+    assert res["rows"]["p1"]["status"] == "passed", \
+        "rows must map link -> full row so later items can read every column"
+
+
+def test_realtest_exposes_delay_and_tls_for_the_fast_and_secure_buckets() -> None:
+    """
+    بندهای B6 (`fast/`) و B7 (`secure/`) از همین دو کمک‌تابع تغذیه می‌شوند،
+    پس قراردادشان همین‌جا تثبیت می‌شود.
+
+    سنجشِ سرشماری: بازهٔ تأخیرِ سطرهای موفق ۵۴ تا ۴٬۷۷۶ میلی‌ثانیه، میانهٔ
+    ۶۷۵؛ و مقادیرِ `tls` عبارت‌اند از `tls` (۲٬۰۳۲) · تهی (۸۲۸) ·
+    `none` (۵۶۵) · `reality` (۴۱۴) · `false` (۴) · `…` (۱) · `auto` (۱).
+    """
+    assert realtest.row_delay_ms({"delay": "674"}) == 674
+    for bad in ("-1", "null", "", "abc"):
+        assert realtest.row_delay_ms({"delay": bad}) is None, \
+            f"delay={bad!r} must not be reported as a real latency"
+    assert realtest.row_tls({"tls": "reality"}) == "reality"
+    assert realtest.row_tls({"tls": ""}) == ""
+    assert realtest.row_tls({}) == "", "a missing column must not raise"
+    assert realtest.row_location({"location": "NL"}) == "NL"
+    for bad in ("null", "", "   "):
+        assert realtest.row_location({"location": bad}) is None, \
+            f"location={bad!r} must be reported as unknown, not as a country"
+
+
+def test_realtest_stats_are_internally_consistent() -> None:
+    """
+    آمار باید خودسازگار باشد: هر سطر دقیقاً در یک سبد، و مجموع = تعدادِ سطرها.
+    یک ناسازگاریِ خاموش در آمار یعنی گزارشِ سلامتِ دروغین در بندِ B13.
+    """
+    rows = realtest.parse_csv(_l3_csv(
+        _l3_row(link="p1"), _l3_row(link="p2"),
+        _l3_row(link="s1", status="semi-passed", ip="null", location="null"),
+        _l3_row(link="f1", status="failed", success="0", total="1",
+                code="-1", delay="-1"),
+        _l3_row(link="b1", status="broken", success="0", total="0",
+                code="-1", delay="-1", endpoints=""),
+    ))
+    res = realtest.classify(rows)
+    s = res["stats"]
+    assert s["rows"] == 5
+    assert s["ok"] + s["failed"] + s["broken"] == s["rows"], \
+        "every row must land in exactly one bucket"
+    assert len(res["ok"]) == s["ok"] and len(res["failed"]) == s["failed"]
+    assert sum(s["by_status"].values()) == s["rows"]
+    assert set(s["by_status"]) == set(realtest.ALL_STATUSES), \
+        "every measured status must be reported even at zero"
+    assert s["ok_pct"] == 60.0
+    # ۳ سطرِ موفق، ولی یکی از آن‌ها location ندارد
+    assert s["with_location"] == 2, \
+        "semi-passed rows carry no country; B6b must not over-count"
+    assert s["delay_min"] == 120 and s["delay_max"] == 120
+
+
+def test_realtest_reports_an_unknown_status_instead_of_hiding_it() -> None:
+    """
+    سنجشِ ما فقط چهار وضعیت را ثبت کرده. اگر روزی پنجمی بیاید، باید دیده
+    شود — نه این‌که خاموشانه در سبدِ «ناموفق» گم شود.
+    """
+    rows = realtest.parse_csv(_l3_csv(
+        _l3_row(link="x1", status="totally-new-status")))
+    res = realtest.classify(rows)
+    assert "unknown_status" in res["stats"], \
+        "a fifth status value means upstream changed; it must surface"
+    assert res["stats"]["unknown_status"] == {"totally-new-status": 1}
+    assert res["stats"]["ok"] == 0, \
+        "an unrecognised status must never be treated as working"
+
 
 # ──────────────────────────────────────────────────────────────────────────────
 # اجرا بدون pytest
