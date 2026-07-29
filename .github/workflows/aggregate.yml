@@ -429,7 +429,37 @@ jobs:
             *) echo "::error::xray-knife reports '$VER_OUT', expected version $XRAY_KNIFE_VERSION"; exit 1 ;;
           esac
 
+      # ── آبشارِ چهارلایه: برچسبِ «کار می‌کند» فقط با آزمونِ واقعی ───────────
+      #
+      # این گام `verified/` و `fast/` و `secure/` و `top100.txt` را می‌سازد.
+      # ورودی‌اش `all/configs.txt`ِ همین دور است (سنجیده شد: `filters` سرآیندِ
+      # `#` را خودش می‌اندازد — از ۸۰۲۹ سطر، ۷۹۴۸ ماند و صفر سرآیند رد شد).
+      #
+      # بودجه — عددِ اجراشده، نه تخمین. روی یک سرورِ اختصاصی با همان کد و
+      # ۸۱۵۸ کانفیگ سنجیده شد (دو بار، مستقل):
+      #     L0/L1  ۰٫۳۵s   ·  L2  ۴۲٫۰۷s  ·  سه اجرای L3  ۱۰۶٫۹۲s
+      #     کلِ آبشار **۱۴۹٫۳۴s** از بودجهٔ ۹۰۰ ثانیه‌ای، کندترین اجرا ۳۶٫۲۱s
+      # پس `timeout-minutes: 15` سه‌برابرِ سرآمدِ سنجیده‌شده حاشیه دارد.
+      #
+      # ⚠️ `continue-on-error: true` عمدی است. این لایه به شبکهٔ runner وابسته
+      # است و اگر یک دور نتواند به اندازهٔ کافی کانفیگِ پایدار پیدا کند،
+      # **نباید** انتشارِ `all/ heavy/ light/` را بشکند؛ آن‌ها با معیارِ
+      # دیگری تولید شده‌اند و مستقل‌اند. سکوت هم نمی‌کند: خروجیِ گام و
+      # `pipeline.json` هر دو در خلاصهٔ کار دیده می‌شوند.
+      - name: 🧬 Verify configs with real proxied requests (L3 cascade)
+        id: cascade
+        if: steps.gate.outputs.should_run == 'true'
+        continue-on-error: true
+        timeout-minutes: 15
+        run: python scripts/pipeline.py all/configs.txt --out . --json pipeline.json
+
       # ── دروازهٔ اعتبارسنجی: خروجیِ خراب هرگز commit نمی‌شود ───────────────
+      #
+      # ⚠️ ترتیب مهم است و تصادفی نیست: این گام **بعد** از آبشار می‌آید.
+      # سنجیده شد که `validate.py` هر دایرکتوریِ دستهٔ اختیاری را که وجود
+      # داشته باشد با همان سختیِ دسته‌های اصلی می‌سنجد. پس اگر آبشار
+      # `verified/` را بسازد، همین دروازه هم آن را واقعاً می‌سنجد — یعنی
+      # لایهٔ جدید از اعتبارسنجی معاف نمی‌شود، بلکه مشمولِ آن می‌شود.
       - name: 🔍 Validate outputs with real clients
         if: steps.gate.outputs.should_run == 'true'
         run: python scripts/validate.py --out . --strict --json validation.json
@@ -579,11 +609,22 @@ jobs:
 
           # مسیرهایی که «خروجیِ تولیدشده» محسوب می‌شوند. هر چیزِ دیگری «سورس»
           # است و ربات هرگز نباید آن را عقب ببرد.
-          OUTPUT_PATHS="all heavy light protocols archive index.json health.json"
+          # ⚠️ دسته‌های آبشار (`verified/ fast/ secure/ top100.txt`) باید
+          #    این‌جا باشند، وگرنه تولید می‌شوند و **بی‌صدا دور ریخته
+          #    می‌شوند**: درختِ snapshot فقط همین مسیرها را stage می‌کند و از
+          #    `$ANCHOR` شروع می‌شود، پس هر چیزِ فهرست‌نشده هرگز منتشر
+          #    نمی‌شود. گاردِ رگرسیونِ سورس هم به همین تابع تکیه دارد؛ اگر
+          #    `verified/*` را «سورس» بشمارد، وجودِ آن هر بار به‌عنوان
+          #    «تغییرِ سورس» دیده می‌شود و انتشار در حلقهٔ تلاشِ مجدد می‌افتد.
+          #    این‌ها اختیاری‌اند (آبشار `continue-on-error` است) و منطقِ
+          #    «فقط مسیرهای موجود stage می‌شوند» همان پایین از نبودشان
+          #    عبور می‌کند.
+          OUTPUT_PATHS="all heavy light protocols archive index.json health.json verified fast secure top100.txt"
 
           is_output_path() {
             case "$1" in
               all/*|heavy/*|light/*|protocols/*|archive/*|index.json|health.json) return 0 ;;
+              verified/*|fast/*|secure/*|top100.txt) return 0 ;;
               *) return 1 ;;
             esac
           }

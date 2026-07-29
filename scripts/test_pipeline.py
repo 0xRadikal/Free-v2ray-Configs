@@ -3389,6 +3389,131 @@ def test_pipeline_output_survives_the_publication_gate():
 
 
 # ──────────────────────────────────────────────────────────────────────────────
+# B5 در CI — گامِ آبشار در ورک‌فلو
+# ──────────────────────────────────────────────────────────────────────────────
+
+def test_workflow_runs_the_cascade_before_it_validates_and_publishes():
+    """
+    ترتیبِ گام‌ها **رفتار** است، نه سلیقه.
+
+    اگر آبشار بعد از اعتبارسنجی بیاید، دسته‌های تازه‌ساخته هرگز سنجیده
+    نمی‌شوند؛ و اگر بعد از انتشار بیاید، همان دور منتشر نمی‌شوند. پس
+    این تست اندیسِ واقعیِ گام‌ها را در YAMLِ تجزیه‌شده مقایسه می‌کند، نه
+    متنِ فایل را.
+    """
+    doc = yaml.safe_load(_workflow_text())
+    steps = doc["jobs"]["aggregate"]["steps"]
+    names = [s.get("name", "") for s in steps]
+
+    def idx(pred, what):
+        hits = [i for i, n in enumerate(names) if pred(n)]
+        assert hits, f"گامِ «{what}» در ورک‌فلو نیست: {names}"
+        return hits[0]
+
+    cascade = idx(lambda n: "L3 cascade" in n, "آبشار L3")
+    validate = idx(lambda n: n.startswith("🔍 Validate"), "اعتبارسنجی")
+    publish = idx(lambda n: "Publish" in n, "انتشار")
+
+    assert cascade < validate, (
+        f"آبشار (گام {cascade}) بعد از اعتبارسنجی (گام {validate}) اجرا "
+        f"می‌شود ⇒ دسته‌های verified/fast/secure هرگز سنجیده نمی‌شوند")
+    assert validate < publish, (
+        f"اعتبارسنجی (گام {validate}) بعد از انتشار (گام {publish}) است ⇒ "
+        f"دروازه بی‌اثر می‌شود")
+
+    step = steps[cascade]
+    run = step.get("run", "")
+    assert "scripts/pipeline.py" in run, (
+        f"گامِ آبشار خودِ pipeline.py را صدا نمی‌زند: {run!r}")
+    assert "all/configs.txt" in run, (
+        f"ورودیِ آبشار باید خروجیِ همین دور باشد؛ دیده شد: {run!r}")
+
+    # این لایه به شبکه وابسته است و **نباید** انتشارِ all/heavy/light را
+    # بشکند — آن‌ها با معیارِ دیگری تولید می‌شوند.
+    assert step.get("continue-on-error") is True, (
+        "گامِ آبشار continue-on-error ندارد ⇒ یک دورِ بدشبکه کلِ انتشار را "
+        "می‌شکند")
+
+    # بودجهٔ سنجیده‌شده ۱۴۹٫۳۴ ثانیه بود؛ سقف باید وجود داشته باشد و از آن
+    # بزرگ‌تر ولی از بودجهٔ ۹۰۰ ثانیه‌ایِ CI کوچک‌تر باشد.
+    tmo = step.get("timeout-minutes")
+    assert isinstance(tmo, int), (
+        f"گامِ آبشار سقفِ زمانی ندارد ⇒ یک اجرای گیرکرده runner را می‌بلعد "
+        f"(دیده شد: {tmo!r})")
+    assert 149.34 / 60.0 < tmo <= 15, (
+        f"سقفِ زمانیِ {tmo} دقیقه با بودجهٔ سنجیده‌شدهٔ ۱۴۹٫۳۴s نمی‌خواند")
+
+
+def test_workflow_publishes_the_cascade_categories_it_builds():
+    """
+    اشکالی که با خواندنِ گامِ انتشار پیدا شد، نه با حدس.
+
+    درختِ snapshot از `$ANCHOR` ساخته می‌شود و **فقط** مسیرهای
+    `$OUTPUT_PATHS` را stage می‌کند. پس اگر آبشار `verified/` را بسازد ولی
+    آن مسیر در فهرست نباشد، فایل تولید می‌شود و بعد **بی‌صدا دور ریخته
+    می‌شود** — بدونِ هیچ خطایی. این تست همان سوراخ را می‌بندد.
+    """
+    import re as _re
+
+    text = _workflow_text()
+    m = _re.search(r'OUTPUT_PATHS="([^"]*)"', text)
+    assert m, "متغیرِ OUTPUT_PATHS در گامِ انتشار پیدا نشد"
+    paths = m.group(1).split()
+
+    for need in ("verified", "fast", "secure", "top100.txt"):
+        assert need in paths, (
+            f"«{need}» در OUTPUT_PATHS نیست ⇒ آبشار می‌سازدش و انتشار "
+            f"بی‌صدا دورش می‌ریزد. فهرستِ دیده‌شده: {paths}")
+
+    # مسیرهای قدیمی نباید قربانیِ افزودنِ جدیدها شده باشند.
+    for old in ("all", "heavy", "light", "index.json", "health.json"):
+        assert old in paths, f"مسیرِ قدیمیِ «{old}» از OUTPUT_PATHS افتاده"
+
+
+def test_workflow_treats_cascade_output_as_output_not_as_source():
+    """
+    `is_output_path` قلبِ گاردِ رگرسیونِ سورس است.
+
+    اگر `verified/*` را «سورس» بشمارد، وجودِ آن هر بار به‌عنوان «تغییرِ
+    سورس» دیده می‌شود و انتشار در حلقهٔ تلاشِ مجدد گیر می‌کند. این تست
+    خودِ تابعِ شل را جدا می‌کند و **اجرا** می‌کند — به متن اکتفا نمی‌کند.
+    """
+    import re as _re
+    import subprocess
+
+    text = _workflow_text()
+    m = _re.search(r"is_output_path\(\)\s*\{(.*?)\n          \}", text, _re.S)
+    assert m, "تابعِ is_output_path در گامِ انتشار پیدا نشد"
+    body = m.group(1)
+
+    fn = "is_output_path() {" + body + "\n}\n"
+    script = fn + '\nfor p in "$@"; do\n' \
+                  '  if is_output_path "$p"; then echo "OUT $p"; ' \
+                  'else echo "SRC $p"; fi\ndone\n'
+
+    cases_out = ["verified/configs.txt", "verified/singbox.json",
+                 "fast/clash.yaml", "secure/configs_base64.txt",
+                 "top100.txt", "all/configs.txt", "health.json"]
+    cases_src = ["scripts/pipeline.py", ".github/workflows/aggregate.yml",
+                 "README.md"]
+
+    proc = subprocess.run(["bash", "-c", script, "bash"] + cases_out + cases_src,
+                          capture_output=True, text=True)
+    assert proc.returncode == 0, f"اجرای تابع شکست: {proc.stderr}"
+    verdict = dict(reversed(ln.split(" ", 1))
+                   for ln in proc.stdout.strip().splitlines() if " " in ln)
+
+    for p in cases_out:
+        assert verdict.get(p) == "OUT", (
+            f"«{p}» خروجی است ولی تابع «{verdict.get(p)}» گفت ⇒ گاردِ "
+            f"رگرسیون آن را تغییرِ سورس می‌بیند و انتشار قفل می‌شود")
+    for p in cases_src:
+        assert verdict.get(p) == "SRC", (
+            f"«{p}» سورس است ولی تابع «{verdict.get(p)}» گفت ⇒ ربات "
+            f"می‌تواند کارِ مالک را پاک کند")
+
+
+# ──────────────────────────────────────────────────────────────────────────────
 # اجرا بدون pytest
 # ──────────────────────────────────────────────────────────────────────────────
 
