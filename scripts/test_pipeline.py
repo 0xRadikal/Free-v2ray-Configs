@@ -2127,6 +2127,168 @@ def test_validate_always_checks_every_core_category() -> None:
         assert rep["ok"] is False
 
 
+
+def _xray_knife_install_step() -> dict:
+    """گامِ نصبِ xray-knife را از خودِ ورک‌فلو برمی‌گرداند.
+
+    YAML پارس می‌شود، نه grepِ متنِ خام: کامنت‌های این فایل عمداً دلیلِ هر
+    تصمیم را می‌نویسند، و آزمونی که رشته را در متنِ خام بجوید، با یک جملهٔ
+    توضیحی هم سبز می‌شود بی‌آنکه گامی واقعاً وجود داشته باشد.
+    """
+    doc = yaml.safe_load(_workflow_text())
+    for step in doc["jobs"]["aggregate"]["steps"]:
+        if "Install xray-knife" in (step.get("name") or ""):
+            return step
+    raise AssertionError("no xray-knife install step in the workflow")
+
+
+def test_workflow_installs_xray_knife_pinned_to_the_measured_version():
+    """لایهٔ L3 بدونِ این ابزار وجود ندارد، و بدونِ pin قراردادش می‌شکند.
+
+    چرا نسخه قفل است: خروجیِ CSVِ نسخهٔ ۱۰٫۱٫۱ پانزده ستون دارد و وضعیتِ
+    غیرمستندِ `semi-passed` را تولید می‌کند. اگر upstream ستون‌ها را عوض کند،
+    دستهٔ `verified/` بی‌صدا اشتباه پر می‌شود — نه با خطا، که بدترین حالت است.
+    """
+    step = _xray_knife_install_step()
+    env = step.get("env") or {}
+    assert env.get("XRAY_KNIFE_VERSION") == "10.1.1", \
+        "the version must be pinned to the one whose CSV schema was measured"
+    run = step["run"]
+    # نسخه باید از همان متغیر ساخته شود، نه به‌صورتِ رشتهٔ ثابتِ دوم
+    assert "${XRAY_KNIFE_VERSION}" in run, \
+        "the download URL must derive from the pinned version variable"
+    assert "lilendian0x00/xray-knife/releases/download" in run, \
+        "the binary must come from the upstream release, not a mirror"
+
+
+def test_workflow_verifies_both_the_xray_knife_archive_and_binary():
+    """pinِ نسخه به‌تنهایی کافی نیست: assetِ یک انتشار قابلِ جای‌گزینی است.
+
+    دو checksum لازم است، نه یکی:
+      • sha256ِ آرشیو  → دانلودِ دست‌کاری‌شده را می‌گیرد
+      • sha256ِ باینری → cacheِ خراب/آلوده را می‌گیرد، که آرشیو هرگز نمی‌بیند
+    هر دو مقدار با فایلِ `.dgst`ِ رسمیِ upstream تطبیق داده شده‌اند.
+
+    ⚠️ چرا «حضورِ رشته» سنجیده نمی‌شود: نگارشِ نخستِ این آزمون فقط بررسی
+    می‌کرد که `$XRAY_KNIFE_ZIP_SHA256` جایی در متن هست و `exit 1` جایی هست.
+    آزمونِ جهش نشانش داد که آن نگارش توخالی است: با تبدیلِ شرطِ آرشیو به
+    `if false; then` سوئیت **سبز ماند**، چون رشته در پیامِ خطا هم بود و
+    `exit 1` در شاخهٔ دیگر هم بود. پس اینجا خودِ *شرطِ مقایسه* و *بدنهٔ همان
+    شرط* سنجیده می‌شود، نه حضورِ واژه‌ها.
+    """
+    step = _xray_knife_install_step()
+    env = step.get("env") or {}
+    assert env.get("XRAY_KNIFE_ZIP_SHA256") == \
+        "39696103eb99b4cb55ae5d2c2456210d826f4bbcf0f89e298a05fb5fb82f09e5"
+    assert env.get("XRAY_KNIFE_BIN_SHA256") == \
+        "a3b10a40ccaf423d96836f9606ffec8b2e5f4fce36375eac1aadc10ba9c58034"
+    run = step["run"]
+    code = [ln for ln in run.splitlines() if not ln.strip().startswith("#")]
+    assert run.count("sha256sum") >= 2, \
+        "both the archive and the extracted binary must be hashed"
+
+    # هر دو digest باید در یک شرطِ *واقعیِ نامساوی* به کار روند، و بدنهٔ آن
+    # شرط باید job را بشکند. تابعِ کمکی هر دو را با هم می‌سنجد، چون جدا
+    # سنجیدن‌شان همان سوراخی است که جهشِ m5 از آن گذشت.
+    def _guarded(var: str) -> None:
+        hits = [i for i, ln in enumerate(code)
+                if var in ln and "!=" in ln and ln.strip().startswith("if ")]
+        assert hits, (f"{var} must be compared with `!=` inside an `if`, "
+                      f"not merely printed in a message")
+        for i in hits:
+            body = code[i + 1:i + 8]
+            assert any("exit 1" in b for b in body), (
+                f"the branch guarding {var} must `exit 1`; a warning would let "
+                f"the job go green with an unverified binary")
+
+    _guarded("$XRAY_KNIFE_ZIP_SHA256")
+    _guarded("$XRAY_KNIFE_BIN_SHA256")
+
+
+def test_workflow_verifies_the_xray_knife_binary_even_on_a_cache_hit():
+    """این ظریف‌ترین بخشِ گام است و عمداً قفل شده.
+
+    اگر تأییدِ باینری داخلِ شاخهٔ «اگر فایل نبود، دانلود کن» می‌بود، یک cacheِ
+    آلوده کاملاً از کنترل می‌گشت و L3 با باینریِ ناشناس اجرا می‌شد. سنجش با
+    یک cacheِ آلودهٔ ساختگی: خروج ۱ و فایلِ خراب پاک شد.
+    """
+    run = _xray_knife_install_step()["run"]
+    lines = [ln.rstrip() for ln in run.splitlines()]
+
+    # عمقِ تودرتویی را می‌شماریم، نه «بعد از نخستین fi بودن» را. تفاوت مهم
+    # است: بلوکِ دانلود خودش یک `if`ِ داخلی برای checksumِ آرشیو دارد، پس
+    # آزمونِ ساده‌ترِ «پس از نخستین fi» با یک رگرسیونِ واقعی هم سبز می‌ماند.
+    # آزمونِ درست این است: مقایسهٔ باینری باید در عمقِ صفر باشد، یعنی هیچ
+    # شرطی احاطه‌اش نکرده باشد.
+    depth = 0
+    depth_at = {}
+    for i, ln in enumerate(lines):
+        s = ln.strip()
+        if s == "fi":
+            depth -= 1
+        depth_at[i] = depth
+        if s.startswith("if ") and s.endswith("then"):
+            depth += 1
+    assert depth == 0, f"unbalanced if/fi in the step body (ends at {depth})"
+
+    bin_check = [i for i, ln in enumerate(lines)
+                 if "$XRAY_KNIFE_BIN_SHA256" in ln and "sha256sum" not in ln]
+    assert bin_check, "the binary digest must be compared somewhere"
+    guard = min(bin_check)
+    assert depth_at[guard] == 0, (
+        "the binary checksum comparison must sit at the top level of the "
+        "script, outside the `if [ ! -f $BIN ]` download branch — otherwise a "
+        f"poisoned cache is never checked (found at nesting depth "
+        f"{depth_at[guard]})")
+    # و فایلِ ردشده باید حذف شود تا اجرای بعدی همان cacheِ خراب را نبیند
+    assert 'rm -f "$BIN"' in run, \
+        "a rejected binary must be deleted so the next run re-downloads"
+
+
+def test_workflow_uses_the_xray_knife_flag_that_actually_exists():
+    """آزمونِ زنده: `xray-knife version` خطای «unknown command» می‌دهد.
+
+    پرچمِ درست `--version` است. اگر گام زیرفرمانِ نادرست را صدا می‌زد، با
+    `set -e` کلِ job شکست می‌خورد — و آن شکست شبیهِ «ابزار خراب است» به نظر
+    می‌رسید، نه «دستور اشتباه است».
+
+    ⚠️ چرا کامنت‌ها حذف می‌شوند: نخستین نگارشِ این آزمون کلِ بدنهٔ `run:` را
+    می‌کاوید و شکست خورد — ولی تنها تطبیق، *همین کامنت* بود که خروجیِ
+    سنجیده‌شدهٔ ابزار («xray-knife version 10.1.1») را ثبت می‌کند. آن یک
+    مثبتِ کاذب بود: ادعا دربارهٔ دستورهای اجرایی است، نه دربارهٔ مستندسازی.
+    همین اصل در `test_workflow_never_uses_maxmind_...` هم به کار رفته: آزمونی
+    که واژه را در متنِ خام ممنوع کند، مستندسازیِ درست را جریمه می‌کند.
+    """
+    import re as _re
+    run = _xray_knife_install_step()["run"]
+    assert "--version" in run, "the tool exposes --version, not a subcommand"
+    code = "\n".join(ln for ln in run.splitlines()
+                     if not ln.strip().startswith("#"))
+    assert "--version" in code, \
+        "the --version call must be real code, not only mentioned in a comment"
+    assert not _re.search(r'xray-knife"?\s+version(\s|$)', code), \
+        "`xray-knife version` is not a valid command in v10.1.1"
+
+
+def test_workflow_caches_xray_knife_keyed_by_its_checksum():
+    """۲۰ مگابایت × ۹۶ اجرا در روز، همان استدلالی که برای GeoIP به کار رفت.
+
+    کلید شاملِ خودِ checksum است، پس تغییرِ pin به‌طورِ خودکار cache را
+    بی‌اعتبار می‌کند و هیچ گامِ دستی‌ای فراموش نمی‌شود.
+    """
+    doc = yaml.safe_load(_workflow_text())
+    caches = [s for s in doc["jobs"]["aggregate"]["steps"]
+              if str(s.get("uses", "")).startswith("actions/cache")
+              and "xray-knife" in str((s.get("with") or {}).get("path", ""))]
+    assert caches, "the 57 MB binary must be cached, not re-downloaded 96×/day"
+    key = str((caches[0].get("with") or {}).get("key", ""))
+    assert "a3b10a40ccaf423d96836f9606ffec8b2e5f4fce36375eac1aadc10ba9c58034" in key, \
+        "the cache key must embed the binary digest so re-pinning invalidates it"
+    # مسیرِ cache باید gitignore شده باشد، وگرنه ۵۷ مگابایت commit می‌شود
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    with open(os.path.join(root, ".gitignore"), encoding="utf-8") as f:
+        assert ".cache/" in f.read(), ".cache/ must stay gitignored"
+
 # ──────────────────────────────────────────────────────────────────────────────
 # اجرا بدون pytest
 # ──────────────────────────────────────────────────────────────────────────────

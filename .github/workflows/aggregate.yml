@@ -320,6 +320,115 @@ jobs:
           "$HOME/.local/bin/sing-box" version
           "$HOME/.local/bin/mihomo" -v
 
+      # ── نصبِ xray-knife: ابزارِ آزمونِ واقعیِ پروکسی (لایهٔ L3) ─────────────
+      #
+      # چرا این ابزار: لایه‌های پیشین فقط «قابلِ اتصال بودن» را می‌سنجند.
+      # سنجشِ زنده روی ۶۰۰ کانفیگِ تصادفی نشان داد نرخِ واقعیِ کارکرد
+      # ۶٫۰۰٪ است (بازهٔ اطمینانِ ۹۵٪ به روشِ Wilson: ۴٫۳۷٪ تا ۸٫۱۹٪)، در
+      # حالی که L2 نرخِ ۴۷٫۹۱٪ می‌دهد. یعنی حدودِ چهار پنجمِ آنچه از L2
+      # می‌گذرد، در عمل ترافیک را عبور نمی‌دهد. تنها راهِ تفکیکِ این دو،
+      # اجرای یک هستهٔ واقعیِ Xray است.
+      #
+      # چرا نسخه pin شده: خروجیِ CSVِ این ابزار قراردادِ ورودیِ
+      # `scripts/realtest.py` است. سنجشِ نسخهٔ ۱۰٫۱٫۱ نشان داد CSV پانزده
+      # ستون دارد و وضعیت‌ها `passed / semi-passed / failed / broken` هستند —
+      # و `semi-passed` در هیچ مستندی ذکر نشده است. یک به‌روزرسانیِ خودکارِ
+      # upstream می‌تواند بی‌صدا ستون‌ها یا نامِ وضعیت‌ها را عوض کند و آن‌گاه
+      # دستهٔ `verified/` بی‌آنکه خطایی دیده شود، اشتباه پر می‌شود.
+      #
+      # چرا checksum، در حالی که مرحلهٔ sing-box/mihomo آن را ندارد:
+      # فقط pin کردنِ *نسخه* تضمینی نمی‌دهد، چون یک انتشارِ گیت‌هاب قابلِ
+      # جای‌گزینی است (asset را می‌توان با همان نام دوباره بارگذاری کرد).
+      # مقدارهای زیر دوسویه تأیید شده‌اند: فایلِ `.dgst`ِ رسمیِ upstream در
+      # هر سه الگوریتمِ MD5، SHA-256 و SHA-512 با فایلِ دانلودشده می‌خواند.
+      #
+      # چرا cache: زمان‌بندی `*/5` است (≈۹۶ اجرا در شبانه‌روز). بدونِ cache
+      # این مرحله روزانه ~۲ گیگابایت از انتشارهای گیت‌هاب می‌کشید — همان
+      # استدلالی که برای پایگاهِ دادهٔ GeoIP هم به کار رفت. کلیدِ cache شاملِ
+      # خودِ checksum است، پس تغییرِ pin به‌طورِ خودکار cache را بی‌اعتبار
+      # می‌کند و هیچ گامِ دستی‌ای فراموش نمی‌شود.
+      - name: 📦 Restore xray-knife cache
+        if: steps.gate.outputs.should_run == 'true'
+        uses: actions/cache@v4
+        with:
+          path: .cache/xray-knife
+          # نسخه و checksum هر دو در کلید هستند: اگر یکی عوض شود، cacheِ
+          # قدیمی هرگز بازیابی نمی‌شود. عمداً از `restore-keys` استفاده
+          # نشده — برخلافِ GeoIP، اینجا «نسخهٔ نزدیک» بی‌فایده است، چون
+          # هدفِ pin دقیقاً همان یک باینریِ مشخص است.
+          key: xray-knife-10.1.1-linux-64-a3b10a40ccaf423d96836f9606ffec8b2e5f4fce36375eac1aadc10ba9c58034
+
+      - name: 📦 Install xray-knife (pinned + checksum verified)
+        if: steps.gate.outputs.should_run == 'true'
+        env:
+          XRAY_KNIFE_VERSION: "10.1.1"
+          XRAY_KNIFE_ASSET: "Xray-knife-linux-64.zip"
+          # sha256ِ آرشیوِ منتشرشده — با فایلِ `.dgst`ِ upstream تطبیق داده شد
+          XRAY_KNIFE_ZIP_SHA256: "39696103eb99b4cb55ae5d2c2456210d826f4bbcf0f89e298a05fb5fb82f09e5"
+          # sha256ِ خودِ باینریِ استخراج‌شده — این یکی cacheِ آلوده را هم می‌گیرد
+          XRAY_KNIFE_BIN_SHA256: "a3b10a40ccaf423d96836f9606ffec8b2e5f4fce36375eac1aadc10ba9c58034"
+        run: |
+          set -euo pipefail
+          mkdir -p .cache "$HOME/.local/bin"
+          BIN=".cache/xray-knife"
+
+          # ── دانلود، تنها در صورتِ نبودِ نسخهٔ cacheشده ──────────────────
+          if [ ! -f "$BIN" ]; then
+            URL="https://github.com/lilendian0x00/xray-knife/releases/download/v${XRAY_KNIFE_VERSION}/${XRAY_KNIFE_ASSET}"
+            echo "→ downloading $URL"
+            curl -fsSL --retry 3 --retry-delay 2 --max-time 300 -o /tmp/xk.zip "$URL"
+
+            # تأییدِ آرشیو *پیش از* باز کردن. ترتیب مهم است: باز کردنِ یک
+            # آرشیوِ تأییدنشده یعنی اجرای کدِ فشرده‌سازیِ آن روی محتوایی که
+            # به آن اعتماد نداریم.
+            GOT_ZIP="$(sha256sum /tmp/xk.zip | cut -d' ' -f1)"
+            if [ "$GOT_ZIP" != "$XRAY_KNIFE_ZIP_SHA256" ]; then
+              echo "::error::xray-knife archive checksum mismatch"
+              echo "  expected $XRAY_KNIFE_ZIP_SHA256"
+              echo "  actual   $GOT_ZIP"
+              exit 1
+            fi
+            echo "  ✓ archive sha256 verified"
+
+            # `-j` چون آرشیو تخت است (README.md, xray-knife, LICENSE) و تنها
+            # همان یک فایل لازم است. در فایلِ موقت باز می‌شود و فقط پس از
+            # تأییدِ باینری به مسیرِ cache منتقل می‌گردد — تا cache هرگز
+            # حاملِ فایلِ نیمه‌نوشته یا نامعتبر نشود.
+            unzip -q -o -j /tmp/xk.zip xray-knife -d /tmp/xkbin
+            mv /tmp/xkbin/xray-knife "$BIN.tmp"
+            mv "$BIN.tmp" "$BIN"
+          else
+            echo "→ using cached binary"
+          fi
+
+          # ── تأییدِ باینری: *همیشه*، نه فقط پس از دانلود ─────────────────
+          # این نکته عمدی است. اگر تأیید تنها در شاخهٔ دانلود بود، یک cacheِ
+          # خراب یا دست‌کاری‌شده کاملاً از کنترل می‌گشت و آزمونِ L3 با یک
+          # باینریِ ناشناس اجرا می‌شد.
+          GOT_BIN="$(sha256sum "$BIN" | cut -d' ' -f1)"
+          if [ "$GOT_BIN" != "$XRAY_KNIFE_BIN_SHA256" ]; then
+            echo "::error::xray-knife binary checksum mismatch (corrupt cache or tampered release)"
+            echo "  expected $XRAY_KNIFE_BIN_SHA256"
+            echo "  actual   $GOT_BIN"
+            rm -f "$BIN"
+            exit 1
+          fi
+          echo "  ✓ binary sha256 verified"
+
+          install -m 755 "$BIN" "$HOME/.local/bin/xray-knife"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+          # ── تأییدِ نهایی: خودِ ابزار باید همان نسخه را اعلام کند ─────────
+          # زیرفرمانِ `version` در این ابزار وجود ندارد (آزمون شد: خطای
+          # «unknown command»). پرچمِ درست `--version` است و خروجیِ سنجیده‌شدهٔ
+          # آن دقیقاً «xray-knife version 10.1.1» است.
+          VER_OUT="$("$HOME/.local/bin/xray-knife" --version 2>&1 | head -1)"
+          echo "  $VER_OUT"
+          case "$VER_OUT" in
+            *"$XRAY_KNIFE_VERSION"*) echo "  ✓ version pin honoured" ;;
+            *) echo "::error::xray-knife reports '$VER_OUT', expected version $XRAY_KNIFE_VERSION"; exit 1 ;;
+          esac
+
       # ── دروازهٔ اعتبارسنجی: خروجیِ خراب هرگز commit نمی‌شود ───────────────
       - name: 🔍 Validate outputs with real clients
         if: steps.gate.outputs.should_run == 'true'
