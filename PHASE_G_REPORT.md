@@ -121,8 +121,10 @@ design decision that needs to justify itself. It could not.
 
 It must be said plainly, because the fix depends on it: **the size problem was real.**
 
-Measured on the live repository, one output commit costs **604 KB** of permanent
-history. The production schedule is `cron: "*/5 * * * *"` (288 attempts/day) gated to
+Measured on the live repository, one output commit costs on average **604 KB** of
+permanent history. The per-round cost varies widely — §14.4 measures six consecutive
+historical rounds at **0.6 – 1 420 KB, mean 600.5 KB** — so the mean is what the
+projection below uses. The production schedule is `cron: "*/5 * * * *"` (288 attempts/day) gated to
 `UPDATE_INTERVAL_MINUTES: "15"` — so **96 effective runs/day**, matching
 `index.json`'s declared `update_interval_minutes: 15`:
 
@@ -644,6 +646,13 @@ Things this report does **not** claim to have proven:
    and monetisation* is a well-supported inference from competitor behaviour and how
    GitHub indexing works — not something I measured on this repository.
 
+5. **Rolling squash bounds output commits *above the anchor*, not in the whole history.**
+   A source commit built on top of an output commit permanently cements that one output
+   snapshot. Measured and quantified in §14.2: permanent growth is now driven by the
+   human commit rate (≈ 67 MB/year at one source commit per week), not by the 96 bot
+   runs/day. This is inherent to keeping the files on the default branch and is the
+   accepted cost of that choice — but it was not stated before §14, so it is stated here.
+
 ---
 
 ## 12. Remaining work
@@ -653,6 +662,7 @@ Things this report does **not** claim to have proven:
 | T16 | Push to `origin/main` | ✅ **done** — `2386cdf..3b39ef1` |
 | T12 | Verify all 34 output URLs return 200 on `main` | ✅ **done** — 34/34 |
 | T20 | Lock anchor detection to the commit subject | ✅ **done** — negative control 32/33 |
+| T22 | Observe a bot round landing on a *source* tip | ✅ **done** — §14, invariant held |
 | T13 | Retire the `data` branch | ⏳ deliberately deferred, see below |
 
 Retiring `data` is deliberately last. `main` is now verified serving, so the safety
@@ -818,6 +828,128 @@ raydikalx-bot[actions]   5650 contributions
 
 Exactly two identities, as intended. Every commit pushed in this phase is authored **and
 committed** by `0xRadikal <64886141+0xRadikal@users.noreply.github.com>`.
+
+---
+
+## 14. Third production round — the one state that had not been observed
+
+Sections 13.3 confirmed rolling squash across two bot rounds, but both of those replaced
+*another output commit*. The state that had never been observed was a bot round landing on
+top of a **source** commit. Round three provided it, and it also forced me to correct the
+cost model in this very document.
+
+### 14.1 The round
+
+```
+0aa65dc  raydikalx-bot[actions]  2026-07-29 08:38 UTC  … 7937 configs [@Raydikalx] [auto-output]
+a5a1c8b  0xRadikal               2026-07-29 08:35 UTC  docs: record the production results …
+```
+
+The bot published **three minutes** after my source push, so its parent was a source
+commit. Running the workflow's own anchor command against the real remote history:
+
+```
+tip                   = 0aa65dc  (… [auto-output])
+anchor (via %s)       = a5a1c8b  docs: record the production results of the branch migration
+output commits on top = 1
+```
+
+The invariant holds in the previously-unobserved state. All **32/32** output URLs return
+HTTP 200; sing-box 1.13.14 accepts all three profiles (`rc=0`, 7624 / 6975 / 1519
+outbounds) and mihomo v1.19.29 accepts all three Clash profiles (`rc=0`, 7869 / 7168 /
+1595 proxies, 1457 / 909 / 275 ms).
+
+### 14.2 A property of the design I had not stated: source commits cement one snapshot
+
+`f7bcf9d` — the previous output commit — is **still reachable** from `main`, because my
+source commit landed on top of it instead of replacing it. This is not a defect, but it is
+a property the earlier sections did not state, so it is stated here:
+
+> Rolling squash guarantees **at most one output commit above the anchor**. It does *not*
+> remove an output commit that a source commit has already been built on top of. Each
+> source commit therefore permanently cements the one output snapshot that was live when
+> it was made.
+
+That changes what drives long-term growth. Growth is no longer a function of the 96 bot
+runs/day; it is a function of how often *humans* commit:
+
+| Source-commit rate | Permanent growth |
+|---|---|
+| 1 / day | ≈ 469 MB / year |
+| 1 / week | ≈ 67 MB / year |
+| 1 / month | ≈ 15 MB / year |
+| pre-fix regime (every bot round permanent) | ≈ 20 GB / year |
+
+At one source commit per week that is a **674×** reduction. No action is required; the
+figure is recorded so the number is known rather than assumed.
+
+### 14.3 Two consecutive rounds with unchanged configs cost 4 objects
+
+Comparing the object sets of the 08:13 and 08:23 rounds — after correcting my own method,
+see §14.5 — exactly **four** objects were new:
+
+```
+f7bcf9de  commit      353 B
+04752ca4  tree        593 B   (root)
+c3a9b7d4  blob      8 504 B   index.json
+da54aab6  blob      6 325 B   health.json
+```
+
+Every configuration file was byte-identical, so git stored nothing for them. The
+deterministic-output work of Phase A is what makes this possible: only the two timestamped
+metadata files differ between rounds where upstream content is unchanged.
+
+### 14.4 Re-verifying this document's own 604 KB figure
+
+§2.5 claims one output commit costs 604 KB. Today's live round measured **1 316.6 KB**,
+which looked like a contradiction, so I measured the packed marginal cost of six
+consecutive historical output commits directly:
+
+```
+892.3 KB   0.6 KB   220.9 KB   468.3 KB   1 420.2 KB   600.4 KB
+mean 600.5 KB   median 534.4 KB   range 0.6 – 1 420.2 KB
+```
+
+An independent mean of **600.5 KB** against the document's **604 KB** is a 0.6 %
+difference: the figure is confirmed. What was imprecise was presenting a single value for
+a quantity that varies by three orders of magnitude between rounds. The honest statement
+is: **0.6 – 1 420 KB per round, mean ≈ 600 KB**, and today's 1 316.6 KB sits inside that
+range. The 20.2 GB/year projection is unaffected (mean-based; the worst case would be
+47.5 GB/year).
+
+### 14.5 Three measurement errors of my own, caught before they became claims
+
+Recorded because a verification pass that only reports the target's faults is not a
+verification pass.
+
+**(a) `git rev-list --objects A --not B` over-reported by 8×.** It listed 32 objects as
+"new in `f7bcf9d`" while `git rev-parse` proved the blobs were bit-identical
+(`all/clash.yaml` = `238d52b0…` in both). The set-difference form gave the true answer:
+
+```
+--not form      : 32 objects
+set-difference  :  4 objects   <- correct
+```
+
+Cause: object-listing traversal in a shallow clone does not exclude the same object set
+that reachability does. Every object-level count in this section therefore uses
+`comm -23` over sorted `rev-list --objects` output, never `--not`.
+
+**(b) A tree comparison that could only ever print IDENTICAL.** My loop used
+`git rev-parse "$c:$p" 2>/dev/null || echo -`; on a missing path the subshell swallowed the
+error so both sides collapsed to the same value. Re-run printing the actual hashes, it
+correctly showed `index.json` and `health.json` differing and the five output directories
+identical.
+
+**(c) `proxies=0` for every Clash profile.** My counter matched `'  - name:'` with two
+leading spaces; the generator emits `- name:` at column 0. mihomo's own `rc=0` was the
+clue that the file was fine and the counter was wrong — 7 869 / 7 168 / 1 595 proxies once
+fixed.
+
+A fourth apparent problem, `base64 ≠ plain` (8 015 vs 8 016 lines), was likewise mine: the
+single extra line is the `# @Raydikalx — ALL — 8015 unique configs` header comment. The
+base64 payload is deliberately comment-free, which is correct for subscription clients —
+excluding comments, the two match exactly.
 
 ---
 
