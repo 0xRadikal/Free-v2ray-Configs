@@ -717,6 +717,27 @@ def test_publish_step_uses_rolling_squash_and_never_orphans_the_source():
     assert "grep -v -F \"$OUT_MARK\"" in run, \
         "the anchor search must exclude commits carrying $OUT_MARK"
 
+    # ۳-ب) ★ anchor باید بر اساس «موضوعِ» کامیت (%s) پیدا شود، نه بدنهٔ کامل (%B).
+    #
+    # این یک تلهٔ واقعی است که در انتشارِ زندهٔ همین مخزن دیده شد، نه یک فرض:
+    # کامیتِ سورسِ d5a31d8 خودِ الگوریتم را در بدنه‌اش توضیح می‌دهد و بنابراین
+    # رشتهٔ «[auto-output]» در بدنه‌اش وجود دارد. اگر جست‌وجوی anchor روی %B
+    # انجام شود، آن کامیتِ سورس اشتباهاً «کامیتِ خروجی» تشخیص داده می‌شود و
+    # anchor به عقب می‌لغزد — یعنی کامیت‌های خروجی روی هم انباشته می‌شوند و
+    # کلِ خاصیتِ O(1) از بین می‌رود (اندازه‌گیریِ زنده: با %s تعداد ۱، با %B تعداد ۲).
+    #
+    # پس این assert صرفاً سلیقه نیست؛ ضامنِ درستیِ الگوریتم است.
+    for m in _re.finditer(r"git log --format='([^']*)'[^|]*\|\s*grep -v -F \"\$OUT_MARK\"",
+                          run, _re.S):
+        fmt = m.group(1)
+        assert "%B" not in fmt, (
+            "anchor detection must not match on the commit BODY (%B): a source "
+            "commit that merely *documents* the marker would be misread as an "
+            "output commit and the anchor would slide backwards. Use %s."
+        )
+        assert "%s" in fmt, \
+            f"anchor detection must match on the commit subject (%s), got {fmt!r}"
+
     # ۴) گاردِ رگرسیونِ سورس باید وجود داشته باشد.
     assert "is_output_path" in run, \
         "the step must classify paths and refuse to regress source files"

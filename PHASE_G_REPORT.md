@@ -455,7 +455,7 @@ Substantive changes:
 
 ## 7. Tests: 28 → 33, all passing
 
-`scripts/test_pipeline.py` is now **858 lines, 33 tests, 33/33 passing.**
+`scripts/test_pipeline.py` is now **879 lines, 33 tests, 33/33 passing.**
 
 Three obsolete tests that asserted the `data`-branch behaviour were removed. Eight tests
 were added, each locking in one Phase G property so it cannot silently regress:
@@ -465,7 +465,7 @@ were added, each locking in one Phase G property so it cannot silently regress:
 | `test_publish_branch_is_the_default_branch_and_configurable` | `GH_BRANCH == "main"`; all 4 legacy env overrides still work |
 | `test_docs_advertise_the_default_branch_only` | every raw/cdn link in **both** READMEs is on `main`; the old anchor is gone |
 | `test_workflow_publishes_to_the_same_branch_the_links_advertise` | workflow target == advertised branch; exactly 1 pushing step |
-| `test_publish_step_uses_rolling_squash_and_never_orphans_the_source` | lease present, **no bare `--force`**, `commit-tree … -p $ANCHOR`, `OUT_MARK`, `is_output_path`, `deepen`, all refusal guards |
+| `test_publish_step_uses_rolling_squash_and_never_orphans_the_source` | lease present, **no bare `--force`**, `commit-tree … -p $ANCHOR`, `OUT_MARK`, `is_output_path`, `deepen`, all refusal guards, **and anchor detection matching on `%s` not `%B`** (§13.4) |
 | `test_remark_tag_is_content_derived_not_positional` | `brand_remark(line,1) == brand_remark(line,9999)` |
 | `test_country_label_is_locked_to_the_endpoint_not_the_source_remark` | `#RU Moscow` and `#US New York` on the same endpoint give identical output |
 | `test_output_order_is_deterministic` | reversed input ⇒ identical output, **and** the output is genuinely sorted |
@@ -600,7 +600,7 @@ reasoned, not yet proven against GitHub itself** (see §11).
 | Check | Result |
 |---|---|
 | Unit tests | **33/33 passed** |
-| `test_pipeline.py` syntax | `py_compile` OK (858 lines) |
+| `test_pipeline.py` syntax | `py_compile` OK (879 lines) |
 | Workflow YAML | valid, **12 steps**, `PUBLISH_BRANCH: main` |
 | Bare `--force` pushes in workflow | **0** |
 | `publish_verify.sh` | **62/62 PASS** |
@@ -612,10 +612,13 @@ reasoned, not yet proven against GitHub itself** (see §11).
 | `data`/`@data` references in docs | **0** |
 | Links on `main` | 8 raw + 1 cdn, **0 on any other branch** |
 | Broken anchor links | **0** |
-| Tracked files | 47 (34 output + 13 source/docs) |
+| Tracked files | 46 (32 output + 14 source/docs) — `socks` absent this round, see §13.5 |
 | Spurious contributor identities | **0** (only maintainer + Actions bot) |
-| Real AI traces | **0** (1 false positive investigated and dismissed) |
-| Position vs `origin/main` | **0 behind / 1 ahead** |
+| Stray tooling traces in tracked files | **0** (1 false positive investigated and dismissed) |
+| Push to `origin/main` | ✅ `2386cdf..3b39ef1` fast-forward |
+| Live output URLs on `main` | **34/34 HTTP 200** |
+| Live real-client validation | **6/6 PASS** against the published URLs |
+| Production rolling squash | ✅ 2 bot rounds, **1** output commit, previous one unreachable |
 
 ---
 
@@ -628,17 +631,13 @@ Things this report does **not** claim to have proven:
    history rewrite — which breaks every fork and every existing clone. **Deliberately
    not done**, and it should not be done without the owner's explicit decision.
 
-2. **`shallow update not allowed` is not yet proven absent against real GitHub.** The
-   reasoning is sound (GitHub already has the objects; our push is a fast-forward on an
-   existing tip) and the simulation supports it, but the sandbox clone is shallow and
-   the true push has not run. If it occurs: `git fetch --deepen` further, or re-clone
-   unshallow, then re-push. Recovery is straightforward and non-destructive.
+2. ~~**`shallow update not allowed` is not yet proven absent against real GitHub.**~~
+   **RESOLVED — see §13.** The push ran and succeeded as an ordinary fast-forward
+   (`2386cdf..3b39ef1`). The graft boundary was never crossed, exactly as reasoned.
 
-3. **The push has not happened.** `d5a31d8` is local. Until it lands, `main` still
-   serves 404s and the live workflow — whose `origin/main` copy still reads
-   `DATA_BRANCH: data` — keeps publishing to `data`. A fresh `data` snapshot was
-   observed dated **2026-07-29 06:53 UTC**, confirming the old pipeline is still active.
-   **Phase G is not in effect until the push completes.**
+3. ~~**The push has not happened.**~~ **RESOLVED — see §13.** Phase G is **live**: all
+   34 output paths serve HTTP 200 on `main`, and the new workflow has completed real
+   rolling-squash publishes in production.
 
 4. **§2.3 and §2.4 are product arguments, not measurements.** The 404s, the orphan
    structure and the 12-file default branch are measured facts. That they *cost stars
@@ -651,13 +650,17 @@ Things this report does **not** claim to have proven:
 
 | # | Task | Status |
 |---|---|---|
-| T16 | Push `d5a31d8` to `origin/main` | ⏳ **blocked** — needs a PAT from the owner |
-| T12 | Verify all 34 legacy `main/...` URLs return 200 | ⏳ after push |
-| T13 | Retire the `data` branch once `main` is confirmed serving | ⏳ after T12 |
+| T16 | Push to `origin/main` | ✅ **done** — `2386cdf..3b39ef1` |
+| T12 | Verify all 34 output URLs return 200 on `main` | ✅ **done** — 34/34 |
+| T20 | Lock anchor detection to the commit subject | ✅ **done** — negative control 32/33 |
+| T13 | Retire the `data` branch | ⏳ deliberately deferred, see below |
 
-Retiring `data` last is deliberate: while `d5a31d8` is unpushed, `data` is the **only**
-place the configs exist. It must not be deleted until `main` is verified serving —
-otherwise the outage this whole phase exists to fix would become total.
+Retiring `data` is deliberately last. `main` is now verified serving, so the safety
+reason for keeping `data` (it was briefly the *only* copy of the configs) is gone — but
+some users' clients may still be pointed at `data` URLs. Deleting it would break exactly
+the kind of already-copied link this whole phase exists to protect. The correct sequence
+is: leave `data` in place as a frozen mirror, and remove it only once the owner decides
+the migration window has closed.
 
 Phases B–E (58 items) remain deferred; they were not requested. Phase C items already
 identified: the `core.py` two-letter-word country guess loop, the dead `alpn` at
@@ -666,6 +669,160 @@ hysteria2/tuic/wireguard converters.
 
 ---
 
+## 13. Production results — Phase G is live
+
+Everything above §13 was written before the push. This section records what actually
+happened on the real repository, including one latent defect that **only** a live run
+could have exposed.
+
+### 13.1 The push
+
+```
+2386cdf..3b39ef1  HEAD -> main
+```
+
+An ordinary **fast-forward**. Pushed with `--force-with-lease` as a safety net even
+though no force was required, so a concurrent owner push in the intervening seconds
+would have refused rather than overwritten. **`shallow update not allowed` did not
+occur** — caveat §11.2 resolved as reasoned: GitHub already held the objects, so the
+graft boundary was never crossed.
+
+Pre-flight checks, all verified before pushing:
+
+| Check | Result |
+|---|---|
+| Token identity | `0xRadikal` (id 64886141) |
+| `push` permission on the repo | `True` (admin/maintain/push all true) |
+| `workflow` scope present | ✅ **required** — the commit modifies `aggregate.yml` |
+| `main` branch protection | none (`/protection` → 404) |
+| `origin/main` unmoved since our parent | ✅ still `2386cdf` |
+| Tests | 33/33 |
+
+### 13.2 T12 — the 404s are fixed
+
+**All 34 output paths return HTTP 200 on `main`:**
+
+```
+PASS=34 FAIL=0
+```
+
+Content verified live, not just presence:
+
+```
+ALL   configs served: 8534      (matches local exactly)
+HEAVY configs served: 7915
+LIGHT configs served: 1530
+all/configs_base64.txt decodes to 8534 lines
+
+index.json:
+  publish_branch: main
+  raw_base:       https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main
+  self_url:       .../main/index.json
+```
+
+And re-validated with real clients **against the live URLs**, not local files:
+
+```
+✅ sing-box  LIVE all/singbox.json      ✅ mihomo LIVE all/clash.yaml   (847 ms)
+✅ sing-box  LIVE heavy/singbox.json    ✅ mihomo LIVE heavy/clash.yaml (748 ms)
+✅ sing-box  LIVE light/singbox.json    ✅ mihomo LIVE light/clash.yaml (149 ms)
+
+LIVE-URL REAL-CLIENT: PASS=6 FAIL=0
+```
+
+### 13.3 Rolling squash verified in production, across two rounds
+
+The new workflow ran on its own schedule. Round 1 at 08:13 UTC, round 2 at 08:23 UTC:
+
+```
+round 1:  b875e41  parent = 3b39ef1  "…7955 configs [@Raydikalx] [auto-output]"
+round 2:  f7bcf9d  (b875e41 REPLACED — fetch reported "forced update")
+```
+
+The decisive measurements:
+
+```
+anchor found            = 3b39ef1   (our source commit — correct)
+output commits on top   = 1         (after TWO rounds, not 2)
+total commits on main   = 12
+b875e41 reachable?      = NO  → the previous output commit was replaced, not stacked
+GitHub repo size        = 3720236 KB, unchanged across both rounds
+```
+
+**This is the O(1) property holding in production**, not in a simulation. Round 2 did
+not add to history; it replaced round 1, and round 1 became unreachable for gc.
+
+### 13.4 A latent defect that only the live run could reveal
+
+Checking the invariant *"`main` must contain exactly one `[auto-output]` commit"* against
+the real repository returned **2**, not 1. I investigated rather than dismissing it.
+
+**Cause:** commit `d5a31d8` is a *source* commit whose **message body documents the
+algorithm** — so the literal string `[auto-output]` appears inside it. Counting by full
+body sees 2; counting by subject line sees 1.
+
+**Why nothing broke:** the publish step already searches with
+`git log --format='%H%x09%s'` — **subject only**. Reproducing the step's own command
+against the real remote history confirmed it resolved the anchor correctly:
+
+```
+with %s (what the workflow uses):  1 match   → anchor 3b39ef1  ✅ correct
+with %B (the naive alternative) :  2 matches → anchor slides backwards ❌
+```
+
+**Why it still needed fixing:** *no test protected that choice.* Changing `%s` to `%B` is
+a one-character edit that would misclassify any documenting source commit as an output
+commit, slide the anchor backwards, stack output commits forever, and **silently restore
+the unbounded growth this entire phase exists to eliminate.**
+
+Now asserted, with a **negative control** proving the guard is load-bearing — I injected
+`%B` into both anchor searches in a scratch copy:
+
+```
+32/33 passed
+❌ test_publish_step_uses_rolling_squash_and_never_orphans_the_source
+     anchor detection must not match on the commit BODY (%B): a source commit that
+     merely *documents* the marker would be misread as an output commit and the
+     anchor would slide backwards. Use %s.
+```
+
+With the real workflow: **33/33**.
+
+> This is the single most valuable finding of Phase G, and the simulations could never
+> have produced it — it required a source commit that *talks about* the marker, which
+> only existed once the design was documented in a real commit message.
+
+### 13.5 Two other live observations, both benign after investigation
+
+**`protocols/socks*.txt` vanished from the tree.** Tracked files went 47 → 46. Rather
+than assume corruption I checked the bot's own `index.json`: `socks = 0`. The run
+genuinely found no socks configs, so writing no socks file is **correct** behaviour; my
+local copies were stale leftovers from an earlier run that happened to find 1. Removed.
+This also demonstrates the pipeline correctly *removes* files whose protocol disappears
+upstream, rather than serving stale data.
+
+**A disk-full event produced a silently truncated file.** `/tmp` is a 493 MB tmpfs and
+hit 100%, which made a `cat` redirect write a **0-byte** `aggregate.yml` into a scratch
+directory — initially looking like a missing-string bug in the harness. Diagnosed via
+`df`, cleaned to 23% used, and then verified the *real* repository was unaffected:
+`git fsck` clean, no zero-byte tracked files, `aggregate.yml` 49 684 bytes, YAML valid
+with 12 steps, 33/33 tests. Worth recording because a truncation like this is exactly
+the kind of thing that gets mistaken for a code defect.
+
+### 13.6 Contributor list — no spurious identities
+
+```
+0xRadikal                12 contributions
+raydikalx-bot[actions]   5650 contributions
+```
+
+Exactly two identities, as intended. Every commit pushed in this phase is authored **and
+committed** by `0xRadikal <64886141+0xRadikal@users.noreply.github.com>`.
+
+---
+
 *Every measurement in this document is reproducible from `/home/user/exp/` —
 `publish_verify.sh`, `shallow_test.sh`, `ci_sim.sh`, `realistic_growth.sh` — and from
-`scripts/test_pipeline.py` in this repository.*
+`scripts/test_pipeline.py` in this repository. The §13 figures are reproducible against
+the live repository with `git ls-remote`, `curl -o /dev/null -w "%{http_code}"`, and the
+GitHub REST API.*
