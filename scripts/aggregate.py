@@ -37,6 +37,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import core  # noqa: E402
 import converters  # noqa: E402
+import state as memory  # noqa: E402
 from sources import LIGHT_SOURCES, HEAVY_SOURCES  # noqa: E402
 
 # geo اختیاری است: اگر پایگاه‌دادهٔ GeoIP یا کتابخانه‌اش در دسترس نباشد، خط‌لوله
@@ -632,6 +633,79 @@ def build_health_report(elapsed: float) -> dict:
 
 
 # ──────────────────────────────────────────────────────────────────────────────
+# حافظهٔ بین‌دوره‌ای (فاز D)
+# ──────────────────────────────────────────────────────────────────────────────
+
+def unique_yield(per_source: Dict[str, List[str]]) -> Tuple[Dict[str, int], Dict[str, int], int]:
+    """بازدهِ **یکتا**ی هر منبع → (total, unique, union_size).
+
+    «یکتا» یعنی کلیدی که *هیچ منبعِ دیگری* در همین دور نداشته است. این سنجه —
+    نه «تعدادِ کانفیگ» و نه «HTTP 200» — تنها چیزی است که افزونگی را می‌بیند.
+
+    چرا لازم است، با عددِ سنجیده: `mahdibland/Eternity.txt` امروز ۱۹۸ کانفیگ و
+    `status: ok` دارد، ولی **زیرمجموعهٔ محضِ ۱۰۰.۰۰٪** از
+    `mahdibland/sub/sub_merge.txt` است (هر دو از یک مخزنِ بالادست). با معیارِ
+    «کانفیگ» یا «سلامت» نامرئی است؛ با معیارِ «یکتا» عددش صفر می‌شود.
+
+    از `core.dedup_key` — همان تابعِ هویتی که خطِ لوله برای تکراری‌زدایی به‌کار
+    می‌برد — استفاده می‌شود، تا این سنجه با خروجیِ واقعی هم‌داستان باشد.
+    """
+    keys: Dict[str, set] = {}
+    for url, cfgs in per_source.items():
+        ks = set()
+        for line in cfgs:
+            try:
+                if not core.is_dummy_config(line):
+                    ks.add(core.dedup_key(line))
+            except Exception:
+                continue
+        keys[url] = ks
+
+    owners: Dict[str, int] = {}
+    for ks in keys.values():
+        for k in ks:
+            owners[k] = owners.get(k, 0) + 1
+
+    totals = {u: len(ks) for u, ks in keys.items()}
+    uniq = {u: sum(1 for k in ks if owners.get(k) == 1) for u, ks in keys.items()}
+    return totals, uniq, len(owners)
+
+
+def advance_memory(state: dict, per_source: Dict[str, List[str]],
+                   live_urls: List[str], state_path: str) -> dict:
+    """یک دور را در حافظه ثبت کن، تصمیمِ auto-disable بگیر، و ذخیره کن.
+
+    کلِ این تابع «بهترین تلاش» است: هیچ خرابی‌ای در حافظه نباید دورِ سالمی را
+    بشکند، چون خروجیِ منتشرشده به حافظه وابسته نیست — حافظه فقط دورِ *بعد* را
+    بهتر می‌کند.
+    """
+    try:
+        totals, uniq, union = unique_yield(per_source)
+        obs = {u: {"tier": "light" if u in LIGHT_SOURCES else "heavy",
+                   "total": totals.get(u, 0), "unique": uniq.get(u, 0)}
+               for u in per_source}
+        state = memory.record_round(state, obs, live_urls)
+
+        cand = memory.disable_candidates(state, uniq, union)
+        if cand:
+            state = memory.mark_disabled(state, cand)
+            for url, why in cand.items():
+                log(f"  🚫 auto-disabling {url.rsplit('/', 1)[-1]} — {why}")
+        memory.save_state(state, state_path)
+
+        top = sorted(uniq.items(), key=lambda kv: -kv[1])[:3]
+        zero = [u.rsplit("/", 1)[-1] for u, n in uniq.items() if n == 0]
+        log(memory.summary(state))
+        log(f"  📊 union={union} · top unique: "
+            + ", ".join(f"{u.rsplit('/', 1)[-1]}={n}" for u, n in top))
+        if zero:
+            log(f"  ⚠️ zero unique yield this round ({len(zero)}): {', '.join(zero)}")
+    except Exception as exc:  # noqa: BLE001 — حافظه هرگز دور را نمی‌شکند
+        log(f"  ⚠️ memory step failed ({type(exc).__name__}) — round continues")
+    return state
+
+
+# ──────────────────────────────────────────────────────────────────────────────
 # main
 # ──────────────────────────────────────────────────────────────────────────────
 
@@ -646,7 +720,20 @@ def main() -> int:
     log(f"🚀 Aggregator start → out={out_dir}")
     log(f"📡 Fetching {len(LIGHT_SOURCES)} light + {len(HEAVY_SOURCES)} heavy sources …")
 
-    all_urls = LIGHT_SOURCES + HEAVY_SOURCES
+    # ── حافظهٔ بین‌دوره‌ای (فاز D) ───────────────────────────────────────────
+    # پیش از واکشی خوانده می‌شود تا منابعی که حافظه غیرفعال کرده رد شوند.
+    # `load_state` هرگز استثنا نمی‌دهد؛ نبودِ فایل = حافظهٔ خالی = رفتارِ قبلی.
+    state_path = os.path.join(out_dir, memory.STATE_PATH)
+    mem = memory.load_state(state_path)
+    skipped = [u for u in memory.disabled_urls(mem)
+               if u in (LIGHT_SOURCES + HEAVY_SOURCES)]
+
+    all_urls = [u for u in (LIGHT_SOURCES + HEAVY_SOURCES) if u not in set(skipped)]
+    if skipped:
+        log(f"🧠 memory disabled {len(skipped)} source(s) → fetching "
+            f"{len(all_urls)} of {len(LIGHT_SOURCES) + len(HEAVY_SOURCES)}")
+        for u in skipped:
+            log(f"     ⏭️ {u.rsplit('/', 1)[-1]}")
     per_source = fetch_all(all_urls)
 
     log("🧮 Processing categories (dedup + brand) …")
@@ -669,6 +756,14 @@ def main() -> int:
     if not res_all.unique:
         log("❌ No configs produced — aborting BEFORE writing (existing files preserved)")
         return 2
+
+    # ── ثبتِ دور در حافظه (فاز D) ─────────────────────────────────────────────
+    # عمداً **بعدِ** دروازهٔ ایمنی: دوری که هیچ کانفیگی نساخته، شاهدِ معتبری از
+    # بازدهِ منابع نیست و نباید تاریخچه را آلوده کند یا کسی را غیرفعال کند.
+    # `live_urls` فهرستِ کاملِ `sources.py` است — نه `all_urls`ِ فیلترشده —
+    # وگرنه منبعی که خودمان رد کردیم، در همان دور GC می‌شد و حافظه‌اش (و دلیلِ
+    # غیرفعال‌شدنش) پاک می‌شد؛ یعنی دورِ بعد دوباره واکشی می‌شد.
+    mem = advance_memory(mem, per_source, LIGHT_SOURCES + HEAVY_SOURCES, state_path)
 
     log("💾 Writing output files …")
     for cat, r in results.items():

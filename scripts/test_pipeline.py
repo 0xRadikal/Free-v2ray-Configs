@@ -34,6 +34,9 @@ import reachability  # noqa: E402
 import realtest  # noqa: E402
 import pipeline  # noqa: E402
 import validate  # noqa: E402
+import sources  # noqa: E402
+import state  # noqa: E402
+import aggregate  # noqa: E402
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -898,6 +901,292 @@ def test_every_workflow_fetch_is_bounded_and_time_capped():
         f"publish step cap ({step_cap}m) must not exceed the job cap ({job_cap}m), "
         "otherwise the step ceiling is decorative"
     )
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# فاز D — حافظهٔ بین‌دوره‌ای
+# ──────────────────────────────────────────────────────────────────────────────
+
+def test_state_memory_never_raises_on_a_corrupt_or_missing_file():
+    """حافظهٔ خراب هرگز نباید یک دورِ سالم را بشکند.
+
+    چرا این تست هست: `state.json` در `OUTPUT_PATHS` است و با force-pushِ
+    rolling squash منتشر می‌شود. یعنی می‌تواند نیم‌نوشته، از نسخهٔ دیگری از
+    schema، یا دست‌کاری‌شده به دستِ خطِ لوله برسد. اگر `load_state` استثنا
+    بدهد، خطِ لوله می‌شکند و **هیچ** خروجی‌ای منتشر نمی‌شود — یعنی حافظه‌ای که
+    برای بهبودِ دورِ بعد اضافه شد، دورِ فعلی را نابود می‌کند. پس مسیرِ خرابی
+    باید fail-open باشد، نه fail-closed.
+    """
+    import tempfile as _tf
+    d = _tf.mkdtemp()
+    p = os.path.join(d, "state.json")
+
+    # ۱) فایل نیست — اولین دور
+    st = state.load_state(p)
+    assert st["sources"] == {} and st["schema"] == state.SCHEMA, st
+    assert st["round"] == 0, st
+
+    bad_inputs = [
+        '',                                    # خالی
+        '{"schema": 1, "sourc',                # نیم‌نوشته (force-push وسطِ نوشتن)
+        'not json at all',                     # کاملاً غیرِ JSON
+        '[]',                                  # نوعِ غلط در ریشه
+        '{"schema":1,"sources":[]}',           # sources از نوعِ غلط
+        '{"schema":99,"sources":{}}',          # schemaِ ناشناس
+        '{"schema":1,"sources":{"k":"notadict"}}',
+        '{"schema":1,"sources":{"k":{"url":"no-scheme-here"}}}',
+        '{"schema":1,"round":-5,"sources":{}}',
+    ]
+    for raw in bad_inputs:
+        with open(p, "w", encoding="utf-8") as fh:
+            fh.write(raw)
+        st = state.load_state(p)                       # نباید استثنا بدهد
+        assert isinstance(st, dict), raw
+        assert st["schema"] == state.SCHEMA, raw
+        assert isinstance(st["sources"], dict), raw
+        assert st["sources"] == {}, (
+            f"ورودیِ خرابِ {raw!r} نباید هیچ منبعی تولید کند، ولی "
+            f"{len(st['sources'])} تا داد")
+        assert st["round"] >= 0, raw
+
+
+def test_state_history_growth_is_bounded():
+    """حجمِ `state.json` نباید با شمارِ دورها رشد کند.
+
+    چرا: انتشار force-push است و هر دور کلِ snapshot را می‌فرستد. فایلی که
+    خطی رشد کند، در هزار دور مگابایتی می‌شود و هزینهٔ هر دور را بالا می‌برد —
+    همان جنسِ بدهی‌ای که در اصلاحِ FETCH بسته شد.
+
+    سنجیده‌شده: با ۲۱ منبع و ۱۰۰ دور، اوجِ حجم **۱۸.۴۵ KiB** بود و از دورِ ۲۰
+    تا ۱۰۰ فقط **۲۹ بایت** (پهنایِ رقم‌ها) رشد کرد.
+    """
+    import tempfile as _tf
+    d = _tf.mkdtemp()
+    p = os.path.join(d, "state.json")
+    urls = sources.all_sources()
+
+    st = state.empty_state()
+    sizes = []
+    for i in range(60):
+        obs = {u: {"tier": "light", "total": 1000 + i, "unique": 7 + i} for u in urls}
+        st = state.record_round(st, obs, urls)
+        assert state.save_state(st, p) is True
+        st = state.load_state(p)
+        sizes.append(os.path.getsize(p))
+
+    for key, ent in st["sources"].items():
+        assert len(ent["yield"]) <= state.MAX_HISTORY, (
+            f"تاریخچهٔ yield به {len(ent['yield'])} رسید ولی سقف "
+            f"{state.MAX_HISTORY} است ⇒ کرانِ رشد شکسته")
+        assert len(ent["unique"]) <= state.MAX_HISTORY, len(ent["unique"])
+
+    assert max(sizes) <= 64 * 1024, (
+        f"state.json به {max(sizes)} بایت رسید؛ بودجه ۶۴ KiB است")
+    # از دورِ MAX_HISTORY به بعد باید عملاً ثابت بماند (فقط پهنایِ رقم).
+    tail = sizes[state.MAX_HISTORY:]
+    assert max(tail) - min(tail) < 2048, (
+        f"بعد از پرشدنِ تاریخچه، حجم {max(tail) - min(tail)} بایت نوسان کرد ⇒ "
+        f"چیزی بی‌کران در حال رشد است")
+
+    # حملهٔ رشد: تاریخچهٔ دست‌کاری‌شدهٔ ۱۰٬۰۰۰تایی باید بریده شود.
+    k = state.source_key(urls[0])
+    with open(p, "w", encoding="utf-8") as fh:
+        json.dump({"schema": state.SCHEMA, "round": 5, "sources": {
+            k: {"url": urls[0], "tier": "light", "rounds": 5,
+                "yield": list(range(10000)), "unique": list(range(10000))}}}, fh)
+    st = state.load_state(p)
+    assert len(st["sources"][k]["yield"]) == state.MAX_HISTORY
+    assert len(st["sources"][k]["unique"]) == state.MAX_HISTORY
+
+
+def test_auto_disable_needs_evidence_and_respects_a_safety_floor():
+    """auto-disable نباید بتواند خطِ لوله را از منابع خالی کند.
+
+    چرا این تست هست: تصمیمِ «این منبع را دیگر واکشی نکن» **برگشت‌ناپذیرِ عملی**
+    است (منبع دیگر شاهدِ تازه تولید نمی‌کند تا خودش را تبرئه کند). پس گاردها
+    باید همگی اجرا شوند، و این تست هر کدام را **جدا‌افتاده** می‌آزماید:
+
+      ۱. شاهدِ کافی: `rounds >= MIN_ROUNDS`
+      ۲. پنجرهٔ تاریخچه هم پر باشد هم تماماً صفر
+      ۳. وتوی دادهٔ امروز بر تاریخچه (تحملِ صفر)
+      ٭ کفِ سراسری: تعدادِ فعال هرگز زیرِ `MIN_ACTIVE`
+
+    ⚠️ «جدا‌افتاده» تشریفاتی نیست. نسخهٔ اولِ همین تست شرطِ ۱ را با
+    `hist=[0]*3, rounds=3` می‌آزمود؛ آن‌جا شرطِ ۲ (`len(hist) < MIN_ROUNDS`) هم
+    فعال بود، پس حذفِ کاملِ گاردِ شرطِ ۱ از `state.py` این تست را **نمی‌شکست**
+    — آزمونِ جهشِ D-14 آن جهش را «بازمانده» گزارش کرد. هر حالت اکنون فقط یک
+    گارد را نقض می‌کند تا نبودِ آن گارد قطعاً دیده شود.
+    """
+    def build(n, hist, rounds):
+        st = state.empty_state()
+        for i in range(n):
+            u = f"https://example.com/s{i}.txt"
+            st["sources"][state.source_key(u)] = {
+                "url": u, "tier": "heavy", "rounds": rounds, "last_seen": None,
+                "yield": [10] * state.MAX_HISTORY, "unique": list(hist),
+                "fail": 0, "disabled_since": None, "reason": None}
+        return st
+
+    n = state.MIN_ACTIVE + 4
+    all_zero = {f"https://example.com/s{i}.txt": 0 for i in range(n)}
+    UNION = 8043
+
+    # شرطِ ۱ جدا‌افتاده — پنجره پر و تماماً صفر است (پس شرطِ ۲ راضی است)، ولی
+    # `rounds` کم است. تنها گاردِ فعال شرطِ ۱ است. چنین حافظه‌ای خیالی نیست:
+    # `state.json` از مسیرِ force-push می‌آید و دست‌کاری‌پذیر است.
+    st = build(n, [0] * state.MIN_ROUNDS, rounds=3)
+    assert state.disable_candidates(st, all_zero, UNION) == {}, (
+        f"منبعی با rounds=3 (< MIN_ROUNDS={state.MIN_ROUNDS}) غیرفعال شد، "
+        f"هرچند پنجرهٔ تاریخچه‌اش پر بود ⇒ گاردِ «شاهدِ کافی» وجود ندارد و "
+        f"حافظه‌ای دست‌کاری‌شده می‌تواند منبعِ سالم را حذف کند")
+
+    # شرطِ ۲ جدا‌افتاده (الف) — پنجره کوتاه است ولی `rounds` بالاست
+    st = build(n, [0] * 3, rounds=state.MIN_ROUNDS + 5)
+    assert state.disable_candidates(st, all_zero, UNION) == {}, (
+        f"منبعی با تاریخچهٔ ۳تایی (< MIN_ROUNDS={state.MIN_ROUNDS}) غیرفعال شد "
+        f"⇒ گاردِ «پنجره باید پر باشد» وجود ندارد")
+
+    # شرطِ ۲ جدا‌افتاده (ب) — یک مقدارِ ناصفر در پنجره ⇒ هیچ تصمیمی
+    hist = [0] * state.MAX_HISTORY
+    hist[-2] = 5
+    st = build(n, hist, rounds=state.MIN_ROUNDS + 5)
+    assert state.disable_candidates(st, all_zero, UNION) == {}, (
+        "منبعی که در پنجرهٔ تاریخچه یک دور بازدهِ یکتا داشت غیرفعال شد")
+
+    # حالتِ مثبت — واقعاً باید گرفته شود
+    st = build(n, [0] * state.MAX_HISTORY, rounds=state.MIN_ROUNDS + 5)
+    cand = state.disable_candidates(st, all_zero, UNION)
+    assert cand, "منبعِ واقعاً افزونه گرفته نشد ⇒ تست پوچ است"
+    budget = n - state.MIN_ACTIVE
+    assert len(cand) == budget, (
+        f"باید حداکثر {budget} تا (n={n} − کفِ {state.MIN_ACTIVE}) نامزد شود، "
+        f"ولی {len(cand)} تا شد")
+
+    # شرطِ ۴ — روی کف، هیچ تصمیمی
+    st = build(state.MIN_ACTIVE, [0] * state.MAX_HISTORY, rounds=state.MIN_ROUNDS + 5)
+    on_floor = {f"https://example.com/s{i}.txt": 0 for i in range(state.MIN_ACTIVE)}
+    assert state.disable_candidates(st, on_floor, UNION) == {}, (
+        f"با {state.MIN_ACTIVE} منبعِ فعال (== کف) بازهم غیرفعال‌سازی پیشنهاد "
+        f"شد ⇒ خطِ لوله می‌تواند از منابع خالی شود")
+
+    # شرطِ ۳ — وتوی امروز بر تاریخچه
+    st = build(n, [0] * state.MAX_HISTORY, rounds=state.MIN_ROUNDS + 5)
+    today = dict(all_zero)
+    today["https://example.com/s0.txt"] = 90         # سهمِ چشمگیر
+    today["https://example.com/s1.txt"] = 1          # ناچیز، ولی ناصفر
+    cand = state.disable_candidates(st, today, UNION)
+    assert "https://example.com/s0.txt" not in cand, (
+        "منبعی که امروز بیش از سهمِ وتو کانفیگِ یکتا داد غیرفعال شد ⇒ دادهٔ "
+        "تازه حقِ وتو بر تاریخچه ندارد")
+    assert "https://example.com/s1.txt" not in cand, (
+        "منبعی که امروز کانفیگِ یکتا داشت غیرفعال شد")
+    for u in cand:
+        assert today[u] == 0, f"{u} امروز {today[u]} یکتا داشت ولی غیرفعال شد"
+
+    # علامت‌زدن باید idempotent باشد و کف را نگه دارد
+    st = build(n, [0] * state.MAX_HISTORY, rounds=state.MIN_ROUNDS + 5)
+    st = state.mark_disabled(st, state.disable_candidates(st, all_zero, UNION))
+    assert len(state.disabled_urls(st)) == budget
+    assert state.disable_candidates(st, all_zero, UNION) == {}, (
+        "بعد از رسیدن به کف، دورِ بعد بازهم غیرفعال‌سازی پیشنهاد شد")
+
+
+def test_unique_yield_detects_a_strict_subset_source():
+    """معیارِ درست «بازدهِ یکتا» است، نه «تعدادِ کانفیگ» و نه «HTTP 200».
+
+    چرا: قاعدهٔ نگهداریِ `sources.py` می‌گوید منبعِ صفر باید حذف شود، ولی
+    معیارش زنده‌بودن است. اندازه‌گیریِ زندهٔ ۳۰ جولای ۲۰۲۶:
+    `mahdibland/Eternity.txt` با ۱۹۸ کانفیگ و `status: ok`، زیرمجموعهٔ محضِ
+    **۱۰۰.۰۰٪** از `mahdibland/sub/sub_merge.txt` است. با معیارِ «کانفیگ»
+    نامرئی است؛ با معیارِ «یکتا» صفر می‌شود. این تست همان رابطه را می‌سازد و
+    اطمینان می‌دهد تشخیص کار می‌کند.
+    """
+    big = [f"trojan://pw{i}@h{i}.example.com:443?sni=a#n{i}" for i in range(40)]
+    subset = big[:12]                        # زیرمجموعهٔ محض
+    own = [f"trojan://pw{i}@g{i}.example.net:8443?sni=b#m{i}" for i in range(6)]
+
+    per = {"https://s/big.txt": big,
+           "https://s/subset.txt": subset,
+           "https://s/own.txt": own}
+    totals, uniq, union = aggregate.unique_yield(per)
+
+    assert totals["https://s/subset.txt"] == 12, totals
+    assert uniq["https://s/subset.txt"] == 0, (
+        f"زیرمجموعهٔ محض باید ۰ یکتا بدهد ولی {uniq['https://s/subset.txt']} داد "
+        f"⇒ تشخیصِ افزونگی کار نمی‌کند")
+    assert uniq["https://s/big.txt"] == 40 - 12, uniq
+    assert uniq["https://s/own.txt"] == 6, uniq
+    assert union == 40 + 6, union
+
+    # ضدِ پوچی: منبعی با محتوای کاملاً اختصاصی باید ۱۰۰٪ یکتا بدهد
+    solo = {"https://s/only.txt": own}
+    _, u2, un2 = aggregate.unique_yield(solo)
+    assert u2["https://s/only.txt"] == 6 and un2 == 6, (u2, un2)
+
+
+def test_state_json_is_published_and_never_gates_the_round():
+    """`state.json` باید در `OUTPUT_PATHS` باشد ولی در `MUST_EXIST` نباشد.
+
+    دو خطای متقارن که این تست هر دو را می‌بندد:
+
+      • **اگر در `OUTPUT_PATHS` نباشد:** درختِ snapshot از `$ANCHOR` + همان
+        مسیرها ساخته می‌شود، پس `state.json` هر دور از snapshot بیرون می‌افتد و
+        حافظه **بی‌صدا** صفر می‌شود — بدترین نوعِ باگ در این پروژه: خاموش.
+      • **اگر در `MUST_EXIST` باشد:** در اولین دور فایل وجود ندارد، پس دروازهٔ
+        fail-closed انتشار را رد می‌کند و مخزن هرگز به‌روز نمی‌شود.
+    """
+    wf = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                      ".github", "workflows", "aggregate.yml")
+    doc = yaml.safe_load(open(wf, encoding="utf-8"))
+    steps = doc["jobs"]["aggregate"]["steps"]
+    pub = [s for s in steps if "git push" in (s.get("run") or "")]
+    assert len(pub) == 1, f"مرحلهٔ انتشار {len(pub)} تا پیدا شد، انتظار ۱"
+    run = pub[0]["run"]
+
+    import re as _re
+    m = _re.search(r'OUTPUT_PATHS="([^"]+)"', run)
+    assert m, "OUTPUT_PATHS در مرحلهٔ انتشار پیدا نشد ⇒ الگوی تست شکسته"
+    paths = m.group(1).split()
+    assert state.STATE_PATH in paths, (
+        f"«{state.STATE_PATH}» در OUTPUT_PATHS نیست ({paths}) ⇒ rolling squash "
+        f"هر دور حافظه را دور می‌ریزد و auto-disable هرگز به MIN_ROUNDS نمی‌رسد")
+
+    # باید از دروازهٔ is_output_path() هم عبور کند، وگرنه REGRESS آن را
+    # «تغییرِ سورس» می‌بیند.
+    case = _re.search(r"is_output_path\(\)\s*\{(.+?)\n\s*\}", run, _re.S)
+    assert case, "تابعِ is_output_path پیدا نشد ⇒ الگوی تست شکسته"
+    assert state.STATE_PATH in case.group(1), (
+        f"«{state.STATE_PATH}» در is_output_path() نیست ⇒ به‌عنوان فایلِ سورس "
+        f"دیده می‌شود و منطقِ REGRESS را گمراه می‌کند")
+
+    me = _re.search(r'MUST_EXIST="([^"]+)"', run, _re.S)
+    assert me, "MUST_EXIST پیدا نشد ⇒ الگوی تست شکسته"
+    assert state.STATE_PATH not in me.group(1).split(), (
+        f"«{state.STATE_PATH}» در MUST_EXIST است ⇒ اولین دور (که فایل وجود "
+        f"ندارد) fail-closed می‌شود و انتشار هرگز رخ نمی‌دهد")
+
+
+def test_source_docstring_count_matches_the_actual_list():
+    """عددِ منابع در docstringِ `sources.py` باید با خودِ لیست بخواند.
+
+    چرا این تستِ به‌ظاهر بی‌اهمیت لازم است: قاعدهٔ نگهداریِ آن فایل **دستی**
+    است و از قبل دریفت کرده بود — docstring می‌گفت «۱۸ منبع» در حالی که
+    `LIGHT(7) + HEAVY(14) = 21` بود. یعنی مستنداتِ همان قاعده‌ای که قرار بود
+    منابعِ مرده را حذف کند، خودش ۳ منبع عقب افتاده بود. این تست دریفت را
+    غیرممکن می‌کند.
+    """
+    import re as _re
+    doc = sources.__doc__ or ""
+    fa = "۰۱۲۳۴۵۶۷۸۹"
+    m = _re.search(r"هر ([۰-۹]+) منبع", doc)
+    assert m, "جملهٔ «هر N منبع» در docstringِ sources.py پیدا نشد"
+    claimed = int("".join(str(fa.index(ch)) for ch in m.group(1)))
+    actual = len(sources.all_sources())
+    assert claimed == actual, (
+        f"docstring می‌گوید {claimed} منبع ولی لیست {actual} تا دارد ⇒ همان "
+        f"دریفتی که فاز D بستنش را لازم دانست، برگشته")
+    assert actual == len(sources.LIGHT_SOURCES) + len(sources.HEAVY_SOURCES), (
+        "all_sources() تعدادِ متفاوتی داد ⇒ URLِ تکراری در لیست هست")
 
 
 def test_remark_tag_is_content_derived_not_positional():
