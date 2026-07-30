@@ -1895,6 +1895,76 @@ def test_reachability_closes_every_socket_it_opens() -> None:
         _unpatch(monkey)
 
 
+def test_reachability_raises_when_the_real_fd_count_grows() -> None:
+    """
+    آزمونِ بالا شمارندهٔ *استاب* را می‌سنجد: «هرچه باز شد بسته شد». این
+    خصوصیتِ فِیک است، نه خصوصیتِ ماژول. پس محافظِ واقعی — آن `raise` که
+    وقتی `fd_after > fd_before` باشد نتیجه را باطل می‌کند — بی‌آزمون
+    می‌ماند. (با mutation ثابت شد: برداشتنِ آن `raise` هیچ تستی را
+    نشکست.)
+
+    این‌جا خودِ محافظ سنجیده می‌شود، با جایگزینیِ `fd_count` که تنها دو
+    بار صدا زده می‌شود: یک‌بار پیش از سنجش، یک‌بار پس از آن.
+
+    سه حالت، چون یک محافظ که همیشه بیندازد هم به‌همان اندازه بی‌فایده است:
+      ۱) رشدِ fd → استثنا، با پیامی که از پیامِ EMFILE قابلِ تفکیک است.
+      ۲) fdِ ثابت → بی‌استثنا، و همان اعداد در `stats`.
+      ۳) نبودِ ‎/proc‏ (‎-1‏) → *نباید* رشدِ کاذب تلقی شود؛ ‎-1 → 4‏ عددی
+         بزرگ‌تر است ولی هیچ نشتی را نشان نمی‌دهد. این همان شرطِ
+         `fd_before >= 0` است.
+    """
+    # ۱) رشدِ واقعیِ fd
+    monkey = []
+    grew = iter([4, 9])
+    try:
+        _patch_dns(monkey, {"a.example": ("203.0.113.1",)})
+        _patch_connect(monkey, lambda ip, p: None)
+        monkey.append((reachability, "fd_count", reachability.fd_count))
+        reachability.fd_count = lambda: next(grew)
+        msg = ""
+        try:
+            reachability.check_endpoints([("a.example", 443)])
+        except reachability.FileDescriptorExhaustion as exc:
+            msg = str(exc)
+        assert msg, "رشدِ fd باید FileDescriptorExhaustion بیندازد، نه بی‌صدا بگذرد"
+        assert "leak" in msg.lower(), f"پیام باید نشت را نام ببرد: {msg!r}"
+        assert "4" in msg and "9" in msg, f"پیام باید هر دو عدد را بدهد: {msg!r}"
+        assert "EMFILE" not in msg, (
+            f"پیامِ نشت باید از پیامِ EMFILE جدا باشد، وگرنه علتِ خرابی "
+            f"اشتباه تشخیص داده می‌شود: {msg!r}")
+    finally:
+        _unpatch(monkey)
+
+    # ۲) کنترلِ منفی: fdِ ثابت → هیچ استثنایی
+    monkey = []
+    same = iter([7, 7])
+    try:
+        _patch_dns(monkey, {"a.example": ("203.0.113.1",)})
+        _patch_connect(monkey, lambda ip, p: None)
+        monkey.append((reachability, "fd_count", reachability.fd_count))
+        reachability.fd_count = lambda: next(same)
+        res = reachability.check_endpoints([("a.example", 443)])
+        assert res["stats"]["fd_before"] == 7, res["stats"]
+        assert res["stats"]["fd_after"] == 7, res["stats"]
+    finally:
+        _unpatch(monkey)
+
+    # ۳) کنترلِ منفی: /proc نیست → -1، و -1 < 4 نباید «نشت» خوانده شود
+    monkey = []
+    noproc = iter([-1, 4])
+    try:
+        _patch_dns(monkey, {"a.example": ("203.0.113.1",)})
+        _patch_connect(monkey, lambda ip, p: None)
+        monkey.append((reachability, "fd_count", reachability.fd_count))
+        reachability.fd_count = lambda: next(noproc)
+        res = reachability.check_endpoints([("a.example", 443)])
+        assert res["stats"]["fd_before"] == -1, res["stats"]
+        assert ("a.example", 443) in res["open"], (
+            "بی‌اطلاعی از fd نباید سنجش را باطل کند")
+    finally:
+        _unpatch(monkey)
+
+
 def test_reachability_probes_up_to_the_address_cap_not_just_the_first() -> None:
     """
     سنجشِ واقعی: ۴۳۹ میزبان بیش از یک نشانی دارند و «فقط نشانیِ اول»
