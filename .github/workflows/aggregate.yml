@@ -516,6 +516,52 @@ jobs:
               print("\n</details>")
           PY
           fi
+          # ── نرخِ واقعیِ کارکرد، سنجیده در همین اجرا ────────────────────────
+          #
+          # چرا این‌جا: شرطِ خروجیِ ② فاز B می‌گوید نرخِ `verified/` باید «با
+          # CI» سنجیده شود، نه یک‌بار روی یک ماشین و بعد به‌صورت عددِ ثابت در
+          # README بماند. آمارِ آبشار را `pipeline.py` در `health.json`
+          # (کلیدِ `cascade`) ادغام می‌کند؛ این بلوک همان را در خلاصهٔ هر
+          # اجرا نشان می‌دهد، همراه با محلِ جغرافیاییِ رانر — چون نرخِ کارکرد
+          # بی‌ذکرِ «از کجا سنجیده شد» عددی گمراه‌کننده است.
+          #
+          # مرحلهٔ آبشار `continue-on-error` است؛ اگر شکسته باشد کلیدِ
+          # `cascade` وجود ندارد و این بلوک ساکت می‌ماند، نه خراب.
+          if [ -f health.json ]; then
+            python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          h = json.load(open("health.json"))
+          c = h.get("cascade")
+          if c:
+              L = c["layers"]
+              b = c["buckets"]
+              l3 = L["l3"]
+              geo = c.get("exit_country") or {}
+              where = f"{geo.get('loc', '?')}/{geo.get('colo', '?')}"
+              pool = L["l0_l1"]["in"] or 1
+              pct = lambda n: round(100.0 * n / pool, 2)
+              print(f"\n### 🧬 How many actually work — measured this run"
+                    f" (runner exit: {where})")
+              print("\n| Layer | In | Out | Note |")
+              print("|---|---|---|---|")
+              print(f"| L0+L1 structure | {L['l0_l1']['in']} |"
+                    f" {L['l0_l1']['out']} | {L['l0_l1']['seconds']}s |")
+              print(f"| L2 TCP reachable | {L['l2']['in']} | {L['l2']['out']} |"
+                    f" {L['l2']['open_pct']}% of this layer's input,"
+                    f" {L['l2']['seconds']}s |")
+              print(f"| L3 real request | {l3['in']} | {l3['stable']} |"
+                    f" per-round {l3['per_run_ok']} over {l3['rounds']} rounds,"
+                    f" {l3['seconds']}s |")
+              print(f"\n- **stable in every round:** {l3['stable']}"
+                    f" ({pct(l3['stable'])}% of the {pool} published configs)")
+              print(f"- **worked at least once:** {l3['ever_ok']}"
+                    f" ({pct(l3['ever_ok'])}% of the pool) — flaky"
+                    f" {l3['flaky_pct']}%")
+              print(f"- **published:** verified={b['verified']}"
+                    f" fast={b['fast']} secure={b['secure']} top={b['top']}")
+              print(f"- **cascade time:** {c['total_seconds']}s")
+          PY
+          fi
 
       # ── ★★★ انتشار روی `main` با روشِ «rolling squash» ★★★ ────────────────
       #

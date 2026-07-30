@@ -3802,6 +3802,102 @@ def test_workflow_publishes_the_cascade_categories_it_builds():
         assert old in paths, f"مسیرِ قدیمیِ «{old}» از OUTPUT_PATHS افتاده"
 
 
+def _summary_cascade_snippet() -> str:
+    """کدِ پایتونِ بلوکِ «نرخِ کارکرد» را از گامِ خلاصه بیرون می‌کشد.
+
+    از خودِ YAML خوانده می‌شود تا تودرتوییِ ۱۰ فاصله‌ای دستی حذف نشود:
+    `run: |` را که yaml باز می‌کند، فاصله‌ها همان‌جا برداشته می‌شوند.
+    """
+    import re as _re
+
+    doc = yaml.safe_load(_workflow_text())
+    job = doc["jobs"][next(iter(doc["jobs"]))]
+    steps = [s for s in job["steps"] if "Job summary" in str(s.get("name", ""))]
+    assert len(steps) == 1, f"گامِ «Job summary» یکتا نیست: {len(steps)}"
+    blocks = _re.findall(
+        r"python - <<'PY' >> \"\$GITHUB_STEP_SUMMARY\"\n(.*?)\nPY\n",
+        steps[0]["run"], _re.S)
+    casc = [b for b in blocks if "cascade" in b]
+    assert len(casc) == 1, (
+        f"باید دقیقاً یک بلوکِ خلاصهٔ آبشار باشد، {len(casc)} پیدا شد")
+    return casc[0]
+
+
+def test_workflow_summary_reports_the_measured_working_rate_every_run():
+    """
+    شرطِ خروجیِ ② فاز B: نرخِ کارکردِ `verified/` باید «با CI» سنجیده شود،
+    نه یک‌بار روی یک ماشین و بعد به‌صورت عددِ ثابت در README بماند.
+
+    این تست متن را match نمی‌کند — خودِ بلوک را **اجرا** می‌کند، چون یک
+    بلوکِ خلاصه که syntax درستی دارد ولی عدد اشتباه می‌دهد بدتر از نبودنش
+    است.
+
+    سه سناریو:
+      ۱) آبشار موجود → درصدها باید نسبت به **کلِ pool** حساب شوند، نه نسبت
+         به ورودیِ L3. (تفاوتشان این‌جا ۵٪ در برابر ۱۲٫۵٪ است.)
+      ۲) آبشار غایب (مرحله `continue-on-error` شکسته) → خروجیِ خالی، بدونِ
+         استثنا؛ خلاصهٔ خراب کلِ گزارش را می‌بلعد.
+      ۳) `exit_country` تهی → «از کجا» نامعلوم، ولی گزارش باید بایستد.
+    """
+    import subprocess as _sp
+    import tempfile as _tf
+
+    code = _summary_cascade_snippet()
+    cascade = {
+        "exit_country": {"loc": "DE", "colo": "FRA",
+                         "source": "https://example.invalid/trace"},
+        "layers": {
+            "l0_l1": {"in": 1000, "out": 900,
+                      "dropped": {"unparsable": 100}, "seconds": 0.5},
+            "l2": {"in": 900, "out": 400, "open_pct": 44.44, "seconds": 9.0},
+            "l3": {"in": 400, "rounds": 3, "per_run_ok": [80, 70, 60],
+                   "ever_ok": 90, "stable": 50, "flaky_pct": 44.44,
+                   "seconds": 30.0},
+        },
+        "buckets": {"verified": 50, "fast": 20, "secure": 7, "top": 50},
+        "total_seconds": 39.5,
+    }
+
+    def render(doc) -> tuple[int, str, str]:
+        with _tf.TemporaryDirectory() as tmp:
+            with open(os.path.join(tmp, "health.json"), "w",
+                      encoding="utf-8") as fh:
+                json.dump(doc, fh, ensure_ascii=False)
+            with open(os.path.join(tmp, "snippet.py"), "w",
+                      encoding="utf-8") as fh:
+                fh.write(code + "\n")
+            p = _sp.run([sys.executable, "snippet.py"], cwd=tmp,
+                        capture_output=True, text=True, timeout=120)
+            return p.returncode, p.stdout, p.stderr
+
+    # ۱) آبشارِ موجود
+    rc, out, err = render({"summary": {}, "cascade": cascade})
+    assert rc == 0, f"بلوکِ خلاصه نباید خطا بدهد: {err[-400:]}"
+    assert "DE/FRA" in out, f"محلِ سنجش باید ذکر شود: {out!r}"
+    assert "50" in out and "90" in out, out
+    # ۵۰ از ۱۰۰۰ = ۵٫۰٪ ؛ اگر مخرج اشتباه (۴۰۰) باشد ۱۲٫۵٪ می‌شود
+    assert "5.0%" in out, (
+        f"درصدِ پایدار باید نسبت به کلِ pool (۱۰۰۰) باشد، نه ورودیِ L3: {out!r}")
+    assert "12.5%" not in out, (
+        f"مخرجِ اشتباه (ورودیِ L3) به‌کار رفته است: {out!r}")
+    assert "9.0%" in out, f"درصدِ «حداقل یک‌بار» غایب است: {out!r}"
+    assert "[80, 70, 60]" in out, (
+        f"شمارشِ هر راند باید دیده شود، وگرنه پایداری قابلِ بازبینی نیست: {out!r}")
+    assert "verified=50" in out and "secure=7" in out, out
+
+    # ۲) کنترلِ منفی: آبشار نیست → سکوت، نه خطا
+    rc, out, err = render({"summary": {}, "sources": []})
+    assert rc == 0, f"غیبتِ آبشار نباید خلاصه را بشکند: {err[-400:]}"
+    assert out.strip() == "", f"باید ساکت بماند، این چاپ شد: {out!r}"
+
+    # ۳) exit_country تهی
+    no_geo = json.loads(json.dumps(cascade))
+    no_geo["exit_country"] = None
+    rc, out, err = render({"summary": {}, "cascade": no_geo})
+    assert rc == 0, f"نبودِ ژئو نباید گزارش را بشکند: {err[-400:]}"
+    assert "?/?" in out, f"محلِ نامعلوم باید صریح باشد: {out!r}"
+
+
 def test_workflow_treats_cascade_output_as_output_not_as_source():
     """
     `is_output_path` قلبِ گاردِ رگرسیونِ سورس است.
