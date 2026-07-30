@@ -29,10 +29,59 @@ mihomo -t -f <file>           # mihomo v1.19.29
 If any file fails, **the run aborts and nothing is committed**. The previous good
 release stays in place.
 
-> ⚠️ No TCP health-checking is performed — configs are validated for *correctness*,
-> not *reachability*. Structurally broken entries (dummy UUID, `App not supported`,
-> unsupported ciphers, malformed REALITY keys) are dropped; a syntactically perfect
-> config may still be offline.
+> ⚠️ Structural validity is not the same as working. Structurally broken entries
+> (dummy UUID, `App not supported`, unsupported ciphers, malformed REALITY keys) are
+> dropped, but a syntactically perfect config can still be dead. That is a separate
+> question, answered separately — right below.
+
+<a name="-does-it-actually-work"></a>
+
+### 🧪 Does it actually work?
+
+Most free-config repos publish a number of configs and let you guess. Here is the
+uncomfortable answer, measured rather than estimated: **the large majority of any
+free config pool is dead at any moment.** That is a property of free configs, not of
+this repo — so instead of hiding it, the run measures it and sorts by it.
+
+Every config goes through four stages. Each one is cheap enough to run on the whole
+pool, and each throws away work the next stage would have wasted:
+
+| Stage | What it asks | What it costs |
+|---|---|---|
+| **L0/L1** | Is it parsable, and is the endpoint unique and routable? | no network |
+| **L2** | Does the TCP port actually accept a connection? | one connect per endpoint |
+| **L3** | Does a **real HTTP request through the proxy** succeed? | full handshake, repeated |
+| **buckets** | Which ones passed *every* L3 round? | sorting only |
+
+A config reaches `verified/` only if it passed **every** L3 round, not just its best
+one. That distinction is not cosmetic — measured on one 5-round experiment, per-round
+success ranged from 363 to 501 while only 224 configs passed all five. Publishing the
+best round would have overstated the result by roughly 2×.
+
+**A worked example.** One 5-round experiment, run from a **United States** host on a
+visibly degraded link — the five rounds took 45s, 54s, 345s, 615s and 404s, which is
+itself the tell. (The raw per-round CSVs are ~10 MB and are deliberately *not*
+committed; the run is reproducible with `python scripts/pipeline.py all/configs.txt
+--rounds 5`.)
+
+| Stage | Configs | Share of pool |
+|---|---|---|
+| collected after dedup | 8,158 | 100% |
+| TCP port open (L2) | 3,845 | 47.1% |
+| worked at least once (L3) | 626 | 7.7% |
+| worked in **all 5** rounds → `verified/` | 224 | **2.7%** |
+
+> ⚠️ **Read this before quoting the percentage.** That 2.7% is not a constant, and it
+> is not a claim about your connection. It was measured *from one host, on one day,
+> on a bad link*. The same code on a European host with a healthy link kept
+> substantially more configs alive per round. A config that fails from a GitHub runner
+> in Virginia may work perfectly from Tehran, and the reverse is just as true.
+>
+> So: **`verified/` means "this config answered a real request from the machine that
+> ran the test" — not "this config will work for you."** The per-run numbers for the
+> release you are downloading, together with the country the test ran from, are
+> recorded in the `cascade` block of [`health.json`](#-source-health--healthjson).
+> Trust that file over any number written in this README, which is only an example.
 
 ---
 
@@ -253,6 +302,42 @@ A per-source health report regenerated on every run: for each of the 21 sources 
 records `status` (`ok` / `empty` / `fail`), HTTP code, attempt count, latency, the
 yielded config count, and the last error (if any). Makes dead/changed upstreams
 immediately visible. A summary (`healthy` / `unhealthy`) is also embedded in `index.json`.
+
+The same file also carries a **`cascade`** block describing what the verification run
+actually did — so the numbers come from the machine that produced the release, not
+from this README:
+
+```jsonc
+"cascade": {
+  "exit_country": { "colo": "IAD", "loc": "US",   // where the test ran from
+                    "source": "https://cp.cloudflare.com/cdn-cgi/trace" },
+  "layers": {
+    "l0_l1": { "in": 300, "out": 295, "seconds": 0.01,
+               "endpoints_unique": 258, "dedup_saving_pct": 12.54,
+               "dropped": { "unparsable": 5, "invalid_port": 0, "invalid_uuid": 0,
+                            "unroutable_server": 0, "invalid_server": 0 } },
+    "l2":    { "in": 295, "out": 69, "open_pct": 23.39,
+               "open_pct_of_raw_input": 23.0, "dns_failed": 4,
+               "dns_seconds": 0.6, "tcp_seconds": 3.06, "seconds": 3.68 },
+    "l3":    { "in": 69, "rounds": 2, "per_run_ok": [25, 25], "ever_ok": 25,
+               "stable": 25, "flaky_pct": 0.0, "seconds": 8.77 }
+  },
+  "buckets": { "verified": 25, "fast": 25, "secure": 6, "top": 25,
+               "top_short_by": 75, "fast_threshold_ms": 800 },
+  "total_seconds": 12.55
+}
+```
+
+(Values above are from a small real run kept short for the example; a full run reports
+the whole pool.) Three details worth knowing:
+
+- **`exit_country`** is the country the *test* ran from — the single most important
+  caveat when reading any success rate. Only `loc` and `colo` are recorded; the
+  runner's IP address is deliberately never published.
+- **`dropped`** names the reason each config was rejected, so a source that starts
+  emitting garbage is visible immediately instead of silently shrinking the output.
+- **`per_run_ok` vs `stable`** shows the flakiness directly: `stable` counts only
+  configs that passed *every* round, which is what `verified/` is built from.
 
 ---
 
