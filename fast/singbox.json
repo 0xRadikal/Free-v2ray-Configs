@@ -1,0 +1,3979 @@
+{
+  "log": {
+    "level": "info",
+    "timestamp": true
+  },
+  "dns": {
+    "servers": [
+      {
+        "tag": "proxy-dns",
+        "type": "https",
+        "server": "1.1.1.1",
+        "detour": "🚀 @Raydikalx"
+      },
+      {
+        "tag": "local-dns",
+        "type": "local"
+      }
+    ],
+    "rules": [
+      {
+        "clash_mode": "Direct",
+        "server": "local-dns"
+      },
+      {
+        "clash_mode": "Global",
+        "server": "proxy-dns"
+      }
+    ],
+    "final": "proxy-dns",
+    "strategy": "prefer_ipv4",
+    "independent_cache": true
+  },
+  "inbounds": [
+    {
+      "type": "tun",
+      "tag": "tun-in",
+      "address": [
+        "172.19.0.1/30",
+        "fdfe:dcba:9876::1/126"
+      ],
+      "auto_route": true,
+      "strict_route": true,
+      "stack": "mixed"
+    },
+    {
+      "type": "mixed",
+      "tag": "mixed-in",
+      "listen": "127.0.0.1",
+      "listen_port": 2080
+    }
+  ],
+  "outbounds": [
+    {
+      "type": "selector",
+      "tag": "🚀 @Raydikalx",
+      "outbounds": [
+        "♻️ Auto",
+        "US 🇺🇸 | @Raydikalx | 1C45FC",
+        "US 🇺🇸 | @Raydikalx | B92DC6",
+        "CA 🇨🇦 | @Raydikalx | DEBC1A",
+        "US 🇺🇸 | @Raydikalx | B15379",
+        "US 🇺🇸 | @Raydikalx | 02762D",
+        "US 🇺🇸 | @Raydikalx | CD1C34",
+        "US 🇺🇸 | @Raydikalx | C0A390",
+        "US 🇺🇸 | @Raydikalx | 8C0695",
+        "US 🇺🇸 | @Raydikalx | 510D7C",
+        "US 🇺🇸 | @Raydikalx | 9192D6",
+        "US 🇺🇸 | @Raydikalx | EC9C13",
+        "US 🇺🇸 | @Raydikalx | 076263",
+        "US 🇺🇸 | @Raydikalx | E3CF27",
+        "US 🇺🇸 | @Raydikalx | 569DA6",
+        "US 🇺🇸 | @Raydikalx | 043CAC",
+        "US 🇺🇸 | @Raydikalx | B94E7F",
+        "CA 🇨🇦 | @Raydikalx | A0BCF7",
+        "US 🇺🇸 | @Raydikalx | 549733",
+        "US 🇺🇸 | @Raydikalx | 4A3857",
+        "US 🇺🇸 | @Raydikalx | 0BE3C6",
+        "US 🇺🇸 | @Raydikalx | D50052",
+        "US 🇺🇸 | @Raydikalx | FEA075",
+        "US 🇺🇸 | @Raydikalx | F4AF2E",
+        "CA 🇨🇦 | @Raydikalx | B3C8AC",
+        "US 🇺🇸 | @Raydikalx | 4DA029",
+        "US 🇺🇸 | @Raydikalx | D39BB5",
+        "CA 🇨🇦 | @Raydikalx | 0BB678",
+        "CA 🇨🇦 | @Raydikalx | FBC8A6",
+        "US 🇺🇸 | @Raydikalx | 2D1DC4",
+        "US 🇺🇸 | @Raydikalx | A57557",
+        "US 🇺🇸 | @Raydikalx | 02CE4D",
+        "US 🇺🇸 | @Raydikalx | 48AF8D",
+        "US 🇺🇸 | @Raydikalx | 5D90ED",
+        "US 🇺🇸 | @Raydikalx | 9366BE",
+        "US 🇺🇸 | @Raydikalx | BB7720",
+        "US 🇺🇸 | @Raydikalx | 088543",
+        "US 🇺🇸 | @Raydikalx | C86ABA",
+        "US 🇺🇸 | @Raydikalx | E2EDF3",
+        "US 🇺🇸 | @Raydikalx | 1AF7E8",
+        "US 🇺🇸 | @Raydikalx | E82A92",
+        "CA 🇨🇦 | @Raydikalx | 1B0DB3",
+        "US 🇺🇸 | @Raydikalx | 6BC9F6",
+        "US 🇺🇸 | @Raydikalx | 7CA59D",
+        "US 🇺🇸 | @Raydikalx | 1A4D26",
+        "US 🇺🇸 | @Raydikalx | 61EC2C",
+        "CA 🇨🇦 | @Raydikalx | 1EF852",
+        "US 🇺🇸 | @Raydikalx | 44DCF4",
+        "US 🇺🇸 | @Raydikalx | BACD33",
+        "JP 🇯🇵 | @Raydikalx | D4F357",
+        "US 🇺🇸 | @Raydikalx | 31C6CE",
+        "US 🇺🇸 | @Raydikalx | 45C1A0",
+        "JP 🇯🇵 | @Raydikalx | 2459E0",
+        "US 🇺🇸 | @Raydikalx | 9A112F",
+        "GB 🇬🇧 | @Raydikalx | BBA9C7",
+        "US 🇺🇸 | @Raydikalx | 830C36",
+        "US 🇺🇸 | @Raydikalx | 6ADC1C",
+        "US 🇺🇸 | @Raydikalx | AA4372",
+        "JP 🇯🇵 | @Raydikalx | 554D18",
+        "US 🇺🇸 | @Raydikalx | 916AA8",
+        "JP 🇯🇵 | @Raydikalx | 9EF41E",
+        "CA 🇨🇦 | @Raydikalx | 381CD4",
+        "CA 🇨🇦 | @Raydikalx | 580E92",
+        "KR 🇰🇷 | @Raydikalx | 7D2AD5",
+        "CA 🇨🇦 | @Raydikalx | 3D6002",
+        "JP 🇯🇵 | @Raydikalx | 4D3A7D",
+        "JP 🇯🇵 | @Raydikalx | C47E41",
+        "JP 🇯🇵 | @Raydikalx | F7F260",
+        "IE 🇮🇪 | @Raydikalx | 3AB41C",
+        "JP 🇯🇵 | @Raydikalx | E2A955",
+        "JP 🇯🇵 | @Raydikalx | AC78EE",
+        "JP 🇯🇵 | @Raydikalx | 5B995D",
+        "TW 🇹🇼 | @Raydikalx | 473401",
+        "CA 🇨🇦 | @Raydikalx | 6D325B",
+        "TW 🇹🇼 | @Raydikalx | C75213",
+        "JP 🇯🇵 | @Raydikalx | 1286E2",
+        "US 🇺🇸 | @Raydikalx | C5A1F6",
+        "JP 🇯🇵 | @Raydikalx | C36E71",
+        "JP 🇯🇵 | @Raydikalx | 8B3F7D",
+        "JP 🇯🇵 | @Raydikalx | 570834",
+        "JP 🇯🇵 | @Raydikalx | 30BD19",
+        "HK 🇭🇰 | @Raydikalx | 4BEA91",
+        "JP 🇯🇵 | @Raydikalx | 91BB4F",
+        "JP 🇯🇵 | @Raydikalx | 052A42",
+        "CA 🇨🇦 | @Raydikalx | AAB178",
+        "NL 🇳🇱 | @Raydikalx | 981205",
+        "FR 🇫🇷 | @Raydikalx | 249470",
+        "NL 🇳🇱 | @Raydikalx | CEDE2D",
+        "FR 🇫🇷 | @Raydikalx | 959509",
+        "FR 🇫🇷 | @Raydikalx | 49BE1A",
+        "NL 🇳🇱 | @Raydikalx | 9AD496",
+        "FR 🇫🇷 | @Raydikalx | 68352A",
+        "GB 🇬🇧 | @Raydikalx | 52653D",
+        "NL 🇳🇱 | @Raydikalx | C037D1",
+        "GB 🇬🇧 | @Raydikalx | 66EDAF",
+        "GB 🇬🇧 | @Raydikalx | 4A01A8",
+        "GB 🇬🇧 | @Raydikalx | 5B2BD1",
+        "DE 🇩🇪 | @Raydikalx | 14D675",
+        "DE 🇩🇪 | @Raydikalx | 36737C",
+        "NL 🇳🇱 | @Raydikalx | 27F261",
+        "GB 🇬🇧 | @Raydikalx | BB1164",
+        "NL 🇳🇱 | @Raydikalx | 9C439A",
+        "TW 🇹🇼 | @Raydikalx | D5B6D3",
+        "NL 🇳🇱 | @Raydikalx | 5105A1",
+        "GB 🇬🇧 | @Raydikalx | 64C350",
+        "AU 🇦🇺 | @Raydikalx | DFABBD",
+        "AU 🇦🇺 | @Raydikalx | 196042",
+        "NL 🇳🇱 | @Raydikalx | 825B2C",
+        "NL 🇳🇱 | @Raydikalx | 233A83",
+        "CA 🇨🇦 | @Raydikalx | 32C108",
+        "SG 🇸🇬 | @Raydikalx | 7FEBA6",
+        "NL 🇳🇱 | @Raydikalx | 5A4352",
+        "NL 🇳🇱 | @Raydikalx | CE374E",
+        "KR 🇰🇷 | @Raydikalx | 3E3235",
+        "NL 🇳🇱 | @Raydikalx | 2A413C",
+        "NL 🇳🇱 | @Raydikalx | CD0FA7",
+        "KR 🇰🇷 | @Raydikalx | F49B02",
+        "SG 🇸🇬 | @Raydikalx | 3CFE66",
+        "SG 🇸🇬 | @Raydikalx | 8947EB",
+        "NL 🇳🇱 | @Raydikalx | 8C145E",
+        "DE 🇩🇪 | @Raydikalx | D7863C",
+        "NL 🇳🇱 | @Raydikalx | B42DD1",
+        "SG 🇸🇬 | @Raydikalx | E9A890",
+        "NL 🇳🇱 | @Raydikalx | 4FFB19",
+        "NL 🇳🇱 | @Raydikalx | A23F89",
+        "NL 🇳🇱 | @Raydikalx | F4286E",
+        "DE 🇩🇪 | @Raydikalx | B5E0D5",
+        "NO 🇳🇴 | @Raydikalx | D97531",
+        "DE 🇩🇪 | @Raydikalx | 2437AA",
+        "DE 🇩🇪 | @Raydikalx | 1D455F",
+        "NL 🇳🇱 | @Raydikalx | 3C0C74",
+        "DE 🇩🇪 | @Raydikalx | 225EB1",
+        "DE 🇩🇪 | @Raydikalx | A9B10C",
+        "NL 🇳🇱 | @Raydikalx | 0594FF",
+        "US 🇺🇸 | @Raydikalx | FFB9D2",
+        "ES 🇪🇸 | @Raydikalx | 989B8A",
+        "NL 🇳🇱 | @Raydikalx | E7468B",
+        "KR 🇰🇷 | @Raydikalx | 6CE4A6",
+        "CA 🇨🇦 | @Raydikalx | 651C9A",
+        "US 🇺🇸 | @Raydikalx | 5346AB",
+        "DE 🇩🇪 | @Raydikalx | 8F12B6",
+        "DE 🇩🇪 | @Raydikalx | 82FC13",
+        "BR 🇧🇷 | @Raydikalx | 2DE69A",
+        "NL 🇳🇱 | @Raydikalx | D0A757",
+        "NL 🇳🇱 | @Raydikalx | 743A95",
+        "AU 🇦🇺 | @Raydikalx | 8854B6",
+        "NL 🇳🇱 | @Raydikalx | 5CFE52",
+        "NL 🇳🇱 | @Raydikalx | 0E857C",
+        "CA 🇨🇦 | @Raydikalx | EA39A6",
+        "NL 🇳🇱 | @Raydikalx | FEFEFB",
+        "DE 🇩🇪 | @Raydikalx | 8EE398",
+        "NL 🇳🇱 | @Raydikalx | A0EA09",
+        "NL 🇳🇱 | @Raydikalx | 13A674",
+        "FR 🇫🇷 | @Raydikalx | 11D747",
+        "DE 🇩🇪 | @Raydikalx | D27672",
+        "MO 🇲🇴 | @Raydikalx | F46553",
+        "CA 🇨🇦 | @Raydikalx | C98286",
+        "HK 🇭🇰 | @Raydikalx | 232038",
+        "FR 🇫🇷 | @Raydikalx | 4F9582",
+        "CA 🇨🇦 | @Raydikalx | A7A67C",
+        "US 🇺🇸 | @Raydikalx | B3EC8A",
+        "NL 🇳🇱 | @Raydikalx | 461BFB",
+        "NL 🇳🇱 | @Raydikalx | CCF4B2",
+        "FR 🇫🇷 | @Raydikalx | CE8AC5",
+        "US 🇺🇸 | @Raydikalx | 99586E",
+        "US 🇺🇸 | @Raydikalx | 018C5C",
+        "FR 🇫🇷 | @Raydikalx | EDDAA8",
+        "PL 🇵🇱 | @Raydikalx | 57179B",
+        "FR 🇫🇷 | @Raydikalx | 3CF506",
+        "NL 🇳🇱 | @Raydikalx | CAE108",
+        "ES 🇪🇸 | @Raydikalx | 5524DB",
+        "DE 🇩🇪 | @Raydikalx | 3165F4",
+        "DE 🇩🇪 | @Raydikalx | F13562",
+        "NL 🇳🇱 | @Raydikalx | BDEF2B",
+        "DE 🇩🇪 | @Raydikalx | 4D3B0F",
+        "US 🇺🇸 | @Raydikalx | 143869",
+        "NL 🇳🇱 | @Raydikalx | A68276",
+        "DE 🇩🇪 | @Raydikalx | A386DE",
+        "NL 🇳🇱 | @Raydikalx | B18FD5",
+        "DE 🇩🇪 | @Raydikalx | 4055DA",
+        "HK 🇭🇰 | @Raydikalx | 191BA9",
+        "IT 🇮🇹 | @Raydikalx | B17060",
+        "DE 🇩🇪 | @Raydikalx | 276654",
+        "IT 🇮🇹 | @Raydikalx | FD6100",
+        "CH 🇨🇭 | @Raydikalx | 850989",
+        "TR 🇹🇷 | @Raydikalx | 66FC0D",
+        "NL 🇳🇱 | @Raydikalx | 29752B",
+        "ID 🇮🇩 | @Raydikalx | 9E77D0",
+        "IT 🇮🇹 | @Raydikalx | CC81C4",
+        "CA 🇨🇦 | @Raydikalx | 71FA29",
+        "DE 🇩🇪 | @Raydikalx | FE9813",
+        "IT 🇮🇹 | @Raydikalx | A32AEB",
+        "IT 🇮🇹 | @Raydikalx | DB9A0E",
+        "IT 🇮🇹 | @Raydikalx | 6402D0",
+        "IT 🇮🇹 | @Raydikalx | ACBA16",
+        "CA 🇨🇦 | @Raydikalx | 323850",
+        "IT 🇮🇹 | @Raydikalx | 5309E6",
+        "CA 🇨🇦 | @Raydikalx | 85292F",
+        "NL 🇳🇱 | @Raydikalx | 17A0AE",
+        "FR 🇫🇷 | @Raydikalx | 185EAA",
+        "FR 🇫🇷 | @Raydikalx | 7ED633",
+        "CA 🇨🇦 | @Raydikalx | 93379F",
+        "NL 🇳🇱 | @Raydikalx | A710E0",
+        "US 🇺🇸 | @Raydikalx | B9AC77",
+        "US 🇺🇸 | @Raydikalx | 8C8B8D",
+        "CH 🇨🇭 | @Raydikalx | F91E6B",
+        "CA 🇨🇦 | @Raydikalx | 116960",
+        "SE 🇸🇪 | @Raydikalx | 18A133",
+        "US 🇺🇸 | @Raydikalx | 87EDD1",
+        "FR 🇫🇷 | @Raydikalx | 72B601",
+        "US 🇺🇸 | @Raydikalx | 6F3CC6",
+        "SG 🇸🇬 | @Raydikalx | 5FF374",
+        "CH 🇨🇭 | @Raydikalx | 9B7477",
+        "CH 🇨🇭 | @Raydikalx | BD73A8",
+        "CA 🇨🇦 | @Raydikalx | FEC00C",
+        "HK 🇭🇰 | @Raydikalx | F17139",
+        "US 🇺🇸 | @Raydikalx | 2EB4A9",
+        "CA 🇨🇦 | @Raydikalx | 9C7B2E",
+        "HK 🇭🇰 | @Raydikalx | 78B3E2",
+        "NL 🇳🇱 | @Raydikalx | 8AF975",
+        "HK 🇭🇰 | @Raydikalx | 74A8CC",
+        "US 🇺🇸 | @Raydikalx | E311CB",
+        "CA 🇨🇦 | @Raydikalx | 006A58",
+        "US 🇺🇸 | @Raydikalx | 882A9B",
+        "HK 🇭🇰 | @Raydikalx | 5DA6A2",
+        "CH 🇨🇭 | @Raydikalx | 462A2F",
+        "HK 🇭🇰 | @Raydikalx | D48452",
+        "US 🇺🇸 | @Raydikalx | 8169F9",
+        "HK 🇭🇰 | @Raydikalx | F8BD02",
+        "TH 🇹🇭 | @Raydikalx | AB7D79",
+        "RU 🇷🇺 | @Raydikalx | 839C40",
+        "HK 🇭🇰 | @Raydikalx | B8CEAF",
+        "GB 🇬🇧 | @Raydikalx | 79AA89",
+        "US 🇺🇸 | @Raydikalx | E183EE",
+        "HK 🇭🇰 | @Raydikalx | C3B086",
+        "HK 🇭🇰 | @Raydikalx | 319D31",
+        "US 🇺🇸 | @Raydikalx | C7D66A",
+        "GB 🇬🇧 | @Raydikalx | 2A508E",
+        "GB 🇬🇧 | @Raydikalx | B895E1",
+        "US 🇺🇸 | @Raydikalx | 3D3782",
+        "CA 🇨🇦 | @Raydikalx | 387873",
+        "DE 🇩🇪 | @Raydikalx | 9C1717",
+        "NL 🇳🇱 | @Raydikalx | EB81BC",
+        "FR 🇫🇷 | @Raydikalx | D097D5",
+        "NL 🇳🇱 | @Raydikalx | 0BA891",
+        "CA 🇨🇦 | @Raydikalx | 6A41EA",
+        "DE 🇩🇪 | @Raydikalx | D832BE",
+        "US 🇺🇸 | @Raydikalx | 169990",
+        "CA 🇨🇦 | @Raydikalx | 1FB3DF",
+        "NL 🇳🇱 | @Raydikalx | 254EA2",
+        "LT 🇱🇹 | @Raydikalx | 7B616F",
+        "HK 🇭🇰 | @Raydikalx | 9956C9",
+        "NL 🇳🇱 | @Raydikalx | 9884B6",
+        "NL 🇳🇱 | @Raydikalx | 4EA7F2",
+        "NL 🇳🇱 | @Raydikalx | 88EAE7",
+        "HK 🇭🇰 | @Raydikalx | 64D8FF",
+        "FI 🇫🇮 | @Raydikalx | 954706",
+        "NL 🇳🇱 | @Raydikalx | 7FBF3E"
+      ],
+      "default": "♻️ Auto"
+    },
+    {
+      "type": "urltest",
+      "tag": "♻️ Auto",
+      "outbounds": [
+        "US 🇺🇸 | @Raydikalx | 1C45FC",
+        "US 🇺🇸 | @Raydikalx | B92DC6",
+        "CA 🇨🇦 | @Raydikalx | DEBC1A",
+        "US 🇺🇸 | @Raydikalx | B15379",
+        "US 🇺🇸 | @Raydikalx | 02762D",
+        "US 🇺🇸 | @Raydikalx | CD1C34",
+        "US 🇺🇸 | @Raydikalx | C0A390",
+        "US 🇺🇸 | @Raydikalx | 8C0695",
+        "US 🇺🇸 | @Raydikalx | 510D7C",
+        "US 🇺🇸 | @Raydikalx | 9192D6",
+        "US 🇺🇸 | @Raydikalx | EC9C13",
+        "US 🇺🇸 | @Raydikalx | 076263",
+        "US 🇺🇸 | @Raydikalx | E3CF27",
+        "US 🇺🇸 | @Raydikalx | 569DA6",
+        "US 🇺🇸 | @Raydikalx | 043CAC",
+        "US 🇺🇸 | @Raydikalx | B94E7F",
+        "CA 🇨🇦 | @Raydikalx | A0BCF7",
+        "US 🇺🇸 | @Raydikalx | 549733",
+        "US 🇺🇸 | @Raydikalx | 4A3857",
+        "US 🇺🇸 | @Raydikalx | 0BE3C6",
+        "US 🇺🇸 | @Raydikalx | D50052",
+        "US 🇺🇸 | @Raydikalx | FEA075",
+        "US 🇺🇸 | @Raydikalx | F4AF2E",
+        "CA 🇨🇦 | @Raydikalx | B3C8AC",
+        "US 🇺🇸 | @Raydikalx | 4DA029",
+        "US 🇺🇸 | @Raydikalx | D39BB5",
+        "CA 🇨🇦 | @Raydikalx | 0BB678",
+        "CA 🇨🇦 | @Raydikalx | FBC8A6",
+        "US 🇺🇸 | @Raydikalx | 2D1DC4",
+        "US 🇺🇸 | @Raydikalx | A57557",
+        "US 🇺🇸 | @Raydikalx | 02CE4D",
+        "US 🇺🇸 | @Raydikalx | 48AF8D",
+        "US 🇺🇸 | @Raydikalx | 5D90ED",
+        "US 🇺🇸 | @Raydikalx | 9366BE",
+        "US 🇺🇸 | @Raydikalx | BB7720",
+        "US 🇺🇸 | @Raydikalx | 088543",
+        "US 🇺🇸 | @Raydikalx | C86ABA",
+        "US 🇺🇸 | @Raydikalx | E2EDF3",
+        "US 🇺🇸 | @Raydikalx | 1AF7E8",
+        "US 🇺🇸 | @Raydikalx | E82A92",
+        "CA 🇨🇦 | @Raydikalx | 1B0DB3",
+        "US 🇺🇸 | @Raydikalx | 6BC9F6",
+        "US 🇺🇸 | @Raydikalx | 7CA59D",
+        "US 🇺🇸 | @Raydikalx | 1A4D26",
+        "US 🇺🇸 | @Raydikalx | 61EC2C",
+        "CA 🇨🇦 | @Raydikalx | 1EF852",
+        "US 🇺🇸 | @Raydikalx | 44DCF4",
+        "US 🇺🇸 | @Raydikalx | BACD33",
+        "JP 🇯🇵 | @Raydikalx | D4F357",
+        "US 🇺🇸 | @Raydikalx | 31C6CE",
+        "US 🇺🇸 | @Raydikalx | 45C1A0",
+        "JP 🇯🇵 | @Raydikalx | 2459E0",
+        "US 🇺🇸 | @Raydikalx | 9A112F",
+        "GB 🇬🇧 | @Raydikalx | BBA9C7",
+        "US 🇺🇸 | @Raydikalx | 830C36",
+        "US 🇺🇸 | @Raydikalx | 6ADC1C",
+        "US 🇺🇸 | @Raydikalx | AA4372",
+        "JP 🇯🇵 | @Raydikalx | 554D18",
+        "US 🇺🇸 | @Raydikalx | 916AA8",
+        "JP 🇯🇵 | @Raydikalx | 9EF41E",
+        "CA 🇨🇦 | @Raydikalx | 381CD4",
+        "CA 🇨🇦 | @Raydikalx | 580E92",
+        "KR 🇰🇷 | @Raydikalx | 7D2AD5",
+        "CA 🇨🇦 | @Raydikalx | 3D6002",
+        "JP 🇯🇵 | @Raydikalx | 4D3A7D",
+        "JP 🇯🇵 | @Raydikalx | C47E41",
+        "JP 🇯🇵 | @Raydikalx | F7F260",
+        "IE 🇮🇪 | @Raydikalx | 3AB41C",
+        "JP 🇯🇵 | @Raydikalx | E2A955",
+        "JP 🇯🇵 | @Raydikalx | AC78EE",
+        "JP 🇯🇵 | @Raydikalx | 5B995D",
+        "TW 🇹🇼 | @Raydikalx | 473401",
+        "CA 🇨🇦 | @Raydikalx | 6D325B",
+        "TW 🇹🇼 | @Raydikalx | C75213",
+        "JP 🇯🇵 | @Raydikalx | 1286E2",
+        "US 🇺🇸 | @Raydikalx | C5A1F6",
+        "JP 🇯🇵 | @Raydikalx | C36E71",
+        "JP 🇯🇵 | @Raydikalx | 8B3F7D",
+        "JP 🇯🇵 | @Raydikalx | 570834",
+        "JP 🇯🇵 | @Raydikalx | 30BD19",
+        "HK 🇭🇰 | @Raydikalx | 4BEA91",
+        "JP 🇯🇵 | @Raydikalx | 91BB4F",
+        "JP 🇯🇵 | @Raydikalx | 052A42",
+        "CA 🇨🇦 | @Raydikalx | AAB178",
+        "NL 🇳🇱 | @Raydikalx | 981205",
+        "FR 🇫🇷 | @Raydikalx | 249470",
+        "NL 🇳🇱 | @Raydikalx | CEDE2D",
+        "FR 🇫🇷 | @Raydikalx | 959509",
+        "FR 🇫🇷 | @Raydikalx | 49BE1A",
+        "NL 🇳🇱 | @Raydikalx | 9AD496",
+        "FR 🇫🇷 | @Raydikalx | 68352A",
+        "GB 🇬🇧 | @Raydikalx | 52653D",
+        "NL 🇳🇱 | @Raydikalx | C037D1",
+        "GB 🇬🇧 | @Raydikalx | 66EDAF",
+        "GB 🇬🇧 | @Raydikalx | 4A01A8",
+        "GB 🇬🇧 | @Raydikalx | 5B2BD1",
+        "DE 🇩🇪 | @Raydikalx | 14D675",
+        "DE 🇩🇪 | @Raydikalx | 36737C",
+        "NL 🇳🇱 | @Raydikalx | 27F261",
+        "GB 🇬🇧 | @Raydikalx | BB1164",
+        "NL 🇳🇱 | @Raydikalx | 9C439A",
+        "TW 🇹🇼 | @Raydikalx | D5B6D3",
+        "NL 🇳🇱 | @Raydikalx | 5105A1",
+        "GB 🇬🇧 | @Raydikalx | 64C350",
+        "AU 🇦🇺 | @Raydikalx | DFABBD",
+        "AU 🇦🇺 | @Raydikalx | 196042",
+        "NL 🇳🇱 | @Raydikalx | 825B2C",
+        "NL 🇳🇱 | @Raydikalx | 233A83",
+        "CA 🇨🇦 | @Raydikalx | 32C108",
+        "SG 🇸🇬 | @Raydikalx | 7FEBA6",
+        "NL 🇳🇱 | @Raydikalx | 5A4352",
+        "NL 🇳🇱 | @Raydikalx | CE374E",
+        "KR 🇰🇷 | @Raydikalx | 3E3235",
+        "NL 🇳🇱 | @Raydikalx | 2A413C",
+        "NL 🇳🇱 | @Raydikalx | CD0FA7",
+        "KR 🇰🇷 | @Raydikalx | F49B02",
+        "SG 🇸🇬 | @Raydikalx | 3CFE66",
+        "SG 🇸🇬 | @Raydikalx | 8947EB",
+        "NL 🇳🇱 | @Raydikalx | 8C145E",
+        "DE 🇩🇪 | @Raydikalx | D7863C",
+        "NL 🇳🇱 | @Raydikalx | B42DD1",
+        "SG 🇸🇬 | @Raydikalx | E9A890",
+        "NL 🇳🇱 | @Raydikalx | 4FFB19",
+        "NL 🇳🇱 | @Raydikalx | A23F89",
+        "NL 🇳🇱 | @Raydikalx | F4286E",
+        "DE 🇩🇪 | @Raydikalx | B5E0D5",
+        "NO 🇳🇴 | @Raydikalx | D97531",
+        "DE 🇩🇪 | @Raydikalx | 2437AA",
+        "DE 🇩🇪 | @Raydikalx | 1D455F",
+        "NL 🇳🇱 | @Raydikalx | 3C0C74",
+        "DE 🇩🇪 | @Raydikalx | 225EB1",
+        "DE 🇩🇪 | @Raydikalx | A9B10C",
+        "NL 🇳🇱 | @Raydikalx | 0594FF",
+        "US 🇺🇸 | @Raydikalx | FFB9D2",
+        "ES 🇪🇸 | @Raydikalx | 989B8A",
+        "NL 🇳🇱 | @Raydikalx | E7468B",
+        "KR 🇰🇷 | @Raydikalx | 6CE4A6",
+        "CA 🇨🇦 | @Raydikalx | 651C9A",
+        "US 🇺🇸 | @Raydikalx | 5346AB",
+        "DE 🇩🇪 | @Raydikalx | 8F12B6",
+        "DE 🇩🇪 | @Raydikalx | 82FC13",
+        "BR 🇧🇷 | @Raydikalx | 2DE69A",
+        "NL 🇳🇱 | @Raydikalx | D0A757",
+        "NL 🇳🇱 | @Raydikalx | 743A95",
+        "AU 🇦🇺 | @Raydikalx | 8854B6",
+        "NL 🇳🇱 | @Raydikalx | 5CFE52",
+        "NL 🇳🇱 | @Raydikalx | 0E857C",
+        "CA 🇨🇦 | @Raydikalx | EA39A6",
+        "NL 🇳🇱 | @Raydikalx | FEFEFB",
+        "DE 🇩🇪 | @Raydikalx | 8EE398",
+        "NL 🇳🇱 | @Raydikalx | A0EA09",
+        "NL 🇳🇱 | @Raydikalx | 13A674",
+        "FR 🇫🇷 | @Raydikalx | 11D747",
+        "DE 🇩🇪 | @Raydikalx | D27672",
+        "MO 🇲🇴 | @Raydikalx | F46553",
+        "CA 🇨🇦 | @Raydikalx | C98286",
+        "HK 🇭🇰 | @Raydikalx | 232038",
+        "FR 🇫🇷 | @Raydikalx | 4F9582",
+        "CA 🇨🇦 | @Raydikalx | A7A67C",
+        "US 🇺🇸 | @Raydikalx | B3EC8A",
+        "NL 🇳🇱 | @Raydikalx | 461BFB",
+        "NL 🇳🇱 | @Raydikalx | CCF4B2",
+        "FR 🇫🇷 | @Raydikalx | CE8AC5",
+        "US 🇺🇸 | @Raydikalx | 99586E",
+        "US 🇺🇸 | @Raydikalx | 018C5C",
+        "FR 🇫🇷 | @Raydikalx | EDDAA8",
+        "PL 🇵🇱 | @Raydikalx | 57179B",
+        "FR 🇫🇷 | @Raydikalx | 3CF506",
+        "NL 🇳🇱 | @Raydikalx | CAE108",
+        "ES 🇪🇸 | @Raydikalx | 5524DB",
+        "DE 🇩🇪 | @Raydikalx | 3165F4",
+        "DE 🇩🇪 | @Raydikalx | F13562",
+        "NL 🇳🇱 | @Raydikalx | BDEF2B",
+        "DE 🇩🇪 | @Raydikalx | 4D3B0F",
+        "US 🇺🇸 | @Raydikalx | 143869",
+        "NL 🇳🇱 | @Raydikalx | A68276",
+        "DE 🇩🇪 | @Raydikalx | A386DE",
+        "NL 🇳🇱 | @Raydikalx | B18FD5",
+        "DE 🇩🇪 | @Raydikalx | 4055DA",
+        "HK 🇭🇰 | @Raydikalx | 191BA9",
+        "IT 🇮🇹 | @Raydikalx | B17060",
+        "DE 🇩🇪 | @Raydikalx | 276654",
+        "IT 🇮🇹 | @Raydikalx | FD6100",
+        "CH 🇨🇭 | @Raydikalx | 850989",
+        "TR 🇹🇷 | @Raydikalx | 66FC0D",
+        "NL 🇳🇱 | @Raydikalx | 29752B",
+        "ID 🇮🇩 | @Raydikalx | 9E77D0",
+        "IT 🇮🇹 | @Raydikalx | CC81C4",
+        "CA 🇨🇦 | @Raydikalx | 71FA29",
+        "DE 🇩🇪 | @Raydikalx | FE9813",
+        "IT 🇮🇹 | @Raydikalx | A32AEB",
+        "IT 🇮🇹 | @Raydikalx | DB9A0E",
+        "IT 🇮🇹 | @Raydikalx | 6402D0",
+        "IT 🇮🇹 | @Raydikalx | ACBA16",
+        "CA 🇨🇦 | @Raydikalx | 323850",
+        "IT 🇮🇹 | @Raydikalx | 5309E6",
+        "CA 🇨🇦 | @Raydikalx | 85292F",
+        "NL 🇳🇱 | @Raydikalx | 17A0AE",
+        "FR 🇫🇷 | @Raydikalx | 185EAA",
+        "FR 🇫🇷 | @Raydikalx | 7ED633",
+        "CA 🇨🇦 | @Raydikalx | 93379F",
+        "NL 🇳🇱 | @Raydikalx | A710E0",
+        "US 🇺🇸 | @Raydikalx | B9AC77",
+        "US 🇺🇸 | @Raydikalx | 8C8B8D",
+        "CH 🇨🇭 | @Raydikalx | F91E6B",
+        "CA 🇨🇦 | @Raydikalx | 116960",
+        "SE 🇸🇪 | @Raydikalx | 18A133",
+        "US 🇺🇸 | @Raydikalx | 87EDD1",
+        "FR 🇫🇷 | @Raydikalx | 72B601",
+        "US 🇺🇸 | @Raydikalx | 6F3CC6",
+        "SG 🇸🇬 | @Raydikalx | 5FF374",
+        "CH 🇨🇭 | @Raydikalx | 9B7477",
+        "CH 🇨🇭 | @Raydikalx | BD73A8",
+        "CA 🇨🇦 | @Raydikalx | FEC00C",
+        "HK 🇭🇰 | @Raydikalx | F17139",
+        "US 🇺🇸 | @Raydikalx | 2EB4A9",
+        "CA 🇨🇦 | @Raydikalx | 9C7B2E",
+        "HK 🇭🇰 | @Raydikalx | 78B3E2",
+        "NL 🇳🇱 | @Raydikalx | 8AF975",
+        "HK 🇭🇰 | @Raydikalx | 74A8CC",
+        "US 🇺🇸 | @Raydikalx | E311CB",
+        "CA 🇨🇦 | @Raydikalx | 006A58",
+        "US 🇺🇸 | @Raydikalx | 882A9B",
+        "HK 🇭🇰 | @Raydikalx | 5DA6A2",
+        "CH 🇨🇭 | @Raydikalx | 462A2F",
+        "HK 🇭🇰 | @Raydikalx | D48452",
+        "US 🇺🇸 | @Raydikalx | 8169F9",
+        "HK 🇭🇰 | @Raydikalx | F8BD02",
+        "TH 🇹🇭 | @Raydikalx | AB7D79",
+        "RU 🇷🇺 | @Raydikalx | 839C40",
+        "HK 🇭🇰 | @Raydikalx | B8CEAF",
+        "GB 🇬🇧 | @Raydikalx | 79AA89",
+        "US 🇺🇸 | @Raydikalx | E183EE",
+        "HK 🇭🇰 | @Raydikalx | C3B086",
+        "HK 🇭🇰 | @Raydikalx | 319D31",
+        "US 🇺🇸 | @Raydikalx | C7D66A",
+        "GB 🇬🇧 | @Raydikalx | 2A508E",
+        "GB 🇬🇧 | @Raydikalx | B895E1",
+        "US 🇺🇸 | @Raydikalx | 3D3782",
+        "CA 🇨🇦 | @Raydikalx | 387873",
+        "DE 🇩🇪 | @Raydikalx | 9C1717",
+        "NL 🇳🇱 | @Raydikalx | EB81BC",
+        "FR 🇫🇷 | @Raydikalx | D097D5",
+        "NL 🇳🇱 | @Raydikalx | 0BA891",
+        "CA 🇨🇦 | @Raydikalx | 6A41EA",
+        "DE 🇩🇪 | @Raydikalx | D832BE",
+        "US 🇺🇸 | @Raydikalx | 169990",
+        "CA 🇨🇦 | @Raydikalx | 1FB3DF",
+        "NL 🇳🇱 | @Raydikalx | 254EA2",
+        "LT 🇱🇹 | @Raydikalx | 7B616F",
+        "HK 🇭🇰 | @Raydikalx | 9956C9",
+        "NL 🇳🇱 | @Raydikalx | 9884B6",
+        "NL 🇳🇱 | @Raydikalx | 4EA7F2",
+        "NL 🇳🇱 | @Raydikalx | 88EAE7",
+        "HK 🇭🇰 | @Raydikalx | 64D8FF",
+        "FI 🇫🇮 | @Raydikalx | 954706",
+        "NL 🇳🇱 | @Raydikalx | 7FBF3E"
+      ],
+      "url": "https://www.gstatic.com/generate_204",
+      "interval": "5m",
+      "tolerance": 50
+    },
+    {
+      "type": "vmess",
+      "tag": "US 🇺🇸 | @Raydikalx | 1C45FC",
+      "server": "84.17.41.2",
+      "server_port": 18000,
+      "uuid": "f8c8dc3d-0d37-46b0-8b34-a7232882fcfe",
+      "security": "auto",
+      "alter_id": 0
+    },
+    {
+      "type": "vless",
+      "tag": "US 🇺🇸 | @Raydikalx | B92DC6",
+      "server": "15.204.97.195",
+      "server_port": 23576,
+      "uuid": "48ff2b70-e180-582f-8866-d9a2edeed5f5",
+      "flow": "xtls-rprx-vision",
+      "tls": {
+        "enabled": true,
+        "server_name": "fuck.rkn",
+        "reality": {
+          "enabled": true,
+          "public_key": "1y5h2FGWKXTJ9xLPCqPo6Mw7RxoZzh6fGkEQKNxpZ3s",
+          "short_id": "01"
+        },
+        "utls": {
+          "enabled": true,
+          "fingerprint": "chrome"
+        }
+      }
+    },
+    {
+      "type": "shadowsocks",
+      "tag": "CA 🇨🇦 | @Raydikalx | DEBC1A",
+      "server": "149.22.95.183",
+      "server_port": 443,
+      "method": "aes-128-gcm",
+      "password": "shadowsocks"
+    },
+    {
+      "type": "vless",
+      "tag": "US 🇺🇸 | @Raydikalx | B15379",
+      "server": "52.43.158.158",
+      "server_port": 443,
+      "uuid": "0370b162-baff-4757-86cc-cce4bf07f6f1",
+      "tls": {
+        "enabled": true,
+        "server_name": "www.cloudflare.com",
+        "reality": {
+          "enabled": true,
+          "public_key": "lYcMPEgf6ePmF_d8RXR5fsVorycW37v_ECl-fz_H6w4",
+          "short_id": "cfe08c23a85f24"
+        },
+        "utls": {
+          "enabled": true,
+          "fingerprint": "chrome"
+        }
+      }
+    },
+    {
+      "type": "vmess",
+      "tag": "US 🇺🇸 | @Raydikalx | 02762D",
+      "server": "165.140.216.141",
+      "server_port": 443,
+      "uuid": "e7d72a8d-26f2-4b54-b366-0c43e0bcba7d",
+      "security": "auto",
+      "alter_id": 0
+    },
+    {
+      "type": "vmess",
+      "tag": "US 🇺🇸 | @Raydikalx | CD1C34",
+      "server": "165.140.216.142",
+      "server_port": 443,
+      "uuid": "b65a2d69-5634-42a2-e4be-54e8a6176900",
+      "security": "auto",
+      "alter_id": 0
+    },
+    {
+      "type": "vmess",
+      "tag": "US 🇺🇸 | @Raydikalx | C0A390",
+      "server": "82.198.246.97",
+      "server_port": 180,
+      "uuid": "d13fc2f5-3e05-4795-81eb-44143a09e552",
+      "security": "auto",
+      "alter_id": 0
+    },
+    {
+      "type": "vmess",
+      "tag": "US 🇺🇸 | @Raydikalx | 8C0695",
+      "server": "82.198.246.37",
+      "server_port": 180,
+      "uuid": "d13fc2f5-3e05-4795-81eb-44143a09e552",
+      "security": "auto",
+      "alter_id": 0
+    },
+    {
+      "type": "vmess",
+      "tag": "US 🇺🇸 | @Raydikalx | 510D7C",
+      "server": "82.198.246.233",
+      "server_port": 180,
+      "uuid": "d13fc2f5-3e05-4795-81eb-44143a09e552",
+      "security": "auto",
+      "alter_id": 0
+    },
+    {
+      "type": "vmess",
+      "tag": "US 🇺🇸 | @Raydikalx | 9192D6",
+      "server": "82.198.246.97",
+      "server_port": 180,
+      "uuid": "d13fc2f5-3e05-4795-81eb-44143a09e552",
+      "security": "auto",
+      "alter_id": 0
+    },
+    {
+      "type": "vmess",
+      "tag": "US 🇺🇸 | @Raydikalx | EC9C13",
+      "server": "82.198.246.37",
+      "server_port": 180,
+      "uuid": "d13fc2f5-3e05-4795-81eb-44143a09e552",
+      "security": "auto",
+      "alter_id": 0
+    },
+    {
+      "type": "vmess",
+      "tag": "US 🇺🇸 | @Raydikalx | 076263",
+      "server": "169.197.142.22",
+      "server_port": 18000,
+      "uuid": "f8c8dc3d-0d37-46b0-8b34-a7232882fcfe",
+      "security": "auto",
+      "alter_id": 0
+    },
+    {
+      "type": "vless",
+      "tag": "US 🇺🇸 | @Raydikalx | E3CF27",
+      "server": "64.23.143.23",
+      "server_port": 34045,
+      "uuid": "d8dd94fd-540e-461d-b5d4-acebef02c22a",
+      "tls": {
+        "enabled": true,
+        "server_name": "visit-this-invitation-link-to-join-tg-enkelte-notif.ekt.me",
+        "reality": {
+          "enabled": true,
+          "public_key": "cDaDzPr3PlS3NM8lreHZbdo-Mhqz8vMBzMSkHXhGIUA",
+          "short_id": "e8ab71d0"
+        },
+        "utls": {
+          "enabled": true,
+          "fingerprint": "chrome"
+        }
+      }
+    },
+    {
+      "type": "shadowsocks",
+      "tag": "US 🇺🇸 | @Raydikalx | 569DA6",
+      "server": "108.181.118.10",
+      "server_port": 8388,
+      "method": "chacha20-ietf-poly1305",
+      "password": "G5p6ww4o67HB"
+    },
+    {
+      "type": "shadowsocks",
+      "tag": "US 🇺🇸 | @Raydikalx | 043CAC",
+      "server": "108.181.0.177",
+      "server_port": 8388,
+      "method": "chacha20-ietf-poly1305",
+      "password": "G5p6ww4o67HB"
+    },
+    {
+      "type": "vmess",
+      "tag": "US 🇺🇸 | @Raydikalx | B94E7F",
+      "server": "216.106.185.141",
+      "server_port": 22324,
+      "uuid": "04621bae-ab36-11ec-b909-0242ac120002",
+      "security": "auto",
+      "alter_id": 0
+    },
+    {
+      "type": "vless",
+      "tag": "CA 🇨🇦 | @Raydikalx | A0BCF7",
+      "server": "www.wto.org",
+      "server_port": 2095,
+      "uuid": "86c50e3a-5b87-49dd-bd20-03c7f2735e40",
+      "transport": {
+        "type": "ws",
+        "path": "/",
+        "headers": {
+          "Host": "fuckingfangbinxing.pusytroller.cf"
+        }
+      }
+    },
+    {
+      "type": "vmess",
+      "tag": "US 🇺🇸 | @Raydikalx | 549733",
+      "server": "129.146.143.80",
+      "server_port": 48111,
+      "uuid": "d4603cc2-e0ee-4651-83f5-1db5b7168177",
+      "security": "auto",
+      "alter_id": 0
+    },
+    {
+      "type": "shadowsocks",
+      "tag": "US 🇺🇸 | @Raydikalx | 4A3857",
+      "server": "156.146.38.167",
+      "server_port": 443,
+      "method": "aes-128-gcm",
+      "password": "shadowsocks"
+    },
+    {
+      "type": "vless",
+      "tag": "US 🇺🇸 | @Raydikalx | 0BE3C6",
+      "server": "191.101.130.131",
+      "server_port": 38001,
+      "uuid": "d38fb586-bec2-4892-f774-7789068e32d5"
+    },
+    {
+      "type": "shadowsocks",
+      "tag": "US 🇺🇸 | @Raydikalx | D50052",
+      "server": "156.146.38.169",
+      "server_port": 443,
+      "method": "aes-128-gcm",
+      "password": "shadowsocks"
+    },
+    {
+      "type": "shadowsocks",
+      "tag": "US 🇺🇸 | @Raydikalx | FEA075",
+      "server": "156.146.38.170",
+      "server_port": 443,
+      "method": "aes-128-gcm",
+      "password": "shadowsocks"
+    },
+    {
+      "type": "shadowsocks",
+      "tag": "US 🇺🇸 | @Raydikalx | F4AF2E",
+      "server": "156.146.38.168",
+      "server_port": 443,
+      "method": "aes-128-gcm",
+      "password": "shadowsocks"
+    },
+    {
+      "type": "vless",
+      "tag": "CA 🇨🇦 | @Raydikalx | B3C8AC",
+      "server": "172.64.146.153",
+      "server_port": 2095,
+      "uuid": "86c50e3a-5b87-49dd-bd20-03c7f2735e40",
+      "transport": {
+        "type": "ws",
+        "path": "/",
+        "headers": {
+          "Host": "fangbinxingnmsl.pusytroller.gq"
+        }
+      }
+    },
+    {
+      "type": "vmess",
+      "tag": "US 🇺🇸 | @Raydikalx | 4DA029",
+      "server": "129.146.77.248",
+      "server_port": 39495,
+      "uuid": "f836c736-87fc-4fde-aabc-00857ecdff3e",
+      "security": "auto",
+      "alter_id": 0,
+      "transport": {
+        "type": "ws",
+        "path": "/cctv13.m3u8"
+      }
+    },
+    {
+      "type": "vmess",
+      "tag": "US 🇺🇸 | @Raydikalx | D39BB5",
+      "server": "129.146.77.248",
+      "server_port": 39495,
+      "uuid": "f836c736-87fc-4fde-aabc-00857ecdff3e",
+      "security": "auto",
+      "alter_id": 0,
+      "transport": {
+        "type": "ws",
+        "path": "/cctv13.m3u8",
+        "headers": {
+          "Host": "129.146.77.248"
+        }
+      }
+    },
+    {
+      "type": "vmess",
+      "tag": "CA 🇨🇦 | @Raydikalx | 0BB678",
+      "server": "23.162.200.198",
+      "server_port": 18000,
+      "uuid": "f8c8dc3d-0d37-46b0-8b34-a7232882fcfe",
+      "security": "auto",
+      "alter_id": 0
+    },
+    {
+      "type": "vmess",
+      "tag": "CA 🇨🇦 | @Raydikalx | FBC8A6",
+      "server": "134.195.196.211",
+      "server_port": 18000,
+      "uuid": "f8c8dc3d-0d37-46b0-8b34-a7232882fcfe",
+      "security": "auto",
+      "alter_id": 0
+    },
+    {
+      "type": "vmess",
+      "tag": "US 🇺🇸 | @Raydikalx | 2D1DC4",
+      "server": "67.220.95.3",
+      "server_port": 18000,
+      "uuid": "f8c8dc3d-0d37-46b0-8b34-a7232882fcfe",
+      "security": "aes-128-gcm",
+      "alter_id": 0
+    },
+    {
+      "type": "vmess",
+      "tag": "US 🇺🇸 | @Raydikalx | A57557",
+      "server": "216.106.183.35",
+      "server_port": 22324,
+      "uuid": "04621bae-ab36-11ec-b909-0242ac120002",
+      "security": "auto",
+      "alter_id": 0
+    },
+    {
+      "type": "shadowsocks",
+      "tag": "US 🇺🇸 | @Raydikalx | 02CE4D",
+      "server": "37.19.198.243",
+      "server_port": 443,
+      "method": "aes-128-gcm",
+      "password": "shadowsocks"
+    },
+    {
+      "type": "vmess",
+      "tag": "US 🇺🇸 | @Raydikalx | 48AF8D",
+      "server": "67.220.85.46",
+      "server_port": 18000,
+      "uuid": "f8c8dc3d-0d37-46b0-8b34-a7232882fcfe",
+      "security": "auto",
+      "alter_id": 0
+    },
+    {
+      "type": "vless",
+      "tag": "US 🇺🇸 | @Raydikalx | 5D90ED",
+      "server": "marzban-node-production-e828.up.railway.app",
+      "server_port": 443,
+      "uuid": "de1e55b3-1cbd-4fae-a3e5-db3430c95b06",
+      "tls": {
+        "enabled": true,
+        "server_name": "marzban-node-production-e828.up.railway.app",
+        "utls": {
+          "enabled": true,
+          "fingerprint": "chrome"
+        }
+      },
+      "transport": {
+        "type": "ws",
+        "path": "/vless",
+        "headers": {
+          "Host": "marzban-node-production-e828.up.railway.app"
+        }
+      }
+    },
+    {
+      "type": "shadowsocks",
+      "tag": "US 🇺🇸 | @Raydikalx | 9366BE",
+      "server": "37.19.198.160",
+      "server_port": 443,
+      "method": "aes-128-gcm",
+      "password": "shadowsocks"
+    },
+    {
+      "type": "shadowsocks",
+      "tag": "US 🇺🇸 | @Raydikalx | BB7720",
+      "server": "37.19.198.244",
+      "server_port": 443,
+      "method": "aes-128-gcm",
+      "password": "shadowsocks"
+    },
+    {
+      "type": "shadowsocks",
+      "tag": "US 🇺🇸 | @Raydikalx | 088543",
+      "server": "37.19.198.236",
+      "server_port": 443,
+      "method": "aes-128-gcm",
+      "password": "shadowsocks"
+    },
+    {
+      "type": "shadowsocks",
+      "tag": "US 🇺🇸 | @Raydikalx | C86ABA",
+      "server": "173.244.56.6",
+      "server_port": 443,
+      "method": "aes-128-gcm",
+      "password": "shadowsocks"
+    },
+    {
+      "type": "shadowsocks",
+      "tag": "US 🇺🇸 | @Raydikalx | E2EDF3",
+      "server": "173.244.56.9",
+      "server_port": 443,
+      "method": "aes-128-gcm",
+      "password": "shadowsocks"
+    },
+    {
+      "type": "trojan",
+      "tag": "US 🇺🇸 | @Raydikalx | 1AF7E8",
+      "server": "163.245.196.68",
+      "server_port": 49361,
+      "password": "0ebb269c9f2d4e8e46b0cd4105a55134",
+      "tls": {
+        "enabled": true,
+        "server_name": "163.245.196.68.sslip.io"
+      }
+    },
+    {
+      "type": "shadowsocks",
+      "tag": "US 🇺🇸 | @Raydikalx | E82A92",
+      "server": "198.98.53.130",
+      "server_port": 443,
+      "method": "chacha20-ietf-poly1305",
+      "password": "eDfN7SODQceIOmIAbtJJtK"
+    },
+    {
+      "type": "shadowsocks",
+      "tag": "CA 🇨🇦 | @Raydikalx | 1B0DB3",
+      "server": "185.196.61.82",
+      "server_port": 8080,
+      "method": "aes-256-gcm",
+      "password": "KixLvKzwjekG00rm"
+    },
+    {
+      "type": "trojan",
+      "tag": "US 🇺🇸 | @Raydikalx | 6BC9F6",
+      "server": "163.245.196.68",
+      "server_port": 49361,
+      "password": "0ebb269c9f2d4e8e46b0cd4105a55134",
+      "tls": {
+        "enabled": true,
+        "server_name": "163.245.196.68.sslip.io"
+      }
+    },
+    {
+      "type": "vless",
+      "tag": "US 🇺🇸 | @Raydikalx | 7CA59D",
+      "server": "198.23.238.35",
+      "server_port": 443,
+      "uuid": "70f8d74a-7938-4f21-9293-2c437a939247",
+      "flow": "xtls-rprx-vision",
+      "tls": {
+        "enabled": true,
+        "server_name": "www.cloudflare.com",
+        "reality": {
+          "enabled": true,
+          "public_key": "M4KRLRGcJGhJScjCv3JinHE0Da9s79Ku7GlVFSNsTVY",
+          "short_id": "a61500e1"
+        },
+        "utls": {
+          "enabled": true,
+          "fingerprint": "chrome"
+        }
+      }
+    },
+    {
+      "type": "shadowsocks",
+      "tag": "US 🇺🇸 | @Raydikalx | 1A4D26",
+      "server": "172.245.235.84",
+      "server_port": 2375,
+      "method": "aes-256-gcm",
+      "password": "faBAoD54k87UJG7"
+    },
+    {
+      "type": "vmess",
+      "tag": "US 🇺🇸 | @Raydikalx | 61EC2C",
+      "server": "38.110.1.246",
+      "server_port": 18000,
+      "uuid": "f8c8dc3d-0d37-46b0-8b34-a7232882fcfe",
+      "security": "auto",
+      "alter_id": 0
+    },
+    {
+      "type": "vless",
+      "tag": "CA 🇨🇦 | @Raydikalx | 1EF852",
+      "server": "216.152.147.28",
+      "server_port": 443,
+      "uuid": "d9e4721d-cdac-44c7-bc91-117367eac194",
+      "flow": "xtls-rprx-vision",
+      "tls": {
+        "enabled": true,
+        "server_name": "www.cloudflare.com",
+        "reality": {
+          "enabled": true,
+          "public_key": "kjiuPmjM4IutdZudHfcPZHEwcrBEFY4qBLlvfC6A_Ss",
+          "short_id": "b9f8d3f8"
+        },
+        "utls": {
+          "enabled": true,
+          "fingerprint": "chrome"
+        }
+      }
+    },
+    {
+      "type": "vmess",
+      "tag": "US 🇺🇸 | @Raydikalx | 44DCF4",
+      "server": "38.91.107.49",
+      "server_port": 18000,
+      "uuid": "f8c8dc3d-0d37-46b0-8b34-a7232882fcfe",
+      "security": "auto",
+      "alter_id": 0
+    },
+    {
+      "type": "vless",
+      "tag": "US 🇺🇸 | @Raydikalx | BACD33",
+      "server": "154.193.55.183",
+      "server_port": 443,
+      "uuid": "f75814f6-8f81-4847-b792-168c41f2dc85",
+      "flow": "xtls-rprx-vision",
+      "tls": {
+        "enabled": true,
+        "server_name": "storage.yandex.net",
+        "reality": {
+          "enabled": true,
+          "public_key": "EMS0wzISeSbEe4JABPD8EgDnyLXgDmrX4_lcfG6VVX4",
+          "short_id": "c76ba2c2fb172e8b"
+        },
+        "utls": {
+          "enabled": true,
+          "fingerprint": "chrome"
+        }
+      }
+    },
+    {
+      "type": "vless",
+      "tag": "JP 🇯🇵 | @Raydikalx | D4F357",
+      "server": "14.137.238.159",
+      "server_port": 10000,
+      "uuid": "431fe973-a43a-4fac-bf83-2a772e0d0625"
+    },
+    {
+      "type": "trojan",
+      "tag": "US 🇺🇸 | @Raydikalx | 31C6CE",
+      "server": "153.75.250.171",
+      "server_port": 49271,
+      "password": "9ad83f65a560960e6509b677eb6162c1",
+      "tls": {
+        "enabled": true,
+        "server_name": "153.75.250.171.sslip.io"
+      }
+    },
+    {
+      "type": "vless",
+      "tag": "US 🇺🇸 | @Raydikalx | 45C1A0",
+      "server": "47.253.226.114",
+      "server_port": 443,
+      "uuid": "055a1ce8-2a16-4a0d-a2c2-22826c9b2413",
+      "flow": "xtls-rprx-vision",
+      "tls": {
+        "enabled": true,
+        "server_name": "www.cloudflare.com",
+        "reality": {
+          "enabled": true,
+          "public_key": "Svl81isn16RPAFnjtmYw7A6TPnsEPLHuYYaJht65Rzc",
+          "short_id": ""
+        },
+        "utls": {
+          "enabled": true,
+          "fingerprint": "chrome"
+        }
+      }
+    },
+    {
+      "type": "shadowsocks",
+      "tag": "JP 🇯🇵 | @Raydikalx | 2459E0",
+      "server": "149.22.87.240",
+      "server_port": 443,
+      "method": "aes-128-gcm",
+      "password": "shadowsocks"
+    },
+    {
+      "type": "hysteria2",
+      "tag": "US 🇺🇸 | @Raydikalx | 9A112F",
+      "server": "usa1.spectrumproxy.shop",
+      "server_port": 443,
+      "password": "76713d07-5a6b-49c2-abd8-bc450a2fa7fc",
+      "tls": {
+        "enabled": true,
+        "server_name": "usa1.spectrumproxy.shop",
+        "insecure": false
+      }
+    },
+    {
+      "type": "vless",
+      "tag": "GB 🇬🇧 | @Raydikalx | BBA9C7",
+      "server": "45.206.5.122",
+      "server_port": 443,
+      "uuid": "11e57eeb-ffdf-4983-a9fa-ad352dea7253",
+      "flow": "xtls-rprx-vision",
+      "tls": {
+        "enabled": true,
+        "server_name": "storage.yandex.net",
+        "reality": {
+          "enabled": true,
+          "public_key": "pPi-WO8qQFFZ9UJWNLW9YClbjcoAAZWJQ2_FM3Kjhz8",
+          "short_id": "500aec9e9e5e2212"
+        },
+        "utls": {
+          "enabled": true,
+          "fingerprint": "chrome"
+        }
+      }
+    },
+    {
+      "type": "vless",
+      "tag": "US 🇺🇸 | @Raydikalx | 830C36",
+      "server": "147.182.212.232",
+      "server_port": 56565,
+      "uuid": "7b188eea-b08f-42c2-bac7-d3b0e74218b8",
+      "flow": "xtls-rprx-vision",
+      "tls": {
+        "enabled": true,
+        "server_name": "www.paypal.com",
+        "reality": {
+          "enabled": true,
+          "public_key": "Td03Ae-cuYLq4xg7MSps58c_yRUcbbwtZLXm0ywabjY",
+          "short_id": ""
+        },
+        "utls": {
+          "enabled": true,
+          "fingerprint": "chrome"
+        }
+      }
+    },
+    {
+      "type": "vless",
+      "tag": "US 🇺🇸 | @Raydikalx | 6ADC1C",
+      "server": "159.89.87.21",
+      "server_port": 28190,
+      "uuid": "14c80e0e-f7ce-4991-94fc-99a1db4a9b1e",
+      "flow": "xtls-rprx-vision",
+      "tls": {
+        "enabled": true,
+        "server_name": "aws.amazon.com",
+        "reality": {
+          "enabled": true,
+          "public_key": "ZJRnFU-1s1JOnO8E9uZ7b00l1fPEh63fGRbdBANFRno",
+          "short_id": ""
+        },
+        "utls": {
+          "enabled": true,
+          "fingerprint": "chrome"
+        }
+      }
+    },
+    {
+      "type": "vless",
+      "tag": "US 🇺🇸 | @Raydikalx | AA4372",
+      "server": "167.99.48.117",
+      "server_port": 24665,
+      "uuid": "f421241e-572f-481e-93ab-961812437fe6",
+      "flow": "xtls-rprx-vision",
+      "tls": {
+        "enabled": true,
+        "server_name": "www.mysql.com",
+        "reality": {
+          "enabled": true,
+          "public_key": "U1wgcKgoj-pgHELpRRsg1ghhsfgAlwkoPY-yu694VkY",
+          "short_id": "6ba85179e30d4fc2"
+        },
+        "utls": {
+          "enabled": true,
+          "fingerprint": "chrome"
+        }
+      }
+    },
+    {
+      "type": "shadowsocks",
+      "tag": "JP 🇯🇵 | @Raydikalx | 554D18",
+      "server": "149.22.87.204",
+      "server_port": 443,
+      "method": "aes-128-gcm",
+      "password": "shadowsocks"
+    },
+    {
+      "type": "vless",
+      "tag": "US 🇺🇸 | @Raydikalx | 916AA8",
+      "server": "137.184.218.169",
+      "server_port": 36925,
+      "uuid": "c9fd0fb1-8251-4106-b09a-f4b426736f67",
+      "flow": "xtls-rprx-vision",
+      "tls": {
+        "enabled": true,
+        "server_name": "www.cloudflare.com",
+        "reality": {
+          "enabled": true,
+          "public_key": "lJ9INPpO4rdnm2Tek_yg0PGFyUrBB6MoKyvqt_Mfqm0",
+          "short_id": ""
+        },
+        "utls": {
+          "enabled": true,
+          "fingerprint": "chrome"
+        }
+      }
+    },
+    {
+      "type": "shadowsocks",
+      "tag": "JP 🇯🇵 | @Raydikalx | 9EF41E",
+      "server": "149.22.87.241",
+      "server_port": 443,
+      "method": "aes-128-gcm",
+      "password": "shadowsocks"
+    },
+    {
+      "type": "vless",
+      "tag": "CA 🇨🇦 | @Raydikalx | 381CD4",
+      "server": "104.16.106.213",
+      "server_port": 8880,
+      "uuid": "e43ca713-a646-4406-a4d5-1e7bad20e7da",
+      "transport": {
+        "type": "ws",
+        "path": "/pyip=ProxyIP.US.CMLiussss.net",
+        "headers": {
+          "Host": "autumn-snow-735a.175-9d9.workers.dev"
+        }
+      }
+    },
+    {
+      "type": "vless",
+      "tag": "CA 🇨🇦 | @Raydikalx | 580E92",
+      "server": "104.21.90.146",
+      "server_port": 443,
+      "uuid": "e35a5ad5-0175-4cd6-b654-1eb220ff28f0",
+      "tls": {
+        "enabled": true,
+        "server_name": "node-dispatch-c8-2.e20260720.kdns.fr",
+        "utls": {
+          "enabled": true,
+          "fingerprint": "chrome"
+        }
+      },
+      "transport": {
+        "type": "ws",
+        "path": "/Wvf67jc5MgASmsb9Qsr0",
+        "headers": {
+          "Host": "node-dispatch-c8-2.e20260720.kdns.fr"
+        }
+      }
+    },
+    {
+      "type": "vmess",
+      "tag": "KR 🇰🇷 | @Raydikalx | 7D2AD5",
+      "server": "140.238.2.250",
+      "server_port": 443,
+      "uuid": "41a7089a-040b-4538-8b8d-010902405bde",
+      "security": "auto",
+      "alter_id": 0
+    },
+    {
+      "type": "vless",
+      "tag": "CA 🇨🇦 | @Raydikalx | 3D6002",
+      "server": "172.67.169.143",
+      "server_port": 443,
+      "uuid": "e35a5ad5-0175-4cd6-b654-1eb220ff28f0",
+      "tls": {
+        "enabled": true,
+        "server_name": "infra-services-c8-2.21491204-f13b-4977-9cc9-5275edd68fd8.kdns.fr",
+        "utls": {
+          "enabled": true,
+          "fingerprint": "chrome"
+        }
+      },
+      "transport": {
+        "type": "ws",
+        "path": "/Wvf67jc5MgASmsb9Qsr0",
+        "headers": {
+          "Host": "infra-services-c8-2.21491204-f13b-4977-9cc9-5275edd68fd8.kdns.fr"
+        }
+      }
+    },
+    {
+      "type": "vmess",
+      "tag": "JP 🇯🇵 | @Raydikalx | 4D3A7D",
+      "server": "45.76.202.45",
+      "server_port": 4010,
+      "uuid": "071a8a71-c656-4fb6-a908-4e42eb72243d",
+      "security": "auto",
+      "alter_id": 0,
+      "transport": {
+        "type": "ws",
+        "path": "/liksuzcp"
+      }
+    },
+    {
+      "type": "vmess",
+      "tag": "JP 🇯🇵 | @Raydikalx | C47E41",
+      "server": "161.33.139.138",
+      "server_port": 58905,
+      "uuid": "1610f8dc-0661-4032-ac6a-a7250603f608",
+      "security": "auto",
+      "alter_id": 0,
+      "transport": {
+        "type": "ws",
+        "path": "/1610f8dc-0661-4032-ac6a-a7250603f608-vm"
+      }
+    },
+    {
+      "type": "vmess",
+      "tag": "JP 🇯🇵 | @Raydikalx | F7F260",
+      "server": "161.33.139.138",
+      "server_port": 58905,
+      "uuid": "1610f8dc-0661-4032-ac6a-a7250603f608",
+      "security": "auto",
+      "alter_id": 0,
+      "transport": {
+        "type": "ws",
+        "path": "/1610f8dc-0661-4032-ac6a-a7250603f608-vm",
+        "headers": {
+          "Host": "161.33.139.138"
+        }
+      }
+    },
+    {
+      "type": "shadowsocks",
+      "tag": "IE 🇮🇪 | @Raydikalx | 3AB41C",
+      "server": "4.231.225.39",
+      "server_port": 443,
+      "method": "chacha20-ietf-poly1305",
+      "password": "IYJ5IS2oSAs93kGT"
+    },
+    {
+      "type": "vless",
+      "tag": "JP 🇯🇵 | @Raydikalx | E2A955",
+      "server": "3.114.220.22",
+      "server_port": 10583,
+      "uuid": "814bd064-544d-4255-a070-5705c03f6da9",
+      "flow": "xtls-rprx-vision",
+      "tls": {
+        "enabled": true,
+        "server_name": "www.apple.com",
+        "reality": {
+          "enabled": true,
+          "public_key": "k2hPp0tTW0Da-HK94wYpSCLbuK44LfGqC2MSJIM1Ti0",
+          "short_id": "48050fab"
+        },
+        "utls": {
+          "enabled": true,
+          "fingerprint": "chrome"
+        }
+      }
+    },
+    {
+      "type": "vless",
+      "tag": "JP 🇯🇵 | @Raydikalx | AC78EE",
+      "server": "3.114.220.22",
+      "server_port": 18007,
+      "uuid": "814bd064-544d-4255-a070-5705c03f6da9",
+      "flow": "xtls-rprx-vision",
+      "tls": {
+        "enabled": true,
+        "server_name": "www.apple.com",
+        "reality": {
+          "enabled": true,
+          "public_key": "k2hPp0tTW0Da-HK94wYpSCLbuK44LfGqC2MSJIM1Ti0",
+          "short_id": "48050fab"
+        },
+        "utls": {
+          "enabled": true,
+          "fingerprint": "chrome"
+        }
+      }
+    },
+    {
+      "type": "vless",
+      "tag": "JP 🇯🇵 | @Raydikalx | 5B995D",
+      "server": "43.165.186.226",
+      "server_port": 443,
+      "uuid": "3dc3b4ef-c3f6-4ef3-9e03-e0a8fd82b7be",
+      "tls": {
+        "enabled": true,
+        "server_name": "www.sony.com",
+        "reality": {
+          "enabled": true,
+          "public_key": "aW52dpxW-umVvMOHPRCDsnHnJjuM8_S1FScLJQrVrG8",
+          "short_id": "a32e8c4a"
+        },
+        "utls": {
+          "enabled": true,
+          "fingerprint": "chrome"
+        }
+      }
+    },
+    {
+      "type": "vless",
+      "tag": "TW 🇹🇼 | @Raydikalx | 473401",
+      "server": "60.249.101.13",
+      "server_port": 10000,
+      "uuid": "431fe973-a43a-4fac-bf83-2a772e0d0625"
+    },
+    {
+      "type": "vless",
+      "tag": "CA 🇨🇦 | @Raydikalx | 6D325B",
+      "server": "www.ipget.net",
+      "server_port": 8880,
+      "uuid": "41ce10f9-748b-46a0-be7c-e29d863aa028",
+      "transport": {
+        "type": "ws",
+        "path": "/pyip=ProxyIP.JP.CMLiussss.net",
+        "headers": {
+          "Host": "gentle-violet-ceef.497-2fe.workers.dev"
+        }
+      }
+    },
+    {
+      "type": "vless",
+      "tag": "TW 🇹🇼 | @Raydikalx | C75213",
+      "server": "60.249.101.16",
+      "server_port": 10000,
+      "uuid": "431fe973-a43a-4fac-bf83-2a772e0d0625"
+    },
+    {
+      "type": "vmess",
+      "tag": "JP 🇯🇵 | @Raydikalx | 1286E2",
+      "server": "168.138.43.75",
+      "server_port": 80,
+      "uuid": "11c3627f-31e8-4695-dfbd-34076e2f1f5d",
+      "security": "auto",
+      "alter_id": 0,
+      "transport": {
+        "type": "ws",
+        "path": "/cctv13.m3u8"
+      }
+    },
+    {
+      "type": "vless",
+      "tag": "US 🇺🇸 | @Raydikalx | C5A1F6",
+      "server": "167.88.167.57",
+      "server_port": 443,
+      "uuid": "41cbcc75-759f-4707-984e-aea715046830",
+      "flow": "xtls-rprx-vision",
+      "tls": {
+        "enabled": true,
+        "server_name": "site.rumedia-cdn.com",
+        "reality": {
+          "enabled": true,
+          "public_key": "vJBCJXM6AYo1zobLsW7-UzJsznfiqzVpz7OphyAbGX0",
+          "short_id": "7b661daae97b9789"
+        },
+        "utls": {
+          "enabled": true,
+          "fingerprint": "chrome"
+        }
+      }
+    },
+    {
+      "type": "vmess",
+      "tag": "JP 🇯🇵 | @Raydikalx | C36E71",
+      "server": "140.83.51.161",
+      "server_port": 25686,
+      "uuid": "6733c357-ba11-4e9f-f00f-7d87f2776ff9",
+      "security": "auto",
+      "alter_id": 0,
+      "transport": {
+        "type": "ws",
+        "path": "/cctv13.m3u8"
+      }
+    },
+    {
+      "type": "vmess",
+      "tag": "JP 🇯🇵 | @Raydikalx | 8B3F7D",
+      "server": "168.138.43.75",
+      "server_port": 80,
+      "uuid": "11c3627f-31e8-4695-dfbd-34076e2f1f5d",
+      "security": "auto",
+      "alter_id": 0,
+      "transport": {
+        "type": "ws",
+        "path": "/cctv13.m3u8"
+      }
+    },
+    {
+      "type": "vmess",
+      "tag": "JP 🇯🇵 | @Raydikalx | 570834",
+      "server": "168.138.43.75",
+      "server_port": 80,
+      "uuid": "11c3627f-31e8-4695-dfbd-34076e2f1f5d",
+      "security": "auto",
+      "alter_id": 0,
+      "transport": {
+        "type": "ws",
+        "path": "/cctv13.m3u8",
+        "headers": {
+          "Host": "168.138.43.75"
+        }
+      }
+    },
+    {
+      "type": "vmess",
+      "tag": "JP 🇯🇵 | @Raydikalx | 30BD19",
+      "server": "140.83.51.161",
+      "server_port": 25686,
+      "uuid": "6733c357-ba11-4e9f-f00f-7d87f2776ff9",
+      "security": "auto",
+      "alter_id": 0,
+      "transport": {
+        "type": "ws",
+        "path": "/cctv13.m3u8",
+        "headers": {
+          "Host": "140.83.51.161"
+        }
+      }
+    },
+    {
+      "type": "vless",
+      "tag": "HK 🇭🇰 | @Raydikalx | 4BEA91",
+      "server": "207.174.133.222",
+      "server_port": 10000,
+      "uuid": "431fe973-a43a-4fac-bf83-2a772e0d0625"
+    },
+    {
+      "type": "vmess",
+      "tag": "JP 🇯🇵 | @Raydikalx | 91BB4F",
+      "server": "140.83.51.161",
+      "server_port": 25686,
+      "uuid": "6733c357-ba11-4e9f-f00f-7d87f2776ff9",
+      "security": "auto",
+      "alter_id": 0,
+      "transport": {
+        "type": "ws",
+        "path": "/cctv13.m3u8",
+        "headers": {
+          "Host": "jp02.a0a.xyz"
+        }
+      }
+    },
+    {
+      "type": "vmess",
+      "tag": "JP 🇯🇵 | @Raydikalx | 052A42",
+      "server": "168.138.43.75",
+      "server_port": 80,
+      "uuid": "11c3627f-31e8-4695-dfbd-34076e2f1f5d",
+      "security": "auto",
+      "alter_id": 0,
+      "transport": {
+        "type": "ws",
+        "path": "/cctv13.m3u8",
+        "headers": {
+          "Host": "jp01.a0a.xyz"
+        }
+      }
+    },
+    {
+      "type": "vless",
+      "tag": "CA 🇨🇦 | @Raydikalx | AAB178",
+      "server": "www.npmjs.com",
+      "server_port": 2095,
+      "uuid": "86c50e3a-5b87-49dd-bd20-03c7f2735e40",
+      "transport": {
+        "type": "ws",
+        "path": "/",
+        "headers": {
+          "Host": "cnmfangbinxing.cnmfangbinxing-1.workers.dev"
+        }
+      }
+    },
+    {
+      "type": "vless",
+      "tag": "NL 🇳🇱 | @Raydikalx | 981205",
+      "server": "193.123.62.167",
+      "server_port": 62145,
+      "uuid": "8fb65472-5957-4f64-ba2d-b5812b2f155a"
+    },
+    {
+      "type": "vless",
+      "tag": "FR 🇫🇷 | @Raydikalx | 249470",
+      "server": "51.45.37.42",
+      "server_port": 22224,
+      "uuid": "e4514801-0d5a-42ba-869f-39bd605aef9e"
+    },
+    {
+      "type": "shadowsocks",
+      "tag": "NL 🇳🇱 | @Raydikalx | CEDE2D",
+      "server": "158.101.208.107",
+      "server_port": 45819,
+      "method": "chacha20-ietf-poly1305",
+      "password": "YTEyZDI0OGQwM2ZmZjc4ZTg1ZTBiYTNlZTZkZjIxODM="
+    },
+    {
+      "type": "vless",
+      "tag": "FR 🇫🇷 | @Raydikalx | 959509",
+      "server": "51.45.37.42",
+      "server_port": 22222,
+      "uuid": "e4514801-0d5a-42ba-869f-39bd605aef9e"
+    },
+    {
+      "type": "vless",
+      "tag": "FR 🇫🇷 | @Raydikalx | 49BE1A",
+      "server": "51.45.37.42",
+      "server_port": 22223,
+      "uuid": "e4514801-0d5a-42ba-869f-39bd605aef9e"
+    },
+    {
+      "type": "shadowsocks",
+      "tag": "NL 🇳🇱 | @Raydikalx | 9AD496",
+      "server": "108.181.126.122",
+      "server_port": 8388,
+      "method": "chacha20-ietf-poly1305",
+      "password": "CJmTCCx7Ltud"
+    },
+    {
+      "type": "vless",
+      "tag": "FR 🇫🇷 | @Raydikalx | 68352A",
+      "server": "51.45.37.42",
+      "server_port": 22222,
+      "uuid": "e4514801-0d5a-42ba-869f-39bd605aef9e"
+    },
+    {
+      "type": "shadowsocks",
+      "tag": "GB 🇬🇧 | @Raydikalx | 52653D",
+      "server": "141.98.101.178",
+      "server_port": 443,
+      "method": "aes-128-gcm",
+      "password": "shadowsocks"
+    },
+    {
+      "type": "vless",
+      "tag": "NL 🇳🇱 | @Raydikalx | C037D1",
+      "server": "109.248.162.115",
+      "server_port": 80,
+      "uuid": "TelegramjoinTurboConfigs"
+    },
+    {
+      "type": "vmess",
+      "tag": "GB 🇬🇧 | @Raydikalx | 66EDAF",
+      "server": "66.163.117.58",
+      "server_port": 22324,
+      "uuid": "04621bae-ab36-11ec-b909-0242ac120002",
+      "security": "auto",
+      "alter_id": 0
+    },
+    {
+      "type": "shadowsocks",
+      "tag": "GB 🇬🇧 | @Raydikalx | 4A01A8",
+      "server": "141.98.101.181",
+      "server_port": 443,
+      "method": "aes-128-gcm",
+      "password": "shadowsocks"
+    },
+    {
+      "type": "vmess",
+      "tag": "GB 🇬🇧 | @Raydikalx | 5B2BD1",
+      "server": "66.163.117.58",
+      "server_port": 22324,
+      "uuid": "04621bae-ab36-11ec-b909-0242ac120002",
+      "security": "auto",
+      "alter_id": 0
+    },
+    {
+      "type": "vless",
+      "tag": "DE 🇩🇪 | @Raydikalx | 14D675",
+      "server": "94.143.231.53",
+      "server_port": 39200,
+      "uuid": "9e1b3859-634f-4dc9-8f59-848a1216f47c"
+    },
+    {
+      "type": "vless",
+      "tag": "DE 🇩🇪 | @Raydikalx | 36737C",
+      "server": "94.143.231.53",
+      "server_port": 39200,
+      "uuid": "9e1b3859-634f-4dc9-8f59-848a1216f47c"
+    },
+    {
+      "type": "vless",
+      "tag": "NL 🇳🇱 | @Raydikalx | 27F261",
+      "server": "109.248.162.115",
+      "server_port": 80,
+      "uuid": "TelegramjoinTurboConfigs"
+    },
+    {
+      "type": "shadowsocks",
+      "tag": "GB 🇬🇧 | @Raydikalx | BB1164",
+      "server": "141.98.101.182",
+      "server_port": 443,
+      "method": "aes-128-gcm",
+      "password": "shadowsocks"
+    },
+    {
+      "type": "shadowsocks",
+      "tag": "NL 🇳🇱 | @Raydikalx | 9C439A",
+      "server": "213.109.147.242",
+      "server_port": 62685,
+      "method": "chacha20-ietf-poly1305",
+      "password": "VpKABcOpNNA0l5G2AVOmw8"
+    },
+    {
+      "type": "shadowsocks",
+      "tag": "TW 🇹🇼 | @Raydikalx | D5B6D3",
+      "server": "r3mrcg001286ek2.cybervena.com",
+      "server_port": 50099,
+      "method": "chacha20-ietf-poly1305",
+      "password": "7e731ec3-f8e1-43f6-92cf-3978d14705c4"
+    },
+    {
+      "type": "shadowsocks",
+      "tag": "NL 🇳🇱 | @Raydikalx | 5105A1",
+      "server": "82.38.31.174",
+      "server_port": 443,
+      "method": "chacha20-ietf-poly1305",
+      "password": "oZIoA69Q8yhcQV8ka3Pa3A"
+    },
+    {
+      "type": "shadowsocks",
+      "tag": "GB 🇬🇧 | @Raydikalx | 64C350",
+      "server": "141.98.101.179",
+      "server_port": 443,
+      "method": "aes-128-gcm",
+      "password": "shadowsocks"
+    },
+    {
+      "type": "shadowsocks",
+      "tag": "AU 🇦🇺 | @Raydikalx | DFABBD",
+      "server": "104.156.233.234",
+      "server_port": 27116,
+      "method": "chacha20-ietf-poly1305",
+      "password": "bIOoi5TuImG2KccxV7-jcA7Cez+vun-c_E"
+    },
+    {
+      "type": "shadowsocks",
+      "tag": "AU 🇦🇺 | @Raydikalx | 196042",
+      "server": "45.77.232.213",
+      "server_port": 15675,
+      "method": "chacha20-ietf-poly1305",
+      "password": "TWG7J1KR5KsPaV5qZI+rieueKxxafZSpCH"
+    },
+    {
+      "type": "shadowsocks",
+      "tag": "NL 🇳🇱 | @Raydikalx | 825B2C",
+      "server": "82.38.31.26",
+      "server_port": 8080,
+      "method": "chacha20-ietf-poly1305",
+      "password": "oZIoA69Q8yhcQV8ka3Pa3A"
+    },
+    {
+      "type": "shadowsocks",
+      "tag": "NL 🇳🇱 | @Raydikalx | 233A83",
+      "server": "82.38.31.3",
+      "server_port": 8080,
+      "method": "chacha20-ietf-poly1305",
+      "password": "oZIoA69Q8yhcQV8ka3Pa3A"
+    },
+    {
+      "type": "vless",
+      "tag": "CA 🇨🇦 | @Raydikalx | 32C108",
+      "server": "www.baipiao.eu.org",
+      "server_port": 8880,
+      "uuid": "ea29d6f1-3567-4d45-b8c2-e42f162caef4",
+      "transport": {
+        "type": "ws",
+        "path": "/pyip=ProxyIP.JP.CMLiussss.net",
+        "headers": {
+          "Host": "mute-dawn-f27b.375.workers.dev"
+        }
+      }
+    },
+    {
+      "type": "vmess",
+      "tag": "SG 🇸🇬 | @Raydikalx | 7FEBA6",
+      "server": "129.226.157.220",
+      "server_port": 59121,
+      "uuid": "d9865d63-d95c-454b-ba07-8e88b838a801",
+      "security": "auto",
+      "alter_id": 0
+    },
+    {
+      "type": "shadowsocks",
+      "tag": "NL 🇳🇱 | @Raydikalx | 5A4352",
+      "server": "82.38.31.202",
+      "server_port": 8080,
+      "method": "chacha20-ietf-poly1305",
+      "password": "k1dBOmOB4oqi7Ump37a1bQ"
+    },
+    {
+      "type": "shadowsocks",
+      "tag": "NL 🇳🇱 | @Raydikalx | CE374E",
+      "server": "82.38.31.34",
+      "server_port": 8080,
+      "method": "chacha20-ietf-poly1305",
+      "password": "oZIoA69Q8yhcQV8ka3Pa3A"
+    },
+    {
+      "type": "vmess",
+      "tag": "KR 🇰🇷 | @Raydikalx | 3E3235",
+      "server": "132.145.80.230",
+      "server_port": 80,
+      "uuid": "5155860e-d07d-46c3-9128-3afbd84626c7",
+      "security": "auto",
+      "alter_id": 0,
+      "transport": {
+        "type": "ws",
+        "path": "/cctv13.m3u8"
+      }
+    },
+    {
+      "type": "shadowsocks",
+      "tag": "NL 🇳🇱 | @Raydikalx | 2A413C",
+      "server": "82.38.31.174",
+      "server_port": 8080,
+      "method": "chacha20-ietf-poly1305",
+      "password": "oZIoA69Q8yhcQV8ka3Pa3A"
+    },
+    {
+      "type": "shadowsocks",
+      "tag": "NL 🇳🇱 | @Raydikalx | CD0FA7",
+      "server": "82.38.31.162",
+      "server_port": 443,
+      "method": "chacha20-ietf-poly1305",
+      "password": "oZIoA69Q8yhcQV8ka3Pa3A"
+    },
+    {
+      "type": "vmess",
+      "tag": "KR 🇰🇷 | @Raydikalx | F49B02",
+      "server": "132.145.80.230",
+      "server_port": 80,
+      "uuid": "5155860e-d07d-46c3-9128-3afbd84626c7",
+      "security": "auto",
+      "alter_id": 0,
+      "transport": {
+        "type": "ws",
+        "path": "/cctv13.m3u8",
+        "headers": {
+          "Host": "kr02.a0a.xyz"
+        }
+      }
+    },
+    {
+      "type": "vmess",
+      "tag": "SG 🇸🇬 | @Raydikalx | 3CFE66",
+      "server": "149.88.23.207",
+      "server_port": 18000,
+      "uuid": "f8c8dc3d-0d37-46b0-8b34-a7232882fcfe",
+      "security": "auto",
+      "alter_id": 0
+    },
+    {
+      "type": "vmess",
+      "tag": "SG 🇸🇬 | @Raydikalx | 8947EB",
+      "server": "149.88.23.202",
+      "server_port": 18000,
+      "uuid": "f8c8dc3d-0d37-46b0-8b34-a7232882fcfe",
+      "security": "auto",
+      "alter_id": 0
+    },
+    {
+      "type": "shadowsocks",
+      "tag": "NL 🇳🇱 | @Raydikalx | 8C145E",
+      "server": "82.38.31.200",
+      "server_port": 8080,
+      "method": "chacha20-ietf-poly1305",
+      "password": "k1dBOmOB4oqi7Ump37a1bQ"
+    },
+    {
+      "type": "shadowsocks",
+      "tag": "DE 🇩🇪 | @Raydikalx | D7863C",
+      "server": "91.107.139.186",
+      "server_port": 34273,
+      "method": "2022-blake3-aes-256-gcm",
+      "password": "KbKUB5mDJTlcs0qlDantQQF0d6PiKT149YWqoBO4b+I=:h1j3H7aFfh1kKPjusgOBfj2kWDelatQDAMWl3ayMioM="
+    },
+    {
+      "type": "shadowsocks",
+      "tag": "NL 🇳🇱 | @Raydikalx | B42DD1",
+      "server": "108.181.58.239",
+      "server_port": 8388,
+      "method": "chacha20-ietf-poly1305",
+      "password": "CJmTCCx7Ltud"
+    },
+    {
+      "type": "shadowsocks",
+      "tag": "SG 🇸🇬 | @Raydikalx | E9A890",
+      "server": "167.150.100.115",
+      "server_port": 27755,
+      "method": "2022-blake3-aes-256-gcm",
+      "password": "fnvo82p9y4AKykZXyIFtnodFy6fQmWnVlI2SvGleOB0="
+    },
+    {
+      "type": "shadowsocks",
+      "tag": "NL 🇳🇱 | @Raydikalx | 4FFB19",
+      "server": "82.38.31.29",
+      "server_port": 443,
+      "method": "chacha20-ietf-poly1305",
+      "password": "oZIoA69Q8yhcQV8ka3Pa3A"
+    },
+    {
+      "type": "shadowsocks",
+      "tag": "NL 🇳🇱 | @Raydikalx | A23F89",
+      "server": "158.173.20.208",
+      "server_port": 443,
+      "method": "aes-128-gcm",
+      "password": "shadowsocks"
+    },
+    {
+      "type": "shadowsocks",
+      "tag": "NL 🇳🇱 | @Raydikalx | F4286E",
+      "server": "82.38.31.32",
+      "server_port": 443,
+      "method": "chacha20-ietf-poly1305",
+      "password": "oZIoA69Q8yhcQV8ka3Pa3A"
+    },
+    {
+      "type": "trojan",
+      "tag": "DE 🇩🇪 | @Raydikalx | B5E0D5",
+      "server": "91.107.139.186",
+      "server_port": 30879,
+      "password": "h1j3H7aFfh1kKPjusgOBfj2kWDelatQDAMWl3ayMioM=",
+      "tls": {
+        "enabled": true,
+        "server_name": "91.107.139.186"
+      }
+    },
+    {
+      "type": "shadowsocks",
+      "tag": "NO 🇳🇴 | @Raydikalx | D97531",
+      "server": "185.213.23.63",
+      "server_port": 990,
+      "method": "chacha20-ietf-poly1305",
+      "password": "ARgvGZywA+gacgGV26Bvmu05+wZmRW/j+AdU+Z8Bt44="
+    },
+    {
+      "type": "trojan",
+      "tag": "DE 🇩🇪 | @Raydikalx | 2437AA",
+      "server": "91.107.139.186",
+      "server_port": 30879,
+      "password": "h1j3H7aFfh1kKPjusgOBfj2kWDelatQDAMWl3ayMioM=",
+      "tls": {
+        "enabled": true,
+        "server_name": "91.107.139.186"
+      }
+    },
+    {
+      "type": "vless",
+      "tag": "DE 🇩🇪 | @Raydikalx | 1D455F",
+      "server": "91.107.139.186",
+      "server_port": 50417,
+      "uuid": "500cdc83-b189-4d79-b06b-139c7972a57f"
+    },
+    {
+      "type": "shadowsocks",
+      "tag": "NL 🇳🇱 | @Raydikalx | 3C0C74",
+      "server": "82.38.31.149",
+      "server_port": 8080,
+      "method": "chacha20-ietf-poly1305",
+      "password": "oZIoA69Q8yhcQV8ka3Pa3A"
+    },
+    {
+      "type": "vless",
+      "tag": "DE 🇩🇪 | @Raydikalx | 225EB1",
+      "server": "91.107.139.186",
+      "server_port": 50417,
+      "uuid": "500cdc83-b189-4d79-b06b-139c7972a57f"
+    },
+    {
+      "type": "vmess",
+      "tag": "DE 🇩🇪 | @Raydikalx | A9B10C",
+      "server": "91.107.139.186",
+      "server_port": 51459,
+      "uuid": "500cdc83-b189-4d79-b06b-139c7972a57f",
+      "security": "auto",
+      "alter_id": 0
+    },
+    {
+      "type": "shadowsocks",
+      "tag": "NL 🇳🇱 | @Raydikalx | 0594FF",
+      "server": "82.38.31.39",
+      "server_port": 8080,
+      "method": "chacha20-ietf-poly1305",
+      "password": "oZIoA69Q8yhcQV8ka3Pa3A"
+    },
+    {
+      "type": "vless",
+      "tag": "US 🇺🇸 | @Raydikalx | FFB9D2",
+      "server": "162.159.38.119",
+      "server_port": 443,
+      "uuid": "8ad6f598-cd8d-4fca-848e-05fc9be15ff3",
+      "tls": {
+        "enabled": true,
+        "server_name": "pmebk.darkfield-dr.sbs",
+        "utls": {
+          "enabled": true,
+          "fingerprint": "chrome"
+        }
+      },
+      "transport": {
+        "type": "ws",
+        "path": "/sea",
+        "headers": {
+          "Host": "pmebk.darkfield-dr.sbs"
+        }
+      }
+    },
+    {
+      "type": "vmess",
+      "tag": "ES 🇪🇸 | @Raydikalx | 989B8A",
+      "server": "85.90.217.42",
+      "server_port": 22324,
+      "uuid": "04621bae-ab36-11ec-b909-0242ac120002",
+      "security": "auto",
+      "alter_id": 0
+    },
+    {
+      "type": "shadowsocks",
+      "tag": "NL 🇳🇱 | @Raydikalx | E7468B",
+      "server": "82.38.31.2",
+      "server_port": 8080,
+      "method": "chacha20-ietf-poly1305",
+      "password": "oZIoA69Q8yhcQV8ka3Pa3A"
+    },
+    {
+      "type": "vless",
+      "tag": "KR 🇰🇷 | @Raydikalx | 6CE4A6",
+      "server": "3.39.4.109",
+      "server_port": 13672,
+      "uuid": "814bd064-544d-4255-a070-5705c03f6da9",
+      "flow": "xtls-rprx-vision",
+      "tls": {
+        "enabled": true,
+        "server_name": "www.apple.com",
+        "reality": {
+          "enabled": true,
+          "public_key": "k2hPp0tTW0Da-HK94wYpSCLbuK44LfGqC2MSJIM1Ti0",
+          "short_id": "48050fab"
+        },
+        "utls": {
+          "enabled": true,
+          "fingerprint": "chrome"
+        }
+      }
+    },
+    {
+      "type": "vless",
+      "tag": "CA 🇨🇦 | @Raydikalx | 651C9A",
+      "server": "skk.moe",
+      "server_port": 8880,
+      "uuid": "afb13fa2-bba2-417f-b8c2-62565f92a78d",
+      "transport": {
+        "type": "ws",
+        "path": "/pyip=ProxyIP.JP.CMLiussss.net",
+        "headers": {
+          "Host": "orange-block-5cd1.124-199.workers.dev"
+        }
+      }
+    },
+    {
+      "type": "shadowsocks",
+      "tag": "US 🇺🇸 | @Raydikalx | 5346AB",
+      "server": "68.168.222.210",
+      "server_port": 1234,
+      "method": "chacha20-ietf-poly1305",
+      "password": "zz0dHjDfoaSaZuRFLGH-hNfBALSEJUYD"
+    },
+    {
+      "type": "shadowsocks",
+      "tag": "DE 🇩🇪 | @Raydikalx | 8F12B6",
+      "server": "8.209.74.72",
+      "server_port": 20001,
+      "method": "chacha20-ietf-poly1305",
+      "password": "PWpjPo3tqhPN4yRZ"
+    },
+    {
+      "type": "shadowsocks",
+      "tag": "DE 🇩🇪 | @Raydikalx | 82FC13",
+      "server": "209.46.102.22",
+      "server_port": 8388,
+      "method": "chacha20-ietf-poly1305",
+      "password": "1hhrqrokj3ag"
+    },
+    {
+      "type": "shadowsocks",
+      "tag": "BR 🇧🇷 | @Raydikalx | 2DE69A",
+      "server": "137.131.170.144",
+      "server_port": 59319,
+      "method": "chacha20-ietf-poly1305",
+      "password": "YjliYmFlNzVmMmE4ZmJkYjAxNzQ2NWUyNzZlNjhkZGU="
+    },
+    {
+      "type": "shadowsocks",
+      "tag": "NL 🇳🇱 | @Raydikalx | D0A757",
+      "server": "82.38.31.210",
+      "server_port": 8080,
+      "method": "chacha20-ietf-poly1305",
+      "password": "k1dBOmOB4oqi7Ump37a1bQ"
+    },
+    {
+      "type": "shadowsocks",
+      "tag": "NL 🇳🇱 | @Raydikalx | 743A95",
+      "server": "82.38.31.164",
+      "server_port": 8080,
+      "method": "chacha20-ietf-poly1305",
+      "password": "oZIoA69Q8yhcQV8ka3Pa3A"
+    },
+    {
+      "type": "shadowsocks",
+      "tag": "AU 🇦🇺 | @Raydikalx | 8854B6",
+      "server": "103.106.231.82",
+      "server_port": 5600,
+      "method": "aes-256-gcm",
+      "password": "Y6R9pAtvxxzmGC"
+    },
+    {
+      "type": "shadowsocks",
+      "tag": "NL 🇳🇱 | @Raydikalx | 5CFE52",
+      "server": "82.38.31.211",
+      "server_port": 8080,
+      "method": "chacha20-ietf-poly1305",
+      "password": "k1dBOmOB4oqi7Ump37a1bQ"
+    },
+    {
+      "type": "shadowsocks",
+      "tag": "NL 🇳🇱 | @Raydikalx | 0E857C",
+      "server": "193.29.139.235",
+      "server_port": 8080,
+      "method": "chacha20-ietf-poly1305",
+      "password": "oZIoA69Q8yhcQV8ka3Pa3A"
+    },
+    {
+      "type": "vless",
+      "tag": "CA 🇨🇦 | @Raydikalx | EA39A6",
+      "server": "198.41.223.253",
+      "server_port": 2083,
+      "uuid": "e4f949dd-4b1d-48e9-8e30-f90029e105a2",
+      "tls": {
+        "enabled": true,
+        "server_name": "f.fugang.dpdns.org",
+        "utls": {
+          "enabled": true,
+          "fingerprint": "chrome"
+        }
+      },
+      "transport": {
+        "type": "ws",
+        "path": "/",
+        "headers": {
+          "Host": "f.fugang.dpdns.org"
+        }
+      }
+    },
+    {
+      "type": "shadowsocks",
+      "tag": "NL 🇳🇱 | @Raydikalx | FEFEFB",
+      "server": "82.38.31.28",
+      "server_port": 8080,
+      "method": "chacha20-ietf-poly1305",
+      "password": "oZIoA69Q8yhcQV8ka3Pa3A"
+    },
+    {
+      "type": "vless",
+      "tag": "DE 🇩🇪 | @Raydikalx | 8EE398",
+      "server": "193.104.58.45",
+      "server_port": 59167,
+      "uuid": "1d977a71-920e-4846-98b1-24f8e2fa0ea3"
+    },
+    {
+      "type": "shadowsocks",
+      "tag": "NL 🇳🇱 | @Raydikalx | A0EA09",
+      "server": "82.38.31.195",
+      "server_port": 8080,
+      "method": "chacha20-ietf-poly1305",
+      "password": "k1dBOmOB4oqi7Ump37a1bQ"
+    },
+    {
+      "type": "shadowsocks",
+      "tag": "NL 🇳🇱 | @Raydikalx | 13A674",
+      "server": "82.38.31.194",
+      "server_port": 8080,
+      "method": "chacha20-ietf-poly1305",
+      "password": "k1dBOmOB4oqi7Ump37a1bQ"
+    },
+    {
+      "type": "vless",
+      "tag": "FR 🇫🇷 | @Raydikalx | 11D747",
+      "server": "45.13.119.219",
+      "server_port": 8888,
+      "uuid": "eb77be10-9d9e-527b-a78d-8caaf58992d6"
+    },
+    {
+      "type": "shadowsocks",
+      "tag": "DE 🇩🇪 | @Raydikalx | D27672",
+      "server": "185.226.172.8",
+      "server_port": 8008,
+      "method": "aes-256-gcm",
+      "password": "XKFKl2rULjIp74"
+    },
+    {
+      "type": "vless",
+      "tag": "MO 🇲🇴 | @Raydikalx | F46553",
+      "server": "45.207.34.239",
+      "server_port": 10086,
+      "uuid": "11e5e68c-355a-415c-8024-3bf12637e220",
+      "transport": {
+        "type": "ws",
+        "path": "/vless",
+        "headers": {
+          "Host": "45.207.34.239"
+        }
+      }
+    },
+    {
+      "type": "vless",
+      "tag": "CA 🇨🇦 | @Raydikalx | C98286",
+      "server": "104.16.8.66",
+      "server_port": 8880,
+      "uuid": "1560c0b2-3cb8-45a3-988b-7103b031a815",
+      "transport": {
+        "type": "ws",
+        "path": "/pyip=ProxyIP.JP.CMLiussss.net",
+        "headers": {
+          "Host": "delicate-wood-49a8.214-451.workers.dev"
+        }
+      }
+    },
+    {
+      "type": "vmess",
+      "tag": "HK 🇭🇰 | @Raydikalx | 232038",
+      "server": "47.244.120.197",
+      "server_port": 44867,
+      "uuid": "845e6b08-2919-4290-ade0-5dc7dcea59ca",
+      "security": "auto",
+      "alter_id": 0,
+      "transport": {
+        "type": "ws",
+        "path": "/arki?ed=2048"
+      }
+    },
+    {
+      "type": "shadowsocks",
+      "tag": "FR 🇫🇷 | @Raydikalx | 4F9582",
+      "server": "64.31.63.244",
+      "server_port": 8881,
+      "method": "aes-256-gcm",
+      "password": "kDWvXYZoTBcGkC4"
+    },
+    {
+      "type": "vless",
+      "tag": "CA 🇨🇦 | @Raydikalx | A7A67C",
+      "server": "104.17.70.206",
+      "server_port": 2096,
+      "uuid": "395d040e-a04a-43d7-a1e9-8635f545879a",
+      "tls": {
+        "enabled": true,
+        "server_name": "shalana.xyz",
+        "utls": {
+          "enabled": true,
+          "fingerprint": "chrome"
+        }
+      },
+      "transport": {
+        "type": "ws",
+        "path": "/shalana",
+        "headers": {
+          "Host": "shalana.xyz"
+        }
+      }
+    },
+    {
+      "type": "vmess",
+      "tag": "US 🇺🇸 | @Raydikalx | B3EC8A",
+      "server": "154.21.83.77",
+      "server_port": 8880,
+      "uuid": "04bccfa1-a6a8-4ace-991f-454624a8766f",
+      "security": "auto",
+      "alter_id": 0,
+      "transport": {
+        "type": "ws",
+        "path": "04bccfa1-a6a8-4ace-991f-454624a8766f-vm",
+        "headers": {
+          "Host": "www.bing.com"
+        }
+      }
+    },
+    {
+      "type": "vless",
+      "tag": "NL 🇳🇱 | @Raydikalx | 461BFB",
+      "server": "163.172.213.174",
+      "server_port": 80,
+      "uuid": "e73df646-1f62-41bf-8c50-653497d603d0",
+      "transport": {
+        "type": "ws",
+        "path": "/vless/",
+        "headers": {
+          "Host": "SC-TheNetherlands2.09vpn.com"
+        }
+      }
+    },
+    {
+      "type": "vless",
+      "tag": "NL 🇳🇱 | @Raydikalx | CCF4B2",
+      "server": "154.83.246.50",
+      "server_port": 443,
+      "uuid": "7216b4e8-e935-4d68-b959-73d145accdee",
+      "flow": "xtls-rprx-vision",
+      "tls": {
+        "enabled": true,
+        "server_name": "storage.yandex.net",
+        "reality": {
+          "enabled": true,
+          "public_key": "pPi-WO8qQFFZ9UJWNLW9YClbjcoAAZWJQ2_FM3Kjhz8",
+          "short_id": "500aec9e9e5e2212"
+        },
+        "utls": {
+          "enabled": true,
+          "fingerprint": "chrome"
+        }
+      }
+    },
+    {
+      "type": "vless",
+      "tag": "FR 🇫🇷 | @Raydikalx | CE8AC5",
+      "server": "35.180.187.82",
+      "server_port": 12228,
+      "uuid": "795d5f5b-318c-49a6-844f-ee2ab63bbe94",
+      "flow": "xtls-rprx-vision",
+      "tls": {
+        "enabled": true,
+        "server_name": "www.tesla.com",
+        "reality": {
+          "enabled": true,
+          "public_key": "hvyaRhFtrj3cGv1Ya5uXpE256i2PoUi2fOgU0KlvKmI",
+          "short_id": "59625eb3275249ca"
+        },
+        "utls": {
+          "enabled": true,
+          "fingerprint": "chrome"
+        }
+      }
+    },
+    {
+      "type": "vless",
+      "tag": "US 🇺🇸 | @Raydikalx | 99586E",
+      "server": "186.246.19.79",
+      "server_port": 40443,
+      "uuid": "5e3f974b-06fc-4555-907a-6681391b7c17",
+      "flow": "xtls-rprx-vision",
+      "tls": {
+        "enabled": true,
+        "server_name": "deepl.com",
+        "reality": {
+          "enabled": true,
+          "public_key": "oc9uweln_cqyaJnlRMnhhhKrGNP7RrYOsuYtaIOIQDE",
+          "short_id": "2bc0"
+        },
+        "utls": {
+          "enabled": true,
+          "fingerprint": "chrome"
+        }
+      }
+    },
+    {
+      "type": "vless",
+      "tag": "US 🇺🇸 | @Raydikalx | 018C5C",
+      "server": "169.40.42.179",
+      "server_port": 443,
+      "uuid": "d65cc14c-f53f-4fe2-b262-97856601319c",
+      "flow": "xtls-rprx-vision",
+      "tls": {
+        "enabled": true,
+        "server_name": "yahoo.com",
+        "reality": {
+          "enabled": true,
+          "public_key": "e2RLf57Li_-MDZGE9ss1BWPgP54mqRb5PfXhW2jcVVg",
+          "short_id": "c39cc7310a"
+        },
+        "utls": {
+          "enabled": true,
+          "fingerprint": "ios"
+        }
+      }
+    },
+    {
+      "type": "vless",
+      "tag": "FR 🇫🇷 | @Raydikalx | EDDAA8",
+      "server": "194.55.189.249",
+      "server_port": 40443,
+      "uuid": "8212a50b-25bf-4739-bba1-aaffb5ffc84c",
+      "tls": {
+        "enabled": true,
+        "server_name": "deepl.com",
+        "reality": {
+          "enabled": true,
+          "public_key": "KCbW84C8h2Ja01LS0Ro8EpLLfzMTjs11t1ldDWLd5zo",
+          "short_id": "aae8"
+        },
+        "utls": {
+          "enabled": true,
+          "fingerprint": "chrome"
+        }
+      }
+    },
+    {
+      "type": "shadowsocks",
+      "tag": "PL 🇵🇱 | @Raydikalx | 57179B",
+      "server": "92.118.205.211",
+      "server_port": 5600,
+      "method": "aes-256-gcm",
+      "password": "Y6R9pAtvxxzmGC"
+    },
+    {
+      "type": "vless",
+      "tag": "FR 🇫🇷 | @Raydikalx | 3CF506",
+      "server": "194.76.154.31",
+      "server_port": 40443,
+      "uuid": "9f0baff8-bdee-4de9-9515-bcc4932b41fa",
+      "tls": {
+        "enabled": true,
+        "server_name": "deepl.com",
+        "reality": {
+          "enabled": true,
+          "public_key": "MN6QjUHDUXyteMdR-cDna89fq4X3qgQhLnNqTtRUbBQ",
+          "short_id": "a8ae"
+        },
+        "utls": {
+          "enabled": true,
+          "fingerprint": "chrome"
+        }
+      }
+    },
+    {
+      "type": "hysteria2",
+      "tag": "NL 🇳🇱 | @Raydikalx | CAE108",
+      "server": "5.255.102.165",
+      "server_port": 443,
+      "password": "LzMWgm6LaNWCm11bFTbynDPq2TqQj03t",
+      "tls": {
+        "enabled": true,
+        "server_name": "www.microsoft.com",
+        "insecure": true
+      }
+    },
+    {
+      "type": "shadowsocks",
+      "tag": "ES 🇪🇸 | @Raydikalx | 5524DB",
+      "server": "140.174.184.5",
+      "server_port": 8388,
+      "method": "chacha20-ietf-poly1305",
+      "password": "qItG8SueYQcP"
+    },
+    {
+      "type": "vless",
+      "tag": "DE 🇩🇪 | @Raydikalx | 3165F4",
+      "server": "154.222.9.190",
+      "server_port": 443,
+      "uuid": "83ab4443-ec22-4b3d-a587-53090be7beb2",
+      "flow": "xtls-rprx-vision",
+      "tls": {
+        "enabled": true,
+        "server_name": "storage.yandex.net",
+        "reality": {
+          "enabled": true,
+          "public_key": "ISa-DZOI4LRRb9DHMFYm5oFqBXDjYzz0hVWUfWvzLmo",
+          "short_id": "dc8109baf0f607ea"
+        },
+        "utls": {
+          "enabled": true,
+          "fingerprint": "chrome"
+        }
+      }
+    },
+    {
+      "type": "vless",
+      "tag": "DE 🇩🇪 | @Raydikalx | F13562",
+      "server": "144.31.87.16",
+      "server_port": 2053,
+      "uuid": "c40f773e-3b96-417e-b22c-e48cb63ca7d9",
+      "tls": {
+        "enabled": true,
+        "server_name": "wildberries.ru",
+        "reality": {
+          "enabled": true,
+          "public_key": "EDeWEPBq0QDOPp73PNVlaV2EWaEBWhgBcNy3MROgZ00",
+          "short_id": "04b38b6b152a1b0b"
+        },
+        "utls": {
+          "enabled": true,
+          "fingerprint": "chrome"
+        }
+      }
+    },
+    {
+      "type": "vless",
+      "tag": "NL 🇳🇱 | @Raydikalx | BDEF2B",
+      "server": "85.17.145.65",
+      "server_port": 12068,
+      "uuid": "05caca6c-9e97-4c0f-8edf-7b88a6e572c5",
+      "transport": {
+        "type": "ws",
+        "path": "/"
+      }
+    },
+    {
+      "type": "vless",
+      "tag": "DE 🇩🇪 | @Raydikalx | 4D3B0F",
+      "server": "134.122.85.126",
+      "server_port": 53996,
+      "uuid": "efc9ffd0-aff8-4f3a-b0f9-1c1777a4e2c4",
+      "tls": {
+        "enabled": true,
+        "server_name": "timeline.www.cloudflare.com",
+        "reality": {
+          "enabled": true,
+          "public_key": "aNMxt5DL5lJSEb_zKQTvGw7GJqpLrOuNQMNUQ8A-BQ8",
+          "short_id": "25735c7d0c3dda"
+        },
+        "utls": {
+          "enabled": true,
+          "fingerprint": "chrome"
+        }
+      }
+    },
+    {
+      "type": "vless",
+      "tag": "US 🇺🇸 | @Raydikalx | 143869",
+      "server": "170.114.45.6",
+      "server_port": 80,
+      "uuid": "6aa028bc-08a9-41d1-a397-d60ce65df081",
+      "transport": {
+        "type": "ws",
+        "path": "/shalana",
+        "headers": {
+          "Host": "shalana.xyz"
+        }
+      }
+    },
+    {
+      "type": "vless",
+      "tag": "NL 🇳🇱 | @Raydikalx | A68276",
+      "server": "mypanel.unixzone.us",
+      "server_port": 12068,
+      "uuid": "05caca6c-9e97-4c0f-8edf-7b88a6e572c5",
+      "transport": {
+        "type": "ws",
+        "path": "/"
+      }
+    },
+    {
+      "type": "vless",
+      "tag": "DE 🇩🇪 | @Raydikalx | A386DE",
+      "server": "164.92.143.135",
+      "server_port": 80,
+      "uuid": "f0e2e83d-d2b0-4e71-8da5-71306ad58e08",
+      "transport": {
+        "type": "ws",
+        "path": "/",
+        "headers": {
+          "Host": "xU.aSaCO.sTorE"
+        }
+      }
+    },
+    {
+      "type": "vless",
+      "tag": "NL 🇳🇱 | @Raydikalx | B18FD5",
+      "server": "85.17.145.65",
+      "server_port": 12068,
+      "uuid": "05caca6c-9e97-4c0f-8edf-7b88a6e572c5",
+      "transport": {
+        "type": "ws",
+        "path": "/",
+        "headers": {
+          "Host": "mypanel.unixzone.us"
+        }
+      }
+    },
+    {
+      "type": "vless",
+      "tag": "DE 🇩🇪 | @Raydikalx | 4055DA",
+      "server": "45.131.212.22",
+      "server_port": 443,
+      "uuid": "1ee6dbe4-b7bd-47bd-b6e5-23deb076f95b",
+      "flow": "xtls-rprx-vision",
+      "tls": {
+        "enabled": true,
+        "server_name": "sellflow.org",
+        "reality": {
+          "enabled": true,
+          "public_key": "SbVKOEMjK0sIlbwg4akyBg5mL5KZwwB-ed4eEE7YnRc",
+          "short_id": ""
+        },
+        "utls": {
+          "enabled": true,
+          "fingerprint": "chrome"
+        }
+      }
+    },
+    {
+      "type": "vless",
+      "tag": "HK 🇭🇰 | @Raydikalx | 191BA9",
+      "server": "38.207.177.236",
+      "server_port": 443,
+      "uuid": "9c64064c-aaaf-449f-9344-77632fc9ff1c",
+      "flow": "xtls-rprx-vision",
+      "tls": {
+        "enabled": true,
+        "server_name": "www.cloudflare.com",
+        "reality": {
+          "enabled": true,
+          "public_key": "maES4RMEtsm5emBCixDRa6Y5GvmVwmwZNBL2G4Q03D4",
+          "short_id": "47de54e71fee3451"
+        },
+        "utls": {
+          "enabled": true,
+          "fingerprint": "chrome"
+        }
+      }
+    },
+    {
+      "type": "vless",
+      "tag": "IT 🇮🇹 | @Raydikalx | B17060",
+      "server": "151.115.164.117",
+      "server_port": 8880,
+      "uuid": "8dc7722c-2767-4eea-a28b-2f8daacc07e3",
+      "transport": {
+        "type": "grpc",
+        "service_name": ""
+      }
+    },
+    {
+      "type": "vless",
+      "tag": "DE 🇩🇪 | @Raydikalx | 276654",
+      "server": "152.53.236.182",
+      "server_port": 443,
+      "uuid": "711c018e-2692-4aa8-93f3-544d83fcd16c",
+      "flow": "xtls-rprx-vision",
+      "tls": {
+        "enabled": true,
+        "server_name": "www.cloudflare.com",
+        "reality": {
+          "enabled": true,
+          "public_key": "HyVSZ2OyySwXT-xRhTAqoiuYflIaj_b0Jxm7S1Iq9hs",
+          "short_id": "7a76f3c4b9dd"
+        },
+        "utls": {
+          "enabled": true,
+          "fingerprint": "chrome"
+        }
+      }
+    },
+    {
+      "type": "vless",
+      "tag": "IT 🇮🇹 | @Raydikalx | FD6100",
+      "server": "151.115.164.43",
+      "server_port": 8880,
+      "uuid": "8dc7722c-2767-4eea-a28b-2f8daacc07e3",
+      "transport": {
+        "type": "grpc",
+        "service_name": ""
+      }
+    },
+    {
+      "type": "vless",
+      "tag": "CH 🇨🇭 | @Raydikalx | 850989",
+      "server": "50.7.41.142",
+      "server_port": 443,
+      "uuid": "b8794f67-80d9-4124-8fc5-2d2ce5516573",
+      "flow": "xtls-rprx-vision",
+      "tls": {
+        "enabled": true,
+        "server_name": "deepl.com",
+        "reality": {
+          "enabled": true,
+          "public_key": "AYL1z7PNyo6LqYLeZpXa50FnK9eEu7o18KHRhOlST1w",
+          "short_id": "bd72"
+        },
+        "utls": {
+          "enabled": true,
+          "fingerprint": "chrome"
+        }
+      }
+    },
+    {
+      "type": "shadowsocks",
+      "tag": "TR 🇹🇷 | @Raydikalx | 66FC0D",
+      "server": "38.180.113.194",
+      "server_port": 8119,
+      "method": "aes-256-gcm",
+      "password": "cdBIDV42DCwnfIN"
+    },
+    {
+      "type": "vless",
+      "tag": "NL 🇳🇱 | @Raydikalx | 29752B",
+      "server": "getsavesafe.net",
+      "server_port": 443,
+      "uuid": "39c42b0a-b823-4c93-bb99-74b4183e518d",
+      "flow": "xtls-rprx-vision",
+      "tls": {
+        "enabled": true,
+        "server_name": "getsavesafe.net",
+        "reality": {
+          "enabled": true,
+          "public_key": "5Z6PwoPSNBLPIsX8lZtHM7-Y-psMMR1vz5Pit0EVISs",
+          "short_id": "82f5d3a1e9c0b661"
+        },
+        "utls": {
+          "enabled": true,
+          "fingerprint": "chrome"
+        }
+      }
+    },
+    {
+      "type": "vless",
+      "tag": "ID 🇮🇩 | @Raydikalx | 9E77D0",
+      "server": "45.198.96.153",
+      "server_port": 443,
+      "uuid": "83ab4443-ec22-4b3d-a587-53090be7beb2",
+      "flow": "xtls-rprx-vision",
+      "tls": {
+        "enabled": true,
+        "server_name": "storage.yandex.net",
+        "reality": {
+          "enabled": true,
+          "public_key": "9Y-_jCI3Z1x6SXK2tHdZ6V1CN9IJPNPnoxSW0cbXxD8",
+          "short_id": "764f497dda21c4fc"
+        },
+        "utls": {
+          "enabled": true,
+          "fingerprint": "chrome"
+        }
+      }
+    },
+    {
+      "type": "vless",
+      "tag": "IT 🇮🇹 | @Raydikalx | CC81C4",
+      "server": "ronaldo15.fordnsdirect.shop",
+      "server_port": 8880,
+      "uuid": "8dc7722c-2767-4eea-a28b-2f8daacc07e3",
+      "transport": {
+        "type": "grpc",
+        "service_name": ""
+      }
+    },
+    {
+      "type": "vless",
+      "tag": "CA 🇨🇦 | @Raydikalx | 71FA29",
+      "server": "www.baipiao.eu.org",
+      "server_port": 8880,
+      "uuid": "6d613d5f-1d65-48ca-b2e8-d83a2c3a17d9",
+      "transport": {
+        "type": "ws",
+        "path": "/pyip=ProxyIP.JP.CMLiussss.net",
+        "headers": {
+          "Host": "tight-star-08eb.331-729.workers.dev"
+        }
+      }
+    },
+    {
+      "type": "vless",
+      "tag": "DE 🇩🇪 | @Raydikalx | FE9813",
+      "server": "154.222.9.240",
+      "server_port": 443,
+      "uuid": "7216b4e8-e935-4d68-b959-73d145accdee",
+      "flow": "xtls-rprx-vision",
+      "tls": {
+        "enabled": true,
+        "server_name": "storage.yandex.net",
+        "reality": {
+          "enabled": true,
+          "public_key": "ISa-DZOI4LRRb9DHMFYm5oFqBXDjYzz0hVWUfWvzLmo",
+          "short_id": "8d3293f0066e129a"
+        },
+        "utls": {
+          "enabled": true,
+          "fingerprint": "chrome"
+        }
+      }
+    },
+    {
+      "type": "vless",
+      "tag": "IT 🇮🇹 | @Raydikalx | A32AEB",
+      "server": "sca8.directdnsai.shop",
+      "server_port": 8880,
+      "uuid": "8dc7722c-2767-4eea-a28b-2f8daacc07e3",
+      "transport": {
+        "type": "grpc",
+        "service_name": ""
+      }
+    },
+    {
+      "type": "vless",
+      "tag": "IT 🇮🇹 | @Raydikalx | DB9A0E",
+      "server": "ronaldo13.fordnsdirect.shop",
+      "server_port": 8880,
+      "uuid": "8dc7722c-2767-4eea-a28b-2f8daacc07e3",
+      "transport": {
+        "type": "grpc",
+        "service_name": ""
+      }
+    },
+    {
+      "type": "vless",
+      "tag": "IT 🇮🇹 | @Raydikalx | 6402D0",
+      "server": "ronaldo14.fordnsdirect.shop",
+      "server_port": 8880,
+      "uuid": "8dc7722c-2767-4eea-a28b-2f8daacc07e3",
+      "transport": {
+        "type": "grpc",
+        "service_name": ""
+      }
+    },
+    {
+      "type": "vless",
+      "tag": "IT 🇮🇹 | @Raydikalx | ACBA16",
+      "server": "ronaldo17.fordnsdirect.shop",
+      "server_port": 8880,
+      "uuid": "8dc7722c-2767-4eea-a28b-2f8daacc07e3",
+      "transport": {
+        "type": "grpc",
+        "service_name": ""
+      }
+    },
+    {
+      "type": "vless",
+      "tag": "CA 🇨🇦 | @Raydikalx | 323850",
+      "server": "upwork.com",
+      "server_port": 8880,
+      "uuid": "8e7ce77a-d889-4dbf-b095-1d0eca88f6dc",
+      "transport": {
+        "type": "ws",
+        "path": "/pyip=ProxyIP.JP.CMLiussss.net",
+        "headers": {
+          "Host": "broad-bread-2a6d.433-b9b.workers.dev"
+        }
+      }
+    },
+    {
+      "type": "shadowsocks",
+      "tag": "IT 🇮🇹 | @Raydikalx | 5309E6",
+      "server": "185.213.20.110",
+      "server_port": 7001,
+      "method": "aes-256-gcm",
+      "password": "RexnBgU7EV5ADxG"
+    },
+    {
+      "type": "vless",
+      "tag": "CA 🇨🇦 | @Raydikalx | 85292F",
+      "server": "162.159.140.78",
+      "server_port": 8880,
+      "uuid": "363202dd-0521-46b4-b4e2-443dfbaa2ce1",
+      "transport": {
+        "type": "ws",
+        "path": "/pyip=ProxyIP.KR.CMLiussss.net",
+        "headers": {
+          "Host": "flat-heart-b60a.401-306.workers.dev"
+        }
+      }
+    },
+    {
+      "type": "vless",
+      "tag": "NL 🇳🇱 | @Raydikalx | 17A0AE",
+      "server": "node3.mxvpn.dev",
+      "server_port": 443,
+      "uuid": "564082ff-cf3c-48db-9e10-8ad2312847b4",
+      "flow": "xtls-rprx-vision",
+      "tls": {
+        "enabled": true,
+        "server_name": "node3.mxvpn.dev",
+        "reality": {
+          "enabled": true,
+          "public_key": "TlpXTLz1Y-v8B6q9MX55U6eypjfL0LCSNE5zQP4yRHw",
+          "short_id": "bbc68cec8bb8d2e3"
+        },
+        "utls": {
+          "enabled": true,
+          "fingerprint": "chrome"
+        }
+      }
+    },
+    {
+      "type": "vless",
+      "tag": "FR 🇫🇷 | @Raydikalx | 185EAA",
+      "server": "node13.mxvpn.dev",
+      "server_port": 443,
+      "uuid": "564082ff-cf3c-48db-9e10-8ad2312847b4",
+      "flow": "xtls-rprx-vision",
+      "tls": {
+        "enabled": true,
+        "server_name": "node13.mxvpn.dev",
+        "reality": {
+          "enabled": true,
+          "public_key": "TlpXTLz1Y-v8B6q9MX55U6eypjfL0LCSNE5zQP4yRHw",
+          "short_id": "bbc68cec8bb8d2e3"
+        },
+        "utls": {
+          "enabled": true,
+          "fingerprint": "chrome"
+        }
+      }
+    },
+    {
+      "type": "vless",
+      "tag": "FR 🇫🇷 | @Raydikalx | 7ED633",
+      "server": "51.91.158.180",
+      "server_port": 443,
+      "uuid": "7b4b7d4e-7a53-4c0c-bd8e-9f3b1b2c7f21",
+      "flow": "xtls-rprx-vision",
+      "tls": {
+        "enabled": true,
+        "server_name": "www.speedtest.net",
+        "reality": {
+          "enabled": true,
+          "public_key": "wwH_L9FmhJ7AyOBKm9J8YGKdVo1G-QlDEuw5-s3eGEM",
+          "short_id": "9a4c7d2f8e1b6a3c"
+        },
+        "utls": {
+          "enabled": true,
+          "fingerprint": "chrome"
+        }
+      }
+    },
+    {
+      "type": "vless",
+      "tag": "CA 🇨🇦 | @Raydikalx | 93379F",
+      "server": "172.64.88.251",
+      "server_port": 8880,
+      "uuid": "7e3cd2f1-0de5-4717-9002-64d8597bc577",
+      "transport": {
+        "type": "ws",
+        "path": "/pyip=ProxyIP.KR.CMLiussss.net",
+        "headers": {
+          "Host": "dry-credit-fc26.203-d8c.workers.dev"
+        }
+      }
+    },
+    {
+      "type": "vless",
+      "tag": "NL 🇳🇱 | @Raydikalx | A710E0",
+      "server": "node2.mxvpn.dev",
+      "server_port": 443,
+      "uuid": "564082ff-cf3c-48db-9e10-8ad2312847b4",
+      "flow": "xtls-rprx-vision",
+      "tls": {
+        "enabled": true,
+        "server_name": "node2.mxvpn.dev",
+        "reality": {
+          "enabled": true,
+          "public_key": "TlpXTLz1Y-v8B6q9MX55U6eypjfL0LCSNE5zQP4yRHw",
+          "short_id": "bbc68cec8bb8d2e3"
+        },
+        "utls": {
+          "enabled": true,
+          "fingerprint": "chrome"
+        }
+      }
+    },
+    {
+      "type": "vless",
+      "tag": "US 🇺🇸 | @Raydikalx | B9AC77",
+      "server": "155.103.69.195",
+      "server_port": 48711,
+      "uuid": "23a9b46e-9443-4268-81c5-399929919ab0"
+    },
+    {
+      "type": "vless",
+      "tag": "US 🇺🇸 | @Raydikalx | 8C8B8D",
+      "server": "155.103.69.195",
+      "server_port": 48711,
+      "uuid": "23a9b46e-9443-4268-81c5-399929919ab0"
+    },
+    {
+      "type": "vless",
+      "tag": "CH 🇨🇭 | @Raydikalx | F91E6B",
+      "server": "channel.tradeip.store",
+      "server_port": 8443,
+      "uuid": "t.me.TradeIP",
+      "flow": "xtls-rprx-vision",
+      "tls": {
+        "enabled": true,
+        "server_name": "play.google.com",
+        "reality": {
+          "enabled": true,
+          "public_key": "HL-IrEO6_mXNGgiBztNWX0VY3nb-JQ3thK_7gFbk4Bg",
+          "short_id": "5625decfd1e54011"
+        },
+        "utls": {
+          "enabled": true,
+          "fingerprint": "chrome"
+        }
+      }
+    },
+    {
+      "type": "trojan",
+      "tag": "CA 🇨🇦 | @Raydikalx | 116960",
+      "server": "vless.herogoing.top",
+      "server_port": 443,
+      "password": "bpb-trojan",
+      "tls": {
+        "enabled": true,
+        "server_name": "vless.herogoing.top"
+      },
+      "transport": {
+        "type": "ws",
+        "path": "/tr?ed=2560",
+        "headers": {
+          "Host": "vless.herogoing.top"
+        }
+      }
+    },
+    {
+      "type": "vless",
+      "tag": "SE 🇸🇪 | @Raydikalx | 18A133",
+      "server": "130.17.1.19",
+      "server_port": 443,
+      "uuid": "06d44c57-8e1a-41f4-b9c4-65d35869e078",
+      "flow": "xtls-rprx-vision",
+      "tls": {
+        "enabled": true,
+        "server_name": "swe06.myxasecure.space",
+        "reality": {
+          "enabled": true,
+          "public_key": "OCLtjVdRxsou3429LRfjkDYgiAPs24TSgSeFZpChCEw",
+          "short_id": "d67ec5a8fc40ebea"
+        },
+        "utls": {
+          "enabled": true,
+          "fingerprint": "chrome"
+        }
+      }
+    },
+    {
+      "type": "vless",
+      "tag": "US 🇺🇸 | @Raydikalx | 87EDD1",
+      "server": "using.neobo-tooth.ru",
+      "server_port": 2083,
+      "uuid": "0c6b632a-cd96-4b74-9b51-151e3b5697db",
+      "tls": {
+        "enabled": true,
+        "server_name": "using.neobo-tooth.ru"
+      },
+      "transport": {
+        "type": "grpc",
+        "service_name": "grpc"
+      }
+    },
+    {
+      "type": "vless",
+      "tag": "FR 🇫🇷 | @Raydikalx | 72B601",
+      "server": "node14.mxvpn.dev",
+      "server_port": 443,
+      "uuid": "564082ff-cf3c-48db-9e10-8ad2312847b4",
+      "flow": "xtls-rprx-vision",
+      "tls": {
+        "enabled": true,
+        "server_name": "node14.mxvpn.dev",
+        "reality": {
+          "enabled": true,
+          "public_key": "TlpXTLz1Y-v8B6q9MX55U6eypjfL0LCSNE5zQP4yRHw",
+          "short_id": "bbc68cec8bb8d2e3"
+        },
+        "utls": {
+          "enabled": true,
+          "fingerprint": "chrome"
+        }
+      }
+    },
+    {
+      "type": "vless",
+      "tag": "US 🇺🇸 | @Raydikalx | 6F3CC6",
+      "server": "using.neobo-tooth.ru",
+      "server_port": 2083,
+      "uuid": "0c6b632a-cd96-4b74-9b51-151e3b5697db",
+      "tls": {
+        "enabled": true,
+        "server_name": "using.neobo-tooth.ru"
+      },
+      "transport": {
+        "type": "grpc",
+        "service_name": "grpc"
+      }
+    },
+    {
+      "type": "vless",
+      "tag": "SG 🇸🇬 | @Raydikalx | 5FF374",
+      "server": "3.0.111.82",
+      "server_port": 12972,
+      "uuid": "814bd064-544d-4255-a070-5705c03f6da9",
+      "flow": "xtls-rprx-vision",
+      "tls": {
+        "enabled": true,
+        "server_name": "www.apple.com",
+        "reality": {
+          "enabled": true,
+          "public_key": "k2hPp0tTW0Da-HK94wYpSCLbuK44LfGqC2MSJIM1Ti0",
+          "short_id": "48050fab"
+        },
+        "utls": {
+          "enabled": true,
+          "fingerprint": "chrome"
+        }
+      }
+    },
+    {
+      "type": "vless",
+      "tag": "CH 🇨🇭 | @Raydikalx | 9B7477",
+      "server": "channel.tradeip.store",
+      "server_port": 443,
+      "uuid": "t.me.TradeIP",
+      "flow": "xtls-rprx-vision",
+      "tls": {
+        "enabled": true,
+        "server_name": "play.google.com",
+        "reality": {
+          "enabled": true,
+          "public_key": "HL-IrEO6_mXNGgiBztNWX0VY3nb-JQ3thK_7gFbk4Bg",
+          "short_id": "06f4e6"
+        },
+        "utls": {
+          "enabled": true,
+          "fingerprint": "chrome"
+        }
+      }
+    },
+    {
+      "type": "vless",
+      "tag": "CH 🇨🇭 | @Raydikalx | BD73A8",
+      "server": "channel.tradeip.store",
+      "server_port": 8443,
+      "uuid": "t.me.TradeIP",
+      "flow": "xtls-rprx-vision",
+      "tls": {
+        "enabled": true,
+        "server_name": "play.google.com",
+        "reality": {
+          "enabled": true,
+          "public_key": "HL-IrEO6_mXNGgiBztNWX0VY3nb-JQ3thK_7gFbk4Bg",
+          "short_id": "06f4e6"
+        },
+        "utls": {
+          "enabled": true,
+          "fingerprint": "chrome"
+        }
+      }
+    },
+    {
+      "type": "vless",
+      "tag": "CA 🇨🇦 | @Raydikalx | FEC00C",
+      "server": "108.162.195.58",
+      "server_port": 443,
+      "uuid": "29ca503d-e6b8-4509-b666-48133f450857",
+      "tls": {
+        "enabled": true,
+        "server_name": "learn00.evany.de5.net"
+      },
+      "transport": {
+        "type": "ws",
+        "path": "/fdip=tw.william.us.ci!txt",
+        "headers": {
+          "Host": "learn00.evany.de5.net"
+        }
+      }
+    },
+    {
+      "type": "trojan",
+      "tag": "HK 🇭🇰 | @Raydikalx | F17139",
+      "server": "18.163.180.201",
+      "server_port": 6357,
+      "password": "d1960ba9f0f6353353994fa844cf817b",
+      "tls": {
+        "enabled": true,
+        "server_name": "www.nintendogames.net"
+      }
+    },
+    {
+      "type": "vless",
+      "tag": "US 🇺🇸 | @Raydikalx | 2EB4A9",
+      "server": "108.162.198.58",
+      "server_port": 443,
+      "uuid": "29ca503d-e6b8-4509-b666-48133f450857",
+      "tls": {
+        "enabled": true,
+        "server_name": "learn00.evany.de5.net",
+        "utls": {
+          "enabled": true,
+          "fingerprint": "random"
+        }
+      },
+      "transport": {
+        "type": "ws",
+        "path": "/fdip",
+        "headers": {
+          "Host": "learn00.evany.de5.net"
+        }
+      }
+    },
+    {
+      "type": "vless",
+      "tag": "CA 🇨🇦 | @Raydikalx | 9C7B2E",
+      "server": "172.64.146.59",
+      "server_port": 2087,
+      "uuid": "29ca503d-e6b8-4509-b666-48133f450857",
+      "tls": {
+        "enabled": true,
+        "server_name": "learn00.evany.de5.net",
+        "utls": {
+          "enabled": true,
+          "fingerprint": "random"
+        }
+      },
+      "transport": {
+        "type": "ws",
+        "path": "/fdip",
+        "headers": {
+          "Host": "learn00.evany.de5.net"
+        }
+      }
+    },
+    {
+      "type": "trojan",
+      "tag": "HK 🇭🇰 | @Raydikalx | 78B3E2",
+      "server": "18.163.180.201",
+      "server_port": 6357,
+      "password": "d1960ba9f0f6353353994fa844cf817b",
+      "tls": {
+        "enabled": true,
+        "server_name": "www.nintendogames.net"
+      }
+    },
+    {
+      "type": "vless",
+      "tag": "NL 🇳🇱 | @Raydikalx | 8AF975",
+      "server": "nl.go-vpn.club",
+      "server_port": 443,
+      "uuid": "40de6299-d792-4868-8a82-411ead0aa943",
+      "flow": "xtls-rprx-vision",
+      "tls": {
+        "enabled": true,
+        "server_name": "gateway.icloud.com",
+        "reality": {
+          "enabled": true,
+          "public_key": "L0acYoTxKR5ix7LXAmP10cy06n2JjgkXTojGjtWAqww",
+          "short_id": "ed7b9bdfedb9b8e5"
+        },
+        "utls": {
+          "enabled": true,
+          "fingerprint": "chrome"
+        }
+      }
+    },
+    {
+      "type": "trojan",
+      "tag": "HK 🇭🇰 | @Raydikalx | 74A8CC",
+      "server": "18.163.180.201",
+      "server_port": 6357,
+      "password": "d1960ba9f0f6353353994fa844cf817b",
+      "tls": {
+        "enabled": true,
+        "server_name": "www.nintendogames.net"
+      }
+    },
+    {
+      "type": "vless",
+      "tag": "US 🇺🇸 | @Raydikalx | E311CB",
+      "server": "108.162.198.87",
+      "server_port": 2087,
+      "uuid": "29ca503d-e6b8-4509-b666-48133f450857",
+      "tls": {
+        "enabled": true,
+        "server_name": "learn00.evany.de5.net",
+        "utls": {
+          "enabled": true,
+          "fingerprint": "chrome"
+        }
+      },
+      "transport": {
+        "type": "ws",
+        "path": "/fdip=tw.william.us.ci!txt",
+        "headers": {
+          "Host": "learn00.evany.de5.net"
+        }
+      }
+    },
+    {
+      "type": "vless",
+      "tag": "CA 🇨🇦 | @Raydikalx | 006A58",
+      "server": "172.64.52.196",
+      "server_port": 8443,
+      "uuid": "29ca503d-e6b8-4509-b666-48133f450857",
+      "tls": {
+        "enabled": true,
+        "server_name": "learn00.evany.de5.net",
+        "utls": {
+          "enabled": true,
+          "fingerprint": "random"
+        }
+      },
+      "transport": {
+        "type": "ws",
+        "path": "/fdip",
+        "headers": {
+          "Host": "learn00.evany.de5.net"
+        }
+      }
+    },
+    {
+      "type": "vless",
+      "tag": "US 🇺🇸 | @Raydikalx | 882A9B",
+      "server": "uwu.spectrumproxy.shop",
+      "server_port": 443,
+      "uuid": "76713d07-5a6b-49c2-abd8-bc450a2fa7fc",
+      "flow": "xtls-rprx-vision",
+      "tls": {
+        "enabled": true,
+        "server_name": "uwu.spectrumproxy.shop",
+        "reality": {
+          "enabled": true,
+          "public_key": "EyzTSZxq5qlUT2xW0l7VP-DzIh2ucabMan9ekEv9Owo",
+          "short_id": "143627f1"
+        },
+        "utls": {
+          "enabled": true,
+          "fingerprint": "chrome"
+        }
+      }
+    },
+    {
+      "type": "trojan",
+      "tag": "HK 🇭🇰 | @Raydikalx | 5DA6A2",
+      "server": "18.163.180.201",
+      "server_port": 6357,
+      "password": "d1960ba9f0f6353353994fa844cf817b",
+      "tls": {
+        "enabled": true,
+        "server_name": "www.nintendogames.net"
+      }
+    },
+    {
+      "type": "vless",
+      "tag": "CH 🇨🇭 | @Raydikalx | 462A2F",
+      "server": "channel.tradeip.store",
+      "server_port": 8443,
+      "uuid": "t.me.TradeIP",
+      "flow": "xtls-rprx-vision",
+      "tls": {
+        "enabled": true,
+        "server_name": "play.google.com",
+        "reality": {
+          "enabled": true,
+          "public_key": "HL-IrEO6_mXNGgiBztNWX0VY3nb-JQ3thK_7gFbk4Bg",
+          "short_id": "c214"
+        },
+        "utls": {
+          "enabled": true,
+          "fingerprint": "chrome"
+        }
+      }
+    },
+    {
+      "type": "vmess",
+      "tag": "HK 🇭🇰 | @Raydikalx | D48452",
+      "server": "zudssgtmrqg9lpvi.v.3dns.vip",
+      "server_port": 443,
+      "uuid": "f23bb427c1f94373876c2f43e9f790f3",
+      "security": "auto",
+      "alter_id": 0,
+      "tls": {
+        "enabled": true,
+        "server_name": "zudssgtmrqg9lpvi.v.3dns.vip"
+      },
+      "transport": {
+        "type": "ws",
+        "path": "/ws-vmess"
+      }
+    },
+    {
+      "type": "vmess",
+      "tag": "US 🇺🇸 | @Raydikalx | 8169F9",
+      "server": "154.17.234.39",
+      "server_port": 2086,
+      "uuid": "7e25875e-50bb-47ed-9627-261e6d232f69",
+      "security": "auto",
+      "alter_id": 0,
+      "transport": {
+        "type": "ws",
+        "path": "/7e25875e-50bb-47ed-9627-261e6d232f69-vm",
+        "headers": {
+          "Host": "www.bing.com"
+        }
+      }
+    },
+    {
+      "type": "vmess",
+      "tag": "HK 🇭🇰 | @Raydikalx | F8BD02",
+      "server": "ejomsxptp19apygl.v.3dns.vip",
+      "server_port": 443,
+      "uuid": "f23bb427c1f94373876c2f43e9f790f3",
+      "security": "auto",
+      "alter_id": 0,
+      "tls": {
+        "enabled": true,
+        "server_name": "ejomsxptp19apygl.v.3dns.vip"
+      },
+      "transport": {
+        "type": "ws",
+        "path": "/ws-vmess"
+      }
+    },
+    {
+      "type": "shadowsocks",
+      "tag": "TH 🇹🇭 | @Raydikalx | AB7D79",
+      "server": "47.81.56.202",
+      "server_port": 44617,
+      "method": "chacha20-ietf-poly1305",
+      "password": "lhuULRwO4slM6k262pAC4cbq5A1H6z8eaOHV27vi7Yw="
+    },
+    {
+      "type": "shadowsocks",
+      "tag": "RU 🇷🇺 | @Raydikalx | 839C40",
+      "server": "195.133.5.207",
+      "server_port": 20111,
+      "method": "aes-256-gcm",
+      "password": "b24a80e79cee1d1f"
+    },
+    {
+      "type": "vmess",
+      "tag": "HK 🇭🇰 | @Raydikalx | B8CEAF",
+      "server": "ex1ogt73nzpqkac2.v.3dns.vip",
+      "server_port": 443,
+      "uuid": "f23bb427c1f94373876c2f43e9f790f3",
+      "security": "auto",
+      "alter_id": 0,
+      "tls": {
+        "enabled": true,
+        "server_name": "EX1oGt73NzPQKAc2.v.3dns.vip"
+      },
+      "transport": {
+        "type": "ws",
+        "path": "/ws-vmess",
+        "headers": {
+          "Host": "EX1oGt73NzPQKAc2.v.3dns.vip"
+        }
+      }
+    },
+    {
+      "type": "vless",
+      "tag": "GB 🇬🇧 | @Raydikalx | 79AA89",
+      "server": "195.74.93.254",
+      "server_port": 443,
+      "uuid": "146eb6cf-a99c-4022-85ca-022cf81502dc",
+      "flow": "xtls-rprx-vision",
+      "tls": {
+        "enabled": true,
+        "server_name": "web.max.ru",
+        "reality": {
+          "enabled": true,
+          "public_key": "7ReQIe2kMtP4rCrptgH5glkOM-JGcSAPzHNxOED-Z0s",
+          "short_id": "247fd6dab1a34a48"
+        },
+        "utls": {
+          "enabled": true,
+          "fingerprint": "chrome"
+        }
+      }
+    },
+    {
+      "type": "vless",
+      "tag": "US 🇺🇸 | @Raydikalx | E183EE",
+      "server": "one-for-all.levikogjgfdd.ir",
+      "server_port": 443,
+      "uuid": "29ca503d-e6b8-4509-b666-48133f450857",
+      "tls": {
+        "enabled": true,
+        "server_name": "learn00.evany.de5.net"
+      },
+      "transport": {
+        "type": "ws",
+        "path": "/fdp",
+        "headers": {
+          "Host": "learn00.evany.de5.net"
+        }
+      }
+    },
+    {
+      "type": "vmess",
+      "tag": "HK 🇭🇰 | @Raydikalx | C3B086",
+      "server": "ejomsxptp19apygl.v.3dns.vip",
+      "server_port": 443,
+      "uuid": "f23bb427c1f94373876c2f43e9f790f3",
+      "security": "auto",
+      "alter_id": 0,
+      "tls": {
+        "enabled": true,
+        "server_name": "ejOMsxPtP19APyGL.v.3dns.vip"
+      },
+      "transport": {
+        "type": "ws",
+        "path": "/ws-vmess",
+        "headers": {
+          "Host": "ejOMsxPtP19APyGL.v.3dns.vip"
+        }
+      }
+    },
+    {
+      "type": "vmess",
+      "tag": "HK 🇭🇰 | @Raydikalx | 319D31",
+      "server": "zudssgtmrqg9lpvi.v.3dns.vip",
+      "server_port": 443,
+      "uuid": "f23bb427c1f94373876c2f43e9f790f3",
+      "security": "auto",
+      "alter_id": 0,
+      "tls": {
+        "enabled": true,
+        "server_name": "zUDssgTMRqg9LpvI.v.3dns.vip"
+      },
+      "transport": {
+        "type": "ws",
+        "path": "/ws-vmess",
+        "headers": {
+          "Host": "zUDssgTMRqg9LpvI.v.3dns.vip"
+        }
+      }
+    },
+    {
+      "type": "vmess",
+      "tag": "US 🇺🇸 | @Raydikalx | C7D66A",
+      "server": "154.17.234.39",
+      "server_port": 2086,
+      "uuid": "7e25875e-50bb-47ed-9627-261e6d232f69",
+      "security": "auto",
+      "alter_id": 0,
+      "transport": {
+        "type": "ws",
+        "path": "7e25875e-50bb-47ed-9627-261e6d232f69-vm",
+        "headers": {
+          "Host": "www.bing.com"
+        }
+      }
+    },
+    {
+      "type": "vless",
+      "tag": "GB 🇬🇧 | @Raydikalx | 2A508E",
+      "server": "ukall.lorqina.ir",
+      "server_port": 31118,
+      "uuid": "9d66932d-9eec-47de-972a-e98dee7231c1",
+      "flow": "xtls-rprx-vision",
+      "tls": {
+        "enabled": true,
+        "server_name": "de.nachrichten.yahoo.com",
+        "reality": {
+          "enabled": true,
+          "public_key": "LUCLCEE0jswfTEzoonfVHLw_1l-j4uROgNJi12jJsnc",
+          "short_id": "1604fe"
+        },
+        "utls": {
+          "enabled": true,
+          "fingerprint": "chrome"
+        }
+      }
+    },
+    {
+      "type": "vless",
+      "tag": "GB 🇬🇧 | @Raydikalx | B895E1",
+      "server": "205.237.109.211",
+      "server_port": 448,
+      "uuid": "70df38ff-5a22-4ffc-a3f9-1725515e0ea5",
+      "tls": {
+        "enabled": true,
+        "server_name": "www.samsung.com",
+        "reality": {
+          "enabled": true,
+          "public_key": "IuB1jsALd-wN_8jRTGxVLBbVG5eSxNbOXjvFyZlm3UU",
+          "short_id": "113241ad01e99a2d"
+        },
+        "utls": {
+          "enabled": true,
+          "fingerprint": "chrome"
+        }
+      }
+    },
+    {
+      "type": "vless",
+      "tag": "US 🇺🇸 | @Raydikalx | 3D3782",
+      "server": "199.232.78.159",
+      "server_port": 443,
+      "uuid": "6e2e03e2-4f66-479a-a186-a34d66ca8c91",
+      "tls": {
+        "enabled": true,
+        "server_name": "ssl.fastly.com"
+      },
+      "transport": {
+        "type": "ws",
+        "path": "/TELEGRAM_NUFiLTER,TELEGRAM_NUFiLTER,TELEGRAM_NUFiLTER,TELEGRAM_NUFiLTER,TELEGRAM_NUFiLTER,TELEGRAM_NUFiLTER,TELEGRAM_NUFiLTER?ed",
+        "headers": {
+          "Host": "pan11.global.ssl.fastly.net"
+        }
+      }
+    },
+    {
+      "type": "vless",
+      "tag": "CA 🇨🇦 | @Raydikalx | 387873",
+      "server": "ordakbot.ir",
+      "server_port": 80,
+      "uuid": "50414e45-4c5f-5a45-5553-6d24857831b8",
+      "transport": {
+        "type": "ws",
+        "path": "/stream/PANEL_ZEUS/6d24857831b8?loc=0",
+        "headers": {
+          "Host": "z-e-u-s-panel-m0yjjp.zeus-12g9x8.workers.dev"
+        }
+      }
+    },
+    {
+      "type": "vless",
+      "tag": "DE 🇩🇪 | @Raydikalx | 9C1717",
+      "server": "146.75.119.82",
+      "server_port": 80,
+      "uuid": "8427d4d6-b977-44f3-a32e-f4bf5dcf09df",
+      "transport": {
+        "type": "ws",
+        "path": "ws/?ed=2048/@AzadMarz@AzadMarz@AzadMarz@AzadMarz@AzadMarz@AzadMarz@AzadMarz@AzadMarz@AzadMarz@AzadMarz@AzadMarz@AzadMarz@AzadMarz@AzadMarz@AzadMarz@AzadMarz@AzadMarz@AzadMarz@AzadMarz@AzadMarz@AzadMarz@AzadMarz@AzadMarz@AzadMarz@AzadMarz@AzadMarz@AzadMarz@AzadMarz@AzadMarz@AzadMarz@AzadMarz@AzadMarz@AzadMarz@AzadMarz@AzadMarz@AzadMarz@AzadMarz@AzadMarz@AzadMarz@AzadMarz@AzadMarz@AzadMarz@AzadMarz@AzadMarz@AzadMarz@AzadMarz@AzadMarz@AzadMarz@AzadMarz@AzadMarz@AzadMarz@AzadMarz/?2048",
+        "headers": {
+          "Host": "rb24.ir"
+        }
+      }
+    },
+    {
+      "type": "shadowsocks",
+      "tag": "NL 🇳🇱 | @Raydikalx | EB81BC",
+      "server": "pl1.levikogjgfdd.ir",
+      "server_port": 443,
+      "method": "chacha20-ietf-poly1305",
+      "password": "oZIoA69Q8yhcQV8ka3Pa3A"
+    },
+    {
+      "type": "vless",
+      "tag": "FR 🇫🇷 | @Raydikalx | D097D5",
+      "server": "45.95.233.185",
+      "server_port": 19168,
+      "uuid": "c90fdc71-d7ac-4b66-8c0c-2be2a7b4ae0c",
+      "tls": {
+        "enabled": true,
+        "server_name": "apple.com",
+        "reality": {
+          "enabled": true,
+          "public_key": "j9-PqbvTxOh3VZ_Sz696WKpEEFvft1CzUzzIvGCJn0w",
+          "short_id": "baeaf515feed2c64"
+        },
+        "utls": {
+          "enabled": true,
+          "fingerprint": "chrome"
+        }
+      },
+      "transport": {
+        "type": "grpc",
+        "service_name": "api"
+      }
+    },
+    {
+      "type": "vless",
+      "tag": "NL 🇳🇱 | @Raydikalx | 0BA891",
+      "server": "217.60.23.230",
+      "server_port": 443,
+      "uuid": "7856eb14-06d6-423a-b4a6-353b3ce5c51a",
+      "flow": "xtls-rprx-vision",
+      "tls": {
+        "enabled": true,
+        "server_name": "site.rumedia-cdn.com",
+        "reality": {
+          "enabled": true,
+          "public_key": "IY7z4YneuuMK6nsOyqxHPC30hLR4CaxBVHD-SpRk2H0",
+          "short_id": "377209f7cecf2f7d"
+        },
+        "utls": {
+          "enabled": true,
+          "fingerprint": "chrome"
+        }
+      }
+    },
+    {
+      "type": "vless",
+      "tag": "CA 🇨🇦 | @Raydikalx | 6A41EA",
+      "server": "104.17.21.32",
+      "server_port": 8880,
+      "uuid": "300f44af-adb8-42b7-b869-bef70b205d7e",
+      "transport": {
+        "type": "ws",
+        "path": "/pyip=ProxyIP.KR.CMLiussss.net",
+        "headers": {
+          "Host": "icy-rice-3c1c.340-680.workers.dev"
+        }
+      }
+    },
+    {
+      "type": "shadowsocks",
+      "tag": "DE 🇩🇪 | @Raydikalx | D832BE",
+      "server": "213.202.208.199",
+      "server_port": 7001,
+      "method": "aes-256-gcm",
+      "password": "RexnBgU7EV5ADxG"
+    },
+    {
+      "type": "vless",
+      "tag": "US 🇺🇸 | @Raydikalx | 169990",
+      "server": "170.114.46.6",
+      "server_port": 80,
+      "uuid": "cac6ec8f-99f0-44c5-814f-2f3f65e4db74",
+      "transport": {
+        "type": "ws",
+        "path": "/dula",
+        "headers": {
+          "Host": "speed.dulacloud.store"
+        }
+      }
+    },
+    {
+      "type": "vless",
+      "tag": "CA 🇨🇦 | @Raydikalx | 1FB3DF",
+      "server": "162.159.48.193",
+      "server_port": 8880,
+      "uuid": "1bc8fb2a-3bee-4ae0-aa12-957885e63e18",
+      "transport": {
+        "type": "ws",
+        "path": "/pyip=ProxyIP.SG.CMLiussss.net",
+        "headers": {
+          "Host": "super-mud-8b38.114-a90.workers.dev"
+        }
+      }
+    },
+    {
+      "type": "shadowsocks",
+      "tag": "NL 🇳🇱 | @Raydikalx | 254EA2",
+      "server": "82.38.31.49",
+      "server_port": 8080,
+      "method": "chacha20-ietf-poly1305",
+      "password": "oZIoA69Q8yhcQV8ka3Pa3A"
+    },
+    {
+      "type": "vless",
+      "tag": "LT 🇱🇹 | @Raydikalx | 7B616F",
+      "server": "5.199.170.105",
+      "server_port": 443,
+      "uuid": "fd47216b-4217-4ec1-85b9-98304634a391",
+      "flow": "xtls-rprx-vision",
+      "tls": {
+        "enabled": true,
+        "server_name": "amd.com",
+        "reality": {
+          "enabled": true,
+          "public_key": "xFUmqmEPEKyv-5ReppEM1oTkc04HQcBUfySH-EwPBlE",
+          "short_id": "6ba85179e30d4fc2"
+        },
+        "utls": {
+          "enabled": true,
+          "fingerprint": "chrome"
+        }
+      }
+    },
+    {
+      "type": "vmess",
+      "tag": "HK 🇭🇰 | @Raydikalx | 9956C9",
+      "server": "93ucrn4i0pffuabk.v.3dns.vip",
+      "server_port": 443,
+      "uuid": "f23bb427c1f94373876c2f43e9f790f3",
+      "security": "auto",
+      "alter_id": 0,
+      "tls": {
+        "enabled": true,
+        "server_name": "93ucrn4i0pffuabk.v.3dns.vip"
+      },
+      "transport": {
+        "type": "ws",
+        "path": "/ws-vmess"
+      }
+    },
+    {
+      "type": "shadowsocks",
+      "tag": "NL 🇳🇱 | @Raydikalx | 9884B6",
+      "server": "82.38.31.11",
+      "server_port": 8080,
+      "method": "chacha20-ietf-poly1305",
+      "password": "oZIoA69Q8yhcQV8ka3Pa3A"
+    },
+    {
+      "type": "shadowsocks",
+      "tag": "NL 🇳🇱 | @Raydikalx | 4EA7F2",
+      "server": "nl2.levikogjgfdd.ir",
+      "server_port": 443,
+      "method": "chacha20-ietf-poly1305",
+      "password": "oZIoA69Q8yhcQV8ka3Pa3A"
+    },
+    {
+      "type": "vless",
+      "tag": "NL 🇳🇱 | @Raydikalx | 88EAE7",
+      "server": "2.26.82.237",
+      "server_port": 443,
+      "uuid": "906be882-7f16-47c3-8702-59db2ada9688",
+      "tls": {
+        "enabled": true,
+        "server_name": "speed.cloudflare.com",
+        "reality": {
+          "enabled": true,
+          "public_key": "VmBEjLUpiEnoNIaPNGDfVPIOzH_ktSDdsGGAvissxgI",
+          "short_id": ""
+        },
+        "utls": {
+          "enabled": true,
+          "fingerprint": "chrome"
+        }
+      },
+      "transport": {
+        "type": "grpc",
+        "service_name": "grpc"
+      }
+    },
+    {
+      "type": "vmess",
+      "tag": "HK 🇭🇰 | @Raydikalx | 64D8FF",
+      "server": "93ucrn4i0pffuabk.v.3dns.vip",
+      "server_port": 443,
+      "uuid": "f23bb427c1f94373876c2f43e9f790f3",
+      "security": "auto",
+      "alter_id": 0,
+      "tls": {
+        "enabled": true,
+        "server_name": "93ucrn4i0PffUAbk.v.3dns.vip"
+      },
+      "transport": {
+        "type": "ws",
+        "path": "/ws-vmess",
+        "headers": {
+          "Host": "93ucrn4i0PffUAbk.v.3dns.vip"
+        }
+      }
+    },
+    {
+      "type": "vless",
+      "tag": "FI 🇫🇮 | @Raydikalx | 954706",
+      "server": "node7.mxvpn.dev",
+      "server_port": 443,
+      "uuid": "564082ff-cf3c-48db-9e10-8ad2312847b4",
+      "flow": "xtls-rprx-vision",
+      "tls": {
+        "enabled": true,
+        "server_name": "node7.mxvpn.dev",
+        "reality": {
+          "enabled": true,
+          "public_key": "TlpXTLz1Y-v8B6q9MX55U6eypjfL0LCSNE5zQP4yRHw",
+          "short_id": "bbc68cec8bb8d2e3"
+        },
+        "utls": {
+          "enabled": true,
+          "fingerprint": "chrome"
+        }
+      }
+    },
+    {
+      "type": "vless",
+      "tag": "NL 🇳🇱 | @Raydikalx | 7FBF3E",
+      "server": "2.26.82.237",
+      "server_port": 443,
+      "uuid": "906be882-7f16-47c3-8702-59db2ada9688",
+      "tls": {
+        "enabled": true,
+        "server_name": "speed.cloudflare.com",
+        "reality": {
+          "enabled": true,
+          "public_key": "VmBEjLUpiEnoNIaPNGDfVPIOzH_ktSDdsGGAvissxgI",
+          "short_id": ""
+        },
+        "utls": {
+          "enabled": true,
+          "fingerprint": "chrome"
+        }
+      },
+      "transport": {
+        "type": "grpc",
+        "service_name": "grpc"
+      }
+    },
+    {
+      "type": "direct",
+      "tag": "direct"
+    }
+  ],
+  "route": {
+    "rules": [
+      {
+        "action": "sniff"
+      },
+      {
+        "protocol": "dns",
+        "action": "hijack-dns"
+      },
+      {
+        "ip_is_private": true,
+        "outbound": "direct"
+      }
+    ],
+    "final": "🚀 @Raydikalx",
+    "auto_detect_interface": true,
+    "default_domain_resolver": {
+      "server": "local-dns"
+    }
+  },
+  "experimental": {
+    "cache_file": {
+      "enabled": true,
+      "store_fakeip": true
+    },
+    "clash_api": {
+      "external_controller": "127.0.0.1:9090"
+    }
+  }
+}
