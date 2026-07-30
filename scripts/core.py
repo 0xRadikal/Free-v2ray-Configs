@@ -29,6 +29,38 @@ from typing import Dict, List, Optional, Tuple
 # ثابت‌ها
 # ──────────────────────────────────────────────────────────────────────────────
 
+# ══════════════════════════════════════════════════════════════════════════════
+# 🔒 سیاستِ برندینگ — تصمیمِ مالکِ مخزن، غیرِقابلِ مذاکره
+# ══════════════════════════════════════════════════════════════════════════════
+# برندینگ یک «انتخابِ سلیقه‌ای» یا بدهیِ فنی نیست؛ **الزامِ محصول** است. مالکِ
+# مخزن صریحاً اعلام کرده:
+#
+#     «بله برندینگ و اضافه کردن آیدی @Raydikalx عمدی است و میخواهم انجام شود
+#      و به هیچ وجه نمیخوام برندینگ حذف شود یا انجام نشود
+#      میخواهم *همیشه* آیدی کانالم @Raydikalx روی کانفیگ ها نوشته شود»
+#
+# پس ناوردایِ زیر باید همیشه برقرار باشد:
+#
+#     هر نودی که منتشر می‌شود — در `configs.txt`، `configs_base64.txt`،
+#     `clash.yaml`، `singbox.json`، `protocols/*` و `archive/*` — باید
+#     `BRAND_CHANNEL` را در ریمارک/نام/تگِ خود داشته باشد.
+#
+# ⚠️ برای هر کسی که بعداً این کد را می‌خواند (انسان یا عامل):
+#
+#   • «کاهشِ برندینگ» **رگرسیون** است، نه بهبود. نسخه‌های قدیمیِ نقشهٔ راه یک
+#     آیتم به نامِ D-7 داشتند با عنوانِ «کاهشِ برندینگ به <۵٪». آن آیتم رسماً
+#     `WON'T DO` شده است. اگر جایی آن را دیدید، سند قدیمی است — کد درست است.
+#   • fallbackهای «بی‌برند» در `converters.py` هم عمداً به مقدارِ **برنددار**
+#     هدف‌گیری شده‌اند؛ برگرداندنشان به `"vmess"`/`scheme`/`type` رگرسیون است.
+#   • برندینگ **idempotent** است (اندازه‌گیری‌شده: ۴ نمونه × ۵ اعمالِ متوالی
+#     ⇒ از نخستین اعمال پایدار)، پس اعمالِ دوباره‌اش بی‌خطر است. به همین دلیل
+#     `aggregate.py` یک دروازهٔ fail-safe دارد که خطِ بی‌برند را دوباره برند
+#     می‌زند و در نهایت — اگر بازهم بی‌برند بود — همان **یک خط** را کنار
+#     می‌گذارد و در `health.json` می‌شمارد. هرگز کلِ اجرا را نمی‌شکند.
+#   • تست‌های `test_pipeline.py` این ناوردا را روی هر ۴ قالبِ خروجی قفل
+#     کرده‌اند. اگر تستی به‌خاطرِ «برند» شکست، تست درست است.
+# ══════════════════════════════════════════════════════════════════════════════
+
 #: برند کانال — تنها جای تعریف
 BRAND_CHANNEL = "@Raydikalx"
 
@@ -301,6 +333,74 @@ def _keyword_hit(haystack: str, needle: str) -> bool:
 _HOST_COUNTRY_CACHE: dict = {}
 
 
+# ──────────────────────────────────────────────────────────────────────────────
+# دیکدِ base64 که به نسخهٔ مفسر وابسته نیست
+# ──────────────────────────────────────────────────────────────────────────────
+#
+# ⚠️ چرا این تابع وجود دارد — یک یافتهٔ اندازه‌گیری‌شده، نه احتیاطِ نظری.
+#
+# `base64.urlsafe_b64decode` روی ورودیِ حاویِ padding در **میانه** بین نسخه‌های
+# CPython رفتارِ متفاوت دارد. اندازه‌گیریِ مستقیم روی `urlsafe_b64decode(s + "==")`:
+#
+#     s = "QUJDRA==EFGH"       →  3.10 : b"ABCD"                 3.13 : b"ABCD\x01\x05\x18"
+#     s = "QUJDRA==@host:443"  →  3.10 : b"ABCD"                 3.13 : binascii.Error  ← پرتاب!
+#     s = "QUJDRQ=XYZ"         →  3.10 : binascii.Error          3.13 : binascii.Error
+#     s = "QUJD@RA=="          →  3.10 : b"ABCD"                 3.13 : b"ABCD"
+#
+# سه رفتارِ متفاوت، و یکی از آن‌ها استثنا می‌پرتابد. چون `dedup_key` استثنا را با
+# `except: pass` می‌بلعد، نتیجه یک **کلیدِ هویتِ متفاوت** است، بی‌هیچ صدایی.
+#
+# پیامدِ واقعی که سنجیده شد: دو کانفیگ از ۸٬۱۳۶ کانفیگِ منتشرشده برچسبی داشتند
+# که مفسرِ ۳.۱۳ بازتولید نمی‌کرد، در حالی که ۳.۱۰ و CI (۳.۱۲) هر دو همان برچسبِ
+# منتشرشده را می‌دادند (`3BA0F5`، `25CF83`). ورودی اثباتاً یکسان بود: sha256 فایلِ
+# نمونه و sha256 خودِ `userinfo` در دو محیط برابر بودند و تنها خروجیِ دیکد
+# ۷۴ بایت در برابر ۸۰ بایت شد.
+#
+# `dedup_key` تابعِ **هویتِ** این مخزن است: یکتاسازی، ترتیبِ خروجی، برچسبِ ریمارک،
+# و شمارشِ مالکیت در `unique_yield` (فاز D) همه به آن تکیه دارند. یک تابعِ هویت
+# نباید به نسخهٔ مفسر وابسته باشد.
+#
+# راهکار: به‌جای تقلیدِ رفتارِ نامستندِ یک نسخهٔ خاص، **صورتِ مسئله را حذف می‌کنیم**:
+# اگر ورودی نحواً base64 نیست، تظاهر به دیکد نمی‌کنیم و `None` برمی‌گردانیم. برای
+# ورودیِ تمیز (که ۹۹.۹۷٪ موارد است) نتیجه با همهٔ نسخه‌ها یکسان است — و این
+# اندازه‌گیری شد، نه فرض.
+#
+# 🚫 عمداً در `try_base64_decode` (دیکدِ **بدنهٔ منابع**) استفاده نمی‌شود. آن‌جا
+#    اندازه‌گیریِ زنده روی هر ۲۱ منبعِ واقعی (شاملِ ۴ منبعِ base64) نشان داد
+#    ۳.۱۰ و ۳.۱۳ **کاملاً یکسان**اند (۲۰٬۵۲۰ خط در هر دو، ۰ منبع با تفاوت)، و
+#    محافظِ چگالیِ ۲۰٪ هم آن مسیر را مقاوم می‌کند. اِعمالِ گیتِ نحوی آن‌جا
+#    می‌توانست منبعی را که امروز جزئاً دیکد می‌شود کاملاً رد کند — یعنی از دست
+#    دادنِ کانفیگ در ازای مشکلی که وجود ندارد.
+
+#: بدنهٔ base64 — هر دو گونهٔ استاندارد (`+/`) و urlsafe (`-_`) با padding اختیاری
+#: در **انتها**. وجودِ `=` در میانه یا هر کاراکترِ خارج از الفبا ⇒ ورودی base64 نیست.
+_B64_BODY_RE = re.compile(r"^[A-Za-z0-9+/_-]+={0,2}$")
+
+
+def decode_base64_text(candidate: str) -> Optional[str]:
+    """
+    اگر `candidate` **نحواً** base64 باشد متنِ دیکدشده را برمی‌گرداند، وگرنه None.
+
+    قطعی است: خروجی فقط تابعِ ورودی است، نه نسخهٔ CPython. جزئیاتِ چرایی در
+    کامنتِ بالای همین بخش.
+    """
+    s = (candidate or "").strip()
+    if not s or not _B64_BODY_RE.match(s):
+        return None
+    body = s.rstrip("=")
+    # طولِ ۴k+1 در base64 ممکن نیست؛ همهٔ نسخه‌ها این را خطا می‌دانند.
+    if len(body) % 4 == 1:
+        return None
+    body += "=" * ((4 - len(body) % 4) % 4)
+    try:
+        # `urlsafe_b64decode` هر دو الفبا را می‌پوشاند: `-`/`_` را ترجمه می‌کند و
+        # `+`/`/` را دست‌نخورده رد می‌کند. پس یک فراخوانی کافی است.
+        raw = base64.urlsafe_b64decode(body)
+    except Exception:
+        return None
+    return raw.decode("utf-8", errors="ignore")
+
+
 def endpoint_of(line: str) -> str:
     """آدرسِ مقصدِ کانفیگ (host یا IP) بدونِ پورت. برای vmess از JSON خوانده می‌شود."""
     line = (line or "").strip()
@@ -322,9 +422,9 @@ def endpoint_of(line: str) -> str:
             # پس در صورتِ شکست، به تجزیهٔ عمومیِ URI پایین می‌افتیم و همان‌جا
             # میزبان درست به‌دست می‌آید.
             b64 = line[8:].split("#")[0].strip()
-            b64 += "=" * ((4 - len(b64) % 4) % 4)
+            _txt = decode_base64_text(b64)
             try:
-                obj = json.loads(base64.b64decode(b64).decode("utf-8", errors="ignore"))
+                obj = json.loads(_txt) if _txt is not None else None
             except Exception:
                 obj = None
             if isinstance(obj, dict):
@@ -464,8 +564,10 @@ def dedup_key(line: str) -> str:
     if line.startswith("vmess://"):
         try:
             b64 = line[8:].split("#")[0].strip()
-            b64 += "=" * ((4 - len(b64) % 4) % 4)
-            obj = json.loads(base64.b64decode(b64).decode("utf-8", errors="ignore"))
+            _txt = decode_base64_text(b64)
+            if _txt is None:
+                raise ValueError("vmess payload is not base64")
+            obj = json.loads(_txt)
             add = (str(obj.get("add") or "")).strip().lower()
             host = _norm_identity_value("host", str(obj.get("host") or ""))
             sni = _norm_identity_value("sni", str(obj.get("sni") or ""))
@@ -491,19 +593,16 @@ def dedup_key(line: str) -> str:
             if "@" in rest:
                 userinfo, hostpart = rest.rsplit("@", 1)
                 hostpart = hostpart.split("?")[0]
-                try:
-                    decoded_ui = base64.urlsafe_b64decode(
-                        userinfo + "==").decode("utf-8", errors="ignore")
-                    if ":" in decoded_ui:
-                        userinfo = decoded_ui
-                except Exception:
-                    pass
+                decoded_ui = decode_base64_text(userinfo)
+                if decoded_ui and ":" in decoded_ui:
+                    userinfo = decoded_ui
                 userinfo = urllib.parse.unquote(userinfo).lower()
                 host, _, port = hostpart.rpartition(":")
                 return f"ss:sip002:{userinfo}@{host.lower()}:{port}"
             else:
-                decoded = base64.urlsafe_b64decode(
-                    rest + "==").decode("utf-8", errors="ignore")
+                decoded = decode_base64_text(rest)
+                if decoded is None:
+                    raise ValueError("ss legacy body is not base64")
                 return f"ss:legacy:{decoded.lower()}"
         except Exception:
             return line.split("#")[0].strip()[:120]
@@ -604,8 +703,8 @@ def brand_remark(line: str, idx=None) -> str:
             # base64 خراب می‌شود و برندینگ خاموشانه رد می‌شود (کانفیگ بدون برند
             # از پایپ‌لاین بیرون می‌آید). dedup_key هم همین کار را می‌کند.
             b64 = line[8:].split("#")[0].strip()
-            b64 += "=" * ((4 - len(b64) % 4) % 4)
-            _cand = json.loads(base64.b64decode(b64).decode("utf-8", errors="ignore"))
+            _txt = decode_base64_text(b64)
+            _cand = json.loads(_txt) if _txt is not None else None
             if isinstance(_cand, dict):
                 _vmess_obj = _cand
         except Exception:
@@ -642,6 +741,54 @@ def brand_remark(line: str, idx=None) -> str:
     label = "Global 🌐" if code == "Global" else f"{code} {flag}"
     new_remark = f"{label} | {BRAND_CHANNEL} | {tag}"
     return f"{core}#{new_remark}"
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# راستی‌آزماییِ برند
+# ──────────────────────────────────────────────────────────────────────────────
+
+def remark_of(line: str) -> str:
+    """ریمارکِ قابلِ‌مشاهده‌ی کاربر را برمی‌گرداند (یا رشتهٔ تهی).
+
+    «قابلِ مشاهده» عمداً تأکید شده: در `vmess://` ریمارک درونِ JSONِ base64شده
+    (کلیدِ `ps`) می‌نشیند و در متنِ خامِ خط **دیده نمی‌شود**، ولی کلاینت آن را
+    به کاربر نشان می‌دهد. پس هر بازرسیِ برند که فقط `BRAND_CHANNEL in line`
+    را چک کند، روی همهٔ vmessها منفیِ کاذب می‌دهد (اندازه‌گیری‌شده: ۲٬۳۷۳ نود
+    از ۸٬۱۳۶ در دادهٔ زنده). این تابع همان چیزی را می‌خواند که کاربر می‌بیند.
+    """
+    if not line:
+        return ""
+    s = line.strip()
+    if s.startswith("vmess://"):
+        b64 = s[8:].split("#")[0].strip()
+        txt = decode_base64_text(b64)
+        if txt is not None:
+            try:
+                obj = json.loads(txt)
+                if isinstance(obj, dict):
+                    return str(obj.get("ps") or obj.get("name") or "")
+            except Exception:
+                pass
+        # vmessِ غیرِJSON (قالبِ URI) از مسیرِ fragment برند می‌خورد — بیفت پایین
+    if "#" in s:
+        return s.split("#", 1)[1]
+    return ""
+
+
+def is_branded(line: str) -> bool:
+    """آیا ریمارکِ این خط `BRAND_CHANNEL` را دارد؟
+
+    این تابع **تعریفِ اجراییِ** ناوردایِ برندینگ است (سیاست، بالای همین فایل).
+    یک‌جا نگه‌داشتنش لازم است چون سه مصرف‌کننده دارد که نباید واگرا شوند:
+    دروازهٔ انتشار در `aggregate.py`، آزمون‌های `test_pipeline.py`، و هر
+    ابزارِ بازرسیِ آینده.
+
+    سنجش روی *ریمارک* است نه کلِ خط: `BRAND_CHANNEL in line` هم منفیِ کاذب
+    می‌دهد (vmess، بالا) و هم مثبتِ کاذب — مثلاً میزبانی که تصادفاً رشتهٔ
+    برند را در query داشته باشد، «برنددار» شمرده می‌شد در حالی که کاربر هیچ
+    برندی نمی‌بیند.
+    """
+    return BRAND_CHANNEL in remark_of(line)
 
 
 # ──────────────────────────────────────────────────────────────────────────────

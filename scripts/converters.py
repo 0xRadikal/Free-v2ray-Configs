@@ -34,6 +34,46 @@ import re
 import urllib.parse
 from typing import Any, Dict, List, Optional
 
+import core
+
+# ══════════════════════════════════════════════════════════════════════════════
+# 🔒 برند — تنها یک منبعِ حقیقت
+# ══════════════════════════════════════════════════════════════════════════════
+# پیش از این، رشتهٔ «@Raydikalx» در ۶ نقطه از همین فایل به‌صورتِ literal تکرار
+# شده بود، در حالی که کامنتِ `core.BRAND_CHANNEL` می‌گفت «تنها جای تعریف». این
+# دوگانگی یک باگِ خفته بود: با تغییرِ برند در `core`، خروجیِ clash/sing-box
+# برندِ کهنه را نگه می‌داشت. الان همه از `core.BRAND_CHANNEL` مشتق می‌شوند.
+#
+# سیاستِ برندینگ (تصمیمِ مالک) در `core.py` بالای `BRAND_CHANNEL` مستند است:
+# هر نودی که منتشر می‌شود باید برند داشته باشد. این فایل هم تابعِ همان سیاست است.
+BRAND = core.BRAND_CHANNEL
+
+#: نامِ گروه‌های خروجی. **همه برنددار** — چون در UIِ کلاینت، گروه نخستین چیزی
+#: است که کاربر می‌بیند (پیش از فهرستِ نودها). یک‌جا تعریف می‌شوند تا تغییرِ نام
+#: هرگز یک مرجعِ ناهمخوان جا نگذارد؛ نامِ گروه در چند نقطه ارجاع می‌شود
+#: (`proxies` گروهِ select، `rules`/`final`، `default`، `detour` در DNS).
+GROUP_MAIN: str = f"🚀 {BRAND}"
+GROUP_AUTO: str = f"♻️ Auto | {BRAND}"
+GROUP_FALLBACK: str = f"🔯 Fallback | {BRAND}"
+
+
+def _branded_fallback(kind: Optional[str]) -> str:
+    """
+    نامِ پیش‌فرضِ **برنددار** برای نودی که ریمارکِ بالادست ندارد.
+
+    چرا وجود دارد: چند نقطه در این فایل fallbackِ «بی‌برند» داشتند
+    (`… or "vmess"`، `… or scheme`، `… or cp["type"]`، `… or ob["type"]`).
+    اندازه‌گیری روی ۸٬۱۳۶ کانفیگِ واقعی نشان داد امروز **هیچ‌کدام شلیک نمی‌کنند**
+    (چون `aggregate.py` پیش از مبدل‌ها همه را برند می‌زند) — ولی این‌ها
+    *موضعِ دفاعی* هستند و موضعِ دفاعی باید به سمتِ درست نشانه رود. اگر روزی
+    داده‌ای از مسیرِ دیگری به مبدل برسد، پیش‌فرض باید **برنددار** باشد نه خالی.
+
+    قطعی است: فقط تابعِ `kind` است، نه موقعیت یا زمان.
+    """
+    k = (kind or "").strip() or "node"
+    return f"{k} | {BRAND}"
+
+
 # ──────────────────────────────────────────────────────────────────────────────
 # whitelist‌های اعتبارسنجی (همه با تست واقعی کلاینت استخراج شده‌اند)
 # ──────────────────────────────────────────────────────────────────────────────
@@ -503,7 +543,7 @@ def parse_proxy(line: str) -> Optional[Dict[str, Any]]:
                 return None
             return {
                 "type": "vmess",
-                "name": str(obj.get("ps") or obj.get("name") or "vmess"),
+                "name": str(obj.get("ps") or obj.get("name") or _branded_fallback("vmess")),
                 "server": str(obj.get("add") or ""),
                 "port": _safe_int(obj.get("port")),
                 "uuid": str(obj.get("id") or ""),
@@ -530,7 +570,7 @@ def parse_proxy(line: str) -> Optional[Dict[str, Any]]:
         parsed = urllib.parse.urlparse(line.split("#")[0])
         q = {k: v[0] for k, v in urllib.parse.parse_qs(parsed.query).items()}
         scheme = parsed.scheme.lower()
-        name = _remark_of(line) or scheme
+        name = _remark_of(line) or _branded_fallback(scheme)
 
         if scheme == "vless":
             return {
@@ -949,7 +989,13 @@ def build_clash_yaml(lines: List[str], limit: int = OUTPUT_PROXY_LIMIT) -> str:
     import yaml  # PyYAML
 
     proxies: List[Dict[str, Any]] = []
-    used_names: set = set()
+    # نامِ گروه‌ها **رزرو** می‌شود: در Clash فضای نامِ گروه و نودِ یکسان است، پس
+    # نودی که تصادفاً همنامِ یک گروه شود، ارجاعِ گروه را می‌شکند (کلاینت به نودِ
+    # همنام می‌رسد نه گروه). امروز با برندینگِ ۱۰۰٪ نامِ نود شکلِ
+    # «{کشور} | @Raydikalx | {TAG}» دارد و برخورد ممکن نیست؛ ولی رزروکردن،
+    # درستی را از «بختِ داده» به «ساختارِ کد» منتقل می‌کند. در صورتِ برخورد،
+    # حلقهٔ یکتاسازیِ پایین به‌طور طبیعی پسوندِ « #n» می‌زند.
+    used_names: set = {GROUP_MAIN, GROUP_AUTO, GROUP_FALLBACK}
     _drops.clear_target("clash")
     for line in lines:
         if len(proxies) >= limit:
@@ -976,7 +1022,7 @@ def build_clash_yaml(lines: List[str], limit: int = OUTPUT_PROXY_LIMIT) -> str:
             _drops.record("clash", "not_expressible", line, p.get("type"))
             continue
         # نام یکتا
-        nm = cp["name"] or cp["type"]
+        nm = cp["name"] or _branded_fallback(cp["type"])
         base_nm = nm
         i = 1
         while nm in used_names:
@@ -995,18 +1041,18 @@ def build_clash_yaml(lines: List[str], limit: int = OUTPUT_PROXY_LIMIT) -> str:
         "log-level": "info",
         "proxies": proxies,
         "proxy-groups": [
-            {"name": "🚀 @Raydikalx", "type": "select",
-             "proxies": ["♻️ Auto", "🔯 Fallback"] + names},
-            {"name": "♻️ Auto", "type": "url-test",
+            {"name": GROUP_MAIN, "type": "select",
+             "proxies": [GROUP_AUTO, GROUP_FALLBACK] + names},
+            {"name": GROUP_AUTO, "type": "url-test",
              "url": "http://www.gstatic.com/generate_204",
              "interval": 300, "tolerance": 50, "proxies": names},
-            {"name": "🔯 Fallback", "type": "fallback",
+            {"name": GROUP_FALLBACK, "type": "fallback",
              "url": "http://www.gstatic.com/generate_204",
              "interval": 300, "proxies": names},
         ],
-        "rules": ["MATCH,🚀 @Raydikalx"],
+        "rules": [f"MATCH,{GROUP_MAIN}"],
     }
-    header = "# Clash subscription — generated by @Raydikalx aggregator\n"
+    header = f"# Clash subscription — generated by {BRAND} aggregator\n"
     return header + yaml.dump(
         doc,
         Dumper=_clash_dumper(),
@@ -1155,7 +1201,9 @@ def _to_singbox_outbound(p: Dict[str, Any]) -> Optional[Dict[str, Any]]:
 def build_singbox_json(lines: List[str], limit: int = OUTPUT_PROXY_LIMIT) -> str:
     """لیست کانفیگ → رشتهٔ Sing-box JSON کامل (با selector/urltest)."""
     outbounds: List[Dict[str, Any]] = []
-    used_tags: set = set()
+    # همان استدلالِ `used_names` در Clash — در sing-box هم tagِ outbound و tagِ
+    # selector/urltest در یک فضای نام‌اند.
+    used_tags: set = {GROUP_MAIN, GROUP_AUTO}
     _drops.clear_target("singbox")
     for line in lines:
         if len(outbounds) >= limit:
@@ -1175,7 +1223,7 @@ def build_singbox_json(lines: List[str], limit: int = OUTPUT_PROXY_LIMIT) -> str
         if not ob:
             _drops.record("singbox", "not_expressible", line, p.get("type"))
             continue
-        tag = ob["tag"] or ob["type"]
+        tag = ob["tag"] or _branded_fallback(ob["type"])
         base_tag = tag
         i = 1
         while tag in used_tags:
@@ -1202,7 +1250,7 @@ def build_singbox_json(lines: List[str], limit: int = OUTPUT_PROXY_LIMIT) -> str
         "dns": {
             "servers": [
                 {"tag": "proxy-dns", "type": "https", "server": "1.1.1.1",
-                 "detour": "🚀 @Raydikalx"},
+                 "detour": GROUP_MAIN},
                 {"tag": "local-dns", "type": "local"},
             ],
             "rules": [
@@ -1221,9 +1269,9 @@ def build_singbox_json(lines: List[str], limit: int = OUTPUT_PROXY_LIMIT) -> str
              "listen": "127.0.0.1", "listen_port": 2080},
         ],
         "outbounds": [
-            {"type": "selector", "tag": "🚀 @Raydikalx",
-             "outbounds": ["♻️ Auto"] + tags, "default": "♻️ Auto"},
-            {"type": "urltest", "tag": "♻️ Auto", "outbounds": tags,
+            {"type": "selector", "tag": GROUP_MAIN,
+             "outbounds": [GROUP_AUTO] + tags, "default": GROUP_AUTO},
+            {"type": "urltest", "tag": GROUP_AUTO, "outbounds": tags,
              "url": "https://www.gstatic.com/generate_204",
              "interval": "5m", "tolerance": 50},
             *outbounds,
@@ -1235,7 +1283,7 @@ def build_singbox_json(lines: List[str], limit: int = OUTPUT_PROXY_LIMIT) -> str
                 {"protocol": "dns", "action": "hijack-dns"},
                 {"ip_is_private": True, "outbound": "direct"},
             ],
-            "final": "🚀 @Raydikalx",
+            "final": GROUP_MAIN,
             "auto_detect_interface": True,
             "default_domain_resolver": {"server": "local-dns"},
         },

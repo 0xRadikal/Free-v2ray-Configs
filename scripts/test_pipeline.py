@@ -4410,6 +4410,898 @@ def test_workflow_treats_cascade_output_as_output_not_as_source():
 
 
 # ──────────────────────────────────────────────────────────────────────────────
+# فاز E — کارگاه A: برندینگ یک **ناوردا** است، نه یک اتفاق
+# ──────────────────────────────────────────────────────────────────────────────
+# مالکِ مخزن صریحاً خواسته آیدی کانال «همیشه» روی کانفیگ‌ها باشد. پیش از این
+# فاز، برندینگ عملاً ۱۰۰٪ بود ولی **هیچ تستی آن را قفل نکرده بود** — یعنی هر
+# رگرسیونی بی‌صدا منتشر می‌شد. اندازه‌گیریِ فاز E سه ریسک پیدا کرد:
+#
+#   ۱. چهار fallbackِ «بی‌برند» در `converters.py` که *امروز* شلیک نمی‌کنند
+#      (روی ۸٬۱۳۶ کانفیگِ واقعی سنجیده شد) ولی موضعِ دفاعی‌شان به سمتِ غلط بود.
+#   ۲. نامِ سه گروهِ خروجی (`♻️ Auto` در clash و sing-box، `🔯 Fallback` در clash)
+#      برند نداشتند — و در UIِ کلاینت **گروه نخستین چیزی است که کاربر می‌بیند**.
+#   ۳. هیچ تستی روی نامِ گروه‌ها نبود؛ سوئیتِ ۱۴۰ تستی با نام‌های بی‌برند هم
+#      سبز می‌ماند. همین ثابت می‌کند پوشش وجود نداشته.
+
+def _e4_freeze_country(host: str, port: int) -> None:
+    """کشور را در کش قفل می‌کند تا تست به DNS/GeoIP دست نزند (قطعی و بی‌شبکه)."""
+    core._HOST_COUNTRY_CACHE[f"{host}:{port}".lower()] = ("DE", "🇩🇪")
+    core._HOST_COUNTRY_CACHE[host.lower()] = ("DE", "🇩🇪")
+
+
+#: ریمارک‌های خصمانه. هر ردیف یک شکستِ واقعی یا محتمل است، نه تزئین:
+#:   • تبلیغِ کانالِ رقیب — یک موردِ **واقعی** در خروجیِ زنده دیده شده بود
+#:   • خالی / فقط‌فاصله — مسیرِ fallbackها را فعال می‌کند
+#:   • percent-encoded — اگر unquote نشود برند در متنِ خام گم می‌شود
+#:   • یونیکد/RTL — شکستنِ تحلیل‌گرهای ساده
+#:   • «a | b | c» — شکلِ لوله‌ای که می‌تواند تحلیلِ ریمارک را گمراه کند
+#:   • از قبل برنددار — برندزنیِ دوباره نباید برند را تکرار کند
+#:   • ۳۰۰ کاراکتر — طولِ بیمارگونه
+_E4_REMARKS = [
+    "",
+    "📯1@oneclickvpnkeys",
+    "%F0%9F%87%A9%F0%9F%87%AA%20DE%20node",
+    "🇩🇪 آلمان — سرور تست",
+    "a | b | c",
+    "DE 🇩🇪 | @Raydikalx | DEADBE",
+    "x" * 300,
+    "  ",
+]
+
+
+def _e4_corpus():
+    """پیکرهٔ خصمانه: ۷ خانوادهٔ پروتکل × ۸ ریمارک = ۵۶ کانفیگِ **خام** (بی‌برند)."""
+    host, port = "test-node.example.com", 443
+    uuid = "eb78e1f0-d921-4ca9-a889-261fcc5a0547"
+    _e4_freeze_country(host, port)
+
+    def vmess_json(rem: str) -> str:
+        obj = {"v": "2", "ps": rem, "add": host, "port": str(port), "id": uuid,
+               "aid": "0", "net": "ws", "type": "none", "host": host,
+               "path": "/", "tls": "tls", "sni": host, "scy": "auto"}
+        body = base64.b64encode(
+            json.dumps(obj, separators=(",", ":")).encode("utf-8")).decode("utf-8")
+        return "vmess://" + body
+
+    ss_ui = base64.b64encode(b"chacha20-ietf-poly1305:secretpass").decode().rstrip("=")
+    bases = {
+        "vmess-uri": f"vmess://{uuid}@{host}:{port}?encryption=none&security=tls&type=ws&path=%2F",
+        "vless": f"vless://{uuid}@{host}:{port}?encryption=none&security=tls&type=ws&path=%2F&sni={host}",
+        "trojan": f"trojan://password123@{host}:{port}?security=tls&type=tcp&sni={host}",
+        "ss-sip002": f"ss://{ss_ui}@{host}:{port}",
+        "hysteria2": f"hysteria2://password123@{host}:{port}?sni={host}",
+        "tuic": f"tuic://{uuid}:password123@{host}:{port}?congestion_control=bbr&alpn=h3&sni={host}",
+    }
+    out = []
+    for rem in _E4_REMARKS:
+        out.append(("vmess-json", vmess_json(rem)))
+        for kind, base in bases.items():
+            out.append((kind, base if not rem else base + "#" + rem))
+    return out
+
+
+def _e4_remark_of(line: str) -> str:
+    """
+    ریمارکِ منتشرشدهٔ یک خط را می‌خواند — برای vmess از داخلِ base64/JSON.
+
+    عمداً از `core` استفاده نمی‌کند تا تست، پیاده‌سازیِ زیرِ آزمون را بازگو
+    نکند؛ وگرنه تست با هر باگی هم‌داستان می‌شود و بی‌ارزش است.
+    """
+    if line.startswith("vmess://"):
+        body = line[8:].split("#")[0].strip()
+        for pad in ("", "=", "==", "==="):
+            try:
+                obj = json.loads(
+                    base64.urlsafe_b64decode(body + pad).decode("utf-8", "ignore"))
+                if isinstance(obj, dict):
+                    return str(obj.get("ps") or obj.get("name") or "")
+            except Exception:
+                continue
+    if "#" in line:
+        try:
+            return urllib.parse.unquote(line.split("#", 1)[1])
+        except Exception:
+            return line.split("#", 1)[1]
+    return ""
+
+
+def test_branding_survives_every_adversarial_remark_in_the_text_outputs():
+    """
+    ناوردا: پس از `brand_remark` **هر** خط باید برند داشته باشد — مهم نیست
+    ریمارکِ بالادست چه بوده. `configs.txt`، `configs_base64.txt`،
+    `protocols/*` و `archive/*` همه از همین یک خط مشتق می‌شوند، پس این تست
+    هر چهار قالبِ متنی را پوشش می‌دهد.
+    """
+    corpus = _e4_corpus()
+    assert len(corpus) == 56, f"پیکره کوچک شده: {len(corpus)}"
+
+    bad = []
+    for kind, raw in corpus:
+        branded = core.brand_remark(raw)
+        if core.BRAND_CHANNEL not in _e4_remark_of(branded):
+            bad.append((kind, _e4_remark_of(raw)[:40]))
+    assert not bad, (
+        f"{len(bad)} از {len(corpus)} کانفیگ بی‌برند منتشر می‌شوند — "
+        f"خواستهٔ صریحِ مالک نقض می‌شود. نمونه: {bad[:5]}")
+
+    # برندِ رقیب باید **بازنویسی** شود، نه اینکه کنارِ برندِ ما بنشیند.
+    ad = [l for k, l in corpus if k == "vless" and "oneclickvpnkeys" in l][0]
+    assert "oneclickvpnkeys" not in _e4_remark_of(core.brand_remark(ad)), \
+        "تبلیغِ کانالِ رقیب در ریمارکِ منتشرشدهٔ ما باقی مانده است"
+
+
+def test_branding_survives_in_clash_and_singbox_for_the_adversarial_corpus():
+    """
+    همان ناوردا در دو قالبِ **ساختاریافته**، با تحلیل‌گرِ رسمی (yaml/json) نه
+    regex — چون در فاز E یک «یافتهٔ» غلط دقیقاً از همین اشتباه زاده شد:
+    regexِ ساده‌تر از قالبِ داده، `proxy-group` را `proxy` شمرد و ۲ موردِ
+    بی‌برندِ کاذب ساخت. قاعده: وقتی ابزارِ سنجش از قالبِ داده ساده‌تر است،
+    مرجع، تحلیل‌گرِ رسمی است.
+    """
+    branded = [core.brand_remark(l) for _, l in _e4_corpus()]
+
+    doc = yaml.safe_load(converters.build_clash_yaml(branded))
+    names = [p["name"] for p in doc["proxies"]]
+    assert names, "clash هیچ نودی تولید نکرد — تست بی‌معنا می‌شود"
+    unbranded = [n for n in names if core.BRAND_CHANNEL not in n]
+    assert not unbranded, f"{len(unbranded)} نامِ نودِ clash بی‌برند: {unbranded[:5]}"
+
+    sb = json.loads(converters.build_singbox_json(branded))
+    node_tags = [o["tag"] for o in sb["outbounds"]
+                 if o["type"] not in ("selector", "urltest", "direct")]
+    assert node_tags, "sing-box هیچ outbound نودی تولید نکرد"
+    unbranded = [t for t in node_tags if core.BRAND_CHANNEL not in t]
+    assert not unbranded, f"{len(unbranded)} تگِ sing-box بی‌برند: {unbranded[:5]}"
+
+
+def test_every_output_group_name_carries_the_brand():
+    """
+    گروه‌ها در UIِ کلاینت **بالاتر از** فهرستِ نودها دیده می‌شوند، پس بی‌برند
+    بودنشان از بی‌برند بودنِ یک نود بدتر است. تا پیش از فاز E سه گروه بی‌برند
+    بودند: `♻️ Auto` (clash و sing-box) و `🔯 Fallback` (clash).
+    """
+    branded = [core.brand_remark(l) for _, l in _e4_corpus()]
+
+    doc = yaml.safe_load(converters.build_clash_yaml(branded))
+    gnames = [g["name"] for g in doc["proxy-groups"]]
+    assert len(gnames) >= 3, f"تعدادِ گروه‌های clash کم شد: {gnames}"
+    for n in gnames:
+        assert core.BRAND_CHANNEL in n, f"گروهِ clash بی‌برند: {n!r}"
+
+    for rule in doc["rules"]:
+        target = rule.split(",")[-1]
+        assert target in gnames, f"هدفِ rule وجود ندارد: {target!r}"
+        assert core.BRAND_CHANNEL in target, f"هدفِ rule بی‌برند: {target!r}"
+
+    sb = json.loads(converters.build_singbox_json(branded))
+    gtags = [o["tag"] for o in sb["outbounds"] if o["type"] in ("selector", "urltest")]
+    assert len(gtags) >= 2, f"تعدادِ گروه‌های sing-box کم شد: {gtags}"
+    for t in gtags:
+        assert core.BRAND_CHANNEL in t, f"گروهِ sing-box بی‌برند: {t!r}"
+    assert core.BRAND_CHANNEL in sb["route"]["final"], "route.final بی‌برند است"
+
+
+def test_no_group_reference_is_left_dangling():
+    """
+    نامِ گروه در چند نقطه ارجاع می‌شود: `proxies` گروهِ select، `rules`،
+    `outbounds`/`default` سلکتور، `route.final` و `dns…detour`. اگر نام در یک
+    نقطه عوض شود و در بقیه نه، فایل **بی‌صدا** خراب می‌شود: کلاینت گروهی را
+    می‌جوید که وجود ندارد. برای همین نام‌ها در `converters.GROUP_*` یک‌جا
+    تعریف شده‌اند؛ این تست همان قرارداد را قفل می‌کند.
+    """
+    branded = [core.brand_remark(l) for _, l in _e4_corpus()]
+
+    doc = yaml.safe_load(converters.build_clash_yaml(branded))
+    universe = ({p["name"] for p in doc["proxies"]}
+                | {g["name"] for g in doc["proxy-groups"]})
+    for g in doc["proxy-groups"]:
+        for ref in g.get("proxies", []):
+            assert ref in universe, \
+                f"گروهِ {g['name']!r} به {ref!r} ارجاع می‌دهد که وجود ندارد"
+
+    # `rules` جدا بررسی می‌شود، نه با فرضِ «چون گروه‌ها درست‌اند قاعده هم
+    # درست است». جهش‌سنجی نشان داد نبودِ این بخش یک شکافِ واقعی بود: قاعده‌ی
+    # `MATCH,<گروهِ ناموجود>` از همهٔ بررسی‌های قبلی سالم رد می‌شد و کلاینت
+    # عملاً هیچ ترافیکی را پروکسی نمی‌کرد.
+    assert doc.get("rules"), "Clash بدونِ هیچ قاعده‌ای منتشر شده است"
+    for rule in doc["rules"]:
+        parts = [s.strip() for s in str(rule).split(",")]
+        # قالبِ Clash: «MATCH,TARGET» یا «TYPE,VALUE,TARGET[,params]»
+        target = parts[1] if parts[0].upper() == "MATCH" else (
+            parts[2] if len(parts) >= 3 else None)
+        assert target, f"هدفِ قاعده‌ی {rule!r} قابلِ استخراج نیست"
+        assert target in universe or target.upper() in ("DIRECT", "REJECT"), (
+            f"قاعده‌ی {rule!r} به {target!r} ارجاع می‌دهد که نه نود است نه گروه "
+            f"⇒ کلاینت هیچ چیز را پروکسی نمی‌کند")
+
+    sb = json.loads(converters.build_singbox_json(branded))
+    tags = {o["tag"] for o in sb["outbounds"]}
+    for o in sb["outbounds"]:
+        if o["type"] in ("selector", "urltest"):
+            for ref in o.get("outbounds", []):
+                assert ref in tags, f"{o['tag']!r} به {ref!r} ارجاع می‌دهد که وجود ندارد"
+            if o.get("default"):
+                assert o["default"] in tags, f"defaultِ {o['tag']!r} وجود ندارد"
+    for srv in sb["dns"]["servers"]:
+        if srv.get("detour"):
+            assert srv["detour"] in tags, f"detourِ DNS وجود ندارد: {srv['detour']!r}"
+
+    # همان شکاف در sing-box: `route.final` معادلِ `MATCH` در Clash است.
+    final = sb["route"].get("final")
+    assert final, "sing-box بدونِ route.final منتشر شده است"
+    assert final in tags, (
+        f"route.final = {final!r} در هیچ outboundای وجود ندارد ⇒ فایل بی‌صدا "
+        f"خراب است")
+    for r in (sb["route"].get("rules") or []):
+        ob = r.get("outbound")
+        if ob:
+            assert ob in tags, f"قاعده‌ی route به {ob!r} ارجاع می‌دهد که نیست"
+    # سرورِ DNSِ نهایی هم باید موجود باشد، وگرنه resolve بی‌صدا می‌شکند
+    dns_tags = {s["tag"] for s in sb["dns"]["servers"] if s.get("tag")}
+    if sb["dns"].get("final"):
+        assert sb["dns"]["final"] in dns_tags, "dns.final وجود ندارد"
+    for r in (sb["dns"].get("rules") or []):
+        if r.get("server"):
+            assert r["server"] in dns_tags, f"قاعده‌ی DNS به {r['server']!r} …"
+
+
+def test_a_node_can_never_shadow_a_group_name():
+    """
+    در Clash فضایِ نامِ گروه و نود **یکی** است. نودی که همنامِ یک گروه شود،
+    ارجاعِ گروه را می‌دزدد و کلاینت به‌جای گروه به آن نود می‌رسد. امروز با
+    برندینگِ ۱۰۰٪ برخورد ممکن نیست، ولی درستی نباید به «بختِ داده» بند باشد:
+    نامِ گروه‌ها از پیش در `used_names`/`used_tags` رزرو شده‌اند.
+    """
+    host, port = "shadow-test.example.com", 8443
+    _e4_freeze_country(host, port)
+    uuid = "eb78e1f0-d921-4ca9-a889-261fcc5a0547"
+
+    hostile = [
+        f"vless://{uuid}@{host}:{port}?encryption=none&security=tls&type=tcp"
+        f"&sni={host}#{urllib.parse.quote(g)}"
+        for g in (converters.GROUP_MAIN, converters.GROUP_AUTO,
+                  converters.GROUP_FALLBACK)
+    ]
+
+    doc = yaml.safe_load(converters.build_clash_yaml(hostile))
+    gnames = {g["name"] for g in doc["proxy-groups"]}
+    pnames = [p["name"] for p in doc["proxies"]]
+    assert not (set(pnames) & gnames), (
+        f"نودی همنامِ گروه منتشر شد ⇒ ارجاعِ گروه می‌شکند: "
+        f"{sorted(set(pnames) & gnames)}")
+    assert len(set(pnames)) == len(pnames), "نامِ نودها یکتا نیست"
+
+    sb = json.loads(converters.build_singbox_json(hostile))
+    gtags = {o["tag"] for o in sb["outbounds"] if o["type"] in ("selector", "urltest")}
+    ntags = [o["tag"] for o in sb["outbounds"]
+             if o["type"] not in ("selector", "urltest", "direct")]
+    assert not (set(ntags) & gtags), \
+        f"outbound همنامِ گروه منتشر شد: {sorted(set(ntags) & gtags)}"
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# E-2 / E-5 / E-9 / E-10 — قفلِ fallbackهای برنددار، idempotency، قطعیتِ base64
+#                          و پینِ نسخهٔ Python
+# ──────────────────────────────────────────────────────────────────────────────
+# این نیمهٔ دوم بلوکِ فاز E است. نیمهٔ اول (پیکرهٔ خصمانه + گروه‌ها) بالاتر است و
+# کمک‌تابع‌های `_e4_corpus` / `_e4_remark_of` / `_e4_freeze_country` را تعریف
+# کرده؛ اینجا از همان‌ها استفاده می‌شود تا دو پیکرهٔ موازی و واگرا نداشته باشیم.
+
+
+def test_converter_default_names_are_branded_not_bare_protocol():
+    """E-2 — هیچ نودی نباید با نامِ «برهنه»ی پروتکل («vmess»/«ss»/…) منتشر شود.
+
+    چرا رفتاری و نه جست‌وجویِ متنِ سورس: کامنت‌های خودِ `converters.py` عبارتِ
+    قدیمیِ `or "vmess"` را برای توضیحِ «قبلاً چه بود» نقل می‌کنند. آزمونی که در
+    متنِ فایل بگردد، روی مستندسازیِ درست مثبتِ کاذب می‌دهد — همان درسی که در این
+    مخزن قبلاً با `str.index()` ثبت شده است. پس رفتار سنجیده می‌شود.
+
+    سه لایه پوشش داده می‌شود، چون سه نقطهٔ متفاوتِ کد است:
+      ۱) خودِ `_branded_fallback` (واحد)
+      ۲) مسیرِ `parse_proxy` — جایی که ریمارکِ بالادست خالی/غایب است
+      ۳) موقعیتِ دفاعیِ درونِ `build_clash_yaml` / `build_singbox_json` که با
+         دادهٔ امروزی **دست‌نیافتنی** است. برای رسیدن به آن، مبدل‌های سطحِ‌پایین
+         موقتاً monkeypatch می‌شوند تا نام/تگِ خالی برگردانند. بدونِ این کار آن
+         دو خط هرگز اجرا نمی‌شوند و «پوشش» توهمی است.
+    """
+    brand = converters.BRAND
+
+    # ── لایهٔ ۱: واحد ────────────────────────────────────────────────────────
+    for kind in (None, "", "   ", "vmess", "vless", "ss", "trojan", "🙂"):
+        got = converters._branded_fallback(kind)
+        assert brand in got, (
+            f"_branded_fallback({kind!r}) = {got!r} بی‌برند است ⇒ نودِ بی‌نام "
+            f"بی‌برند منتشر می‌شود")
+        assert got != (kind or ""), "نام نباید فقط نامِ پروتکلِ برهنه باشد"
+    # ورودیِ تهی نباید نامِ بی‌معنیِ « | @brand» بسازد
+    assert converters._branded_fallback(None) == f"node | {brand}"
+    assert converters._branded_fallback("") == converters._branded_fallback("   ")
+    # قطعی است: فقط تابعِ kind، بی‌اثرِ زمان/موقعیت
+    assert (converters._branded_fallback("vmess")
+            == converters._branded_fallback("vmess"))
+
+    # ── لایهٔ ۲: مسیرِ parse_proxy با ریمارکِ غایب ───────────────────────────
+    uu = "eb78e1f0-d921-4ca9-a889-261fcc5a0547"
+    host = "test-node.example.com"
+
+    vmess_obj = {"v": "2", "ps": "", "add": host, "port": "443", "id": uu,
+                 "aid": "0", "net": "tcp", "type": "none", "tls": "tls"}
+    cases = {
+        "vmess (ps خالی)": "vmess://" + base64.b64encode(
+            json.dumps(vmess_obj).encode()).decode(),
+        "vless (بدون #)": f"vless://{uu}@{host}:443?security=tls&type=tcp",
+        "trojan (بدون #)": f"trojan://password123@{host}:443?security=tls",
+    }
+    for label, line in cases.items():
+        p = converters.parse_proxy(line)
+        assert p is not None, f"«{label}» باید پارس شود"
+        assert brand in (p.get("name") or ""), (
+            f"«{label}» نامِ {p.get('name')!r} گرفت — بی‌برند")
+
+    # کلیدِ ps کاملاً غایب (نه خالی) هم همان مسیر را می‌رود
+    vmess_obj.pop("ps")
+    p = converters.parse_proxy("vmess://" + base64.b64encode(
+        json.dumps(vmess_obj).encode()).decode())
+    assert p is not None and brand in p["name"], "vmess بدون کلیدِ ps بی‌برند شد"
+
+    # ── لایهٔ ۳: موقعیتِ دفاعیِ درونِ سازندهٔ خروجی ──────────────────────────
+    lines = [ln for _k, ln in _e4_corpus()]
+    _e4_freeze_country(host, 443)
+
+    orig_clash = converters._to_clash_proxy
+    orig_sing = converters._to_singbox_outbound
+    try:
+        def _blank_name(p):
+            cp = orig_clash(p)
+            if cp:
+                cp = dict(cp)
+                cp["name"] = ""          # ← شبیه‌سازیِ مبدلی که نام نمی‌دهد
+            return cp
+
+        converters._to_clash_proxy = _blank_name
+        doc = yaml.safe_load(converters.build_clash_yaml(lines))
+        names = [p["name"] for p in doc["proxies"]]
+        assert names, "پیکره باید حداقل یک پروکسیِ Clash تولید کند"
+        unbranded = [n for n in names if brand not in n]
+        assert not unbranded, (
+            f"{len(unbranded)} نودِ Clash با نامِ خالی به fallbackِ بی‌برند "
+            f"رسید — نمونه: {unbranded[:3]}")
+        # و یکتاسازی هم باید کار کند، وگرنه گروه به نودِ همنام می‌شکند
+        assert len(set(names)) == len(names), "نام‌های fallback یکتا نشدند"
+    finally:
+        converters._to_clash_proxy = orig_clash
+
+    try:
+        def _blank_tag(p):
+            ob = orig_sing(p)
+            if ob:
+                ob = dict(ob)
+                ob["tag"] = ""
+            return ob
+
+        converters._to_singbox_outbound = _blank_tag
+        sb = json.loads(converters.build_singbox_json(lines))
+        tags = [o["tag"] for o in sb["outbounds"]
+                if o["type"] not in ("selector", "urltest", "direct")]
+        assert tags, "پیکره باید حداقل یک outboundِ نود تولید کند"
+        unbranded = [t for t in tags if brand not in t]
+        assert not unbranded, (
+            f"{len(unbranded)} outboundِ sing-box با تگِ خالی به fallbackِ "
+            f"بی‌برند رسید — نمونه: {unbranded[:3]}")
+        assert len(set(tags)) == len(tags), "تگ‌های fallback یکتا نشدند"
+    finally:
+        converters._to_singbox_outbound = orig_sing
+
+    # بازگردانیِ موفق را هم اثبات کن؛ وگرنه آزمون‌های بعدی روی حالتِ آلوده
+    # اجرا می‌شوند و شکستشان گمراه‌کننده است.
+    assert converters._to_clash_proxy is orig_clash
+    assert converters._to_singbox_outbound is orig_sing
+
+
+def test_brand_remark_is_idempotent_over_the_adversarial_corpus():
+    """E-5 — `brand_remark` باید تابعِ خودتوان (idempotent) باشد.
+
+    اهمیت: خط‌لوله ممکن است ورودی‌ای بگیرد که *قبلاً* برندخوردهٔ همین مخزن
+    است (کانفیگ‌های ما در منابعِ دیگر بازنشر می‌شوند و از آن‌ها fetch می‌کنیم).
+    اگر برندینگ خودتوان نباشد، ریمارک با هر دور رشد می‌کند:
+    «DE | @X | AAA | @X | AAA | …» — و هم زشت است، هم در برخی کلاینت‌ها
+    نامِ بیش‌ازحد بلند را می‌بُرد و برند را قربانی می‌کند.
+
+    ناوردا روی *ریمارکِ استخراج‌شده* سنجیده می‌شود، نه روی رشتهٔ خامِ خط.
+    دلیلِ اندازه‌گیری‌شده: در `vmess://` ریمارک درونِ JSONِ base64شده
+    (کلیدِ `ps`) می‌نشیند، پس رشتهٔ برند در متنِ خامِ خط **صفر** بار دیده
+    می‌شود در حالی که کاربر آن را می‌بیند. شمارشِ خام، آزمونی غلط می‌ساخت.
+    """
+    brand = core.BRAND_CHANNEL
+    _e4_freeze_country("test-node.example.com", 443)
+
+    for kind, line in _e4_corpus():
+        once = core.brand_remark(line, 0)
+
+        # (۱) دو بار = یک بار
+        twice = core.brand_remark(once, 0)
+        assert twice == once, (
+            f"[{kind}] brand_remark خودتوان نیست:\n  once={once[:160]!r}"
+            f"\n  twice={twice[:160]!r}")
+
+        # (۲) پنج اعمالِ متوالی هم نقطهٔ ثابت را ترک نمی‌کند
+        cur = once
+        for i in range(5):
+            nxt = core.brand_remark(cur, 0)
+            assert nxt == cur, (
+                f"[{kind}] در اعمالِ #{i + 2} از نقطهٔ ثابت خارج شد")
+            cur = nxt
+
+        # (۳) برند دقیقاً یک بار در ریمارک — نه صفر، نه تکراری
+        rem = _e4_remark_of(once)
+        cnt = rem.count(brand)
+        assert cnt == 1, (
+            f"[{kind}] برند {cnt} بار در ریمارک آمد (باید ۱): {rem[:160]!r}")
+
+        # (۴) قالبِ سه‌بخشیِ «کشور | برند | TAG» حفظ شود و بخشِ سومْ همان
+        #     برچسبِ هویتِ خطِ اصلی باشد (نه برچسبِ خطِ برندخورده — چون
+        #     `dedup_key` نباید به ریمارک وابسته باشد).
+        parts = [s.strip() for s in rem.split("|")]
+        assert len(parts) >= 3, f"[{kind}] قالبِ ریمارک شکست: {rem[:160]!r}"
+        assert parts[1] == brand, (
+            f"[{kind}] برند در جایگاهِ دومِ ریمارک نیست: {parts!r}")
+        assert parts[2] == core.stable_label(line), (
+            f"[{kind}] برچسبِ هویت با stable_label(خطِ خام) نمی‌خواند ⇒ "
+            f"هویت به ریمارک وابسته شده است")
+
+
+def test_decode_base64_text_refuses_ambiguous_input_deterministically():
+    """E-9 — رگرسیونِ وکتورهای base64: خروجی نباید به نسخهٔ Python وابسته باشد.
+
+    زمینه (اندازه‌گیری‌شده در فاز E): `base64.b64decode(..., validate=False)`
+    در Python ≤۳.۱۱ نویسه‌های بیرونِ الفبا — از جمله `=`ِ میانِ رشته — را دور
+    می‌ریزد و *چیزی* برمی‌گرداند؛ در ۳.۱۲+ رفتارِ هرس تغییر کرده و خروجیِ
+    دیگری می‌دهد. چون `dedup_key` روی همین خروجی ساخته می‌شود، هویتِ کانفیگ
+    بین مفسرها فرق می‌کرد. `decode_base64_text` با «اول اعتبارسنجیِ نحوی،
+    بعد دیکود» این را قطعی می‌کند: ورودیِ مبهم ⇒ `None`.
+
+    مقادیرِ زیر همه *سنجیده* شده‌اند، نه حدس.
+    """
+    d = core.decode_base64_text
+
+    # ── ورودیِ مبهم (padding در میانِ رشته) ⇒ قطعاً None ────────────────────
+    ambiguous = [
+        "QUJDRA==EFGH",          # کمینه‌ترین بازتولیدکنندهٔ اختلافِ نسخه‌ها
+        "QUJDRA==@host:443",     # همان الگو در بافتِ واقعیِ ss:sip002
+        "QUJDRQ=XYZ",            # یک `=` میانی
+        "QUJD=RA==",             # `=` میانی + padding پایانی
+        "====",                  # فقط padding
+    ]
+    for v in ambiguous:
+        got = d(v)
+        assert got is None, (
+            f"{v!r} نحواً base64 نیست ولی تابع {got!r} داد ⇒ رفتارْ "
+            f"نسخه‌وابسته باقی مانده است")
+
+    # ── نویسهٔ بیرونِ الفبا ⇒ None (نه «هرسِ خاموش») ─────────────────────────
+    for v in ("!!!!", "AB CD", "ab\ncd", "ABCD%3D", "زبان"):
+        assert d(v) is None, f"{v!r} باید رد شود، نه هرس"
+
+    # ── طولِ نامعتبر (۴k+1) ⇒ None ──────────────────────────────────────────
+    for v in ("ABCDE", "a-b_c", "A"):
+        assert d(v) is None, f"طولِ {len(v)} نمی‌تواند base64 معتبر باشد: {v!r}"
+
+    # ── ورودیِ درست ⇒ دیکودِ درست (رگرسیونِ معکوس: تابع نباید همه را رد کند) ─
+    good = {
+        "QUJDRA==": "ABCD",
+        "QUJDRA": "ABCD",       # بدون padding — پذیرفته و ترمیم می‌شود
+        "SGVsbG8=": "Hello",
+        "QQ==": "A",
+    }
+    for src, want in good.items():
+        assert d(src) == want, f"{src!r} باید {want!r} بدهد، داد {d(src)!r}"
+
+    # هر دو الفبا (استاندارد و url-safe) باید کار کنند، چون منابعِ بالادست
+    # هر دو را می‌فرستند.
+    raw = b"\xfb\xff\xfe~ok"
+    std = base64.b64encode(raw).decode()
+    url = base64.urlsafe_b64encode(raw).decode()
+    assert "+" in std or "/" in std, "وکتورِ آزمون باید نویسهٔ افتراقی داشته باشد"
+    assert "-" in url or "_" in url
+    assert d(std) is not None and d(url) is not None, (
+        "هر دو الفبا باید پشتیبانی شوند")
+    assert d(std) == d(url), "دو الفبای همان بایت‌ها باید یک نتیجه بدهند"
+
+    # ── تهی/None ⇒ None و هرگز استثنا ───────────────────────────────────────
+    for v in ("", None):
+        assert d(v) is None
+    # قطعیت: ۳ فراخوانِ متوالی همان نتیجه
+    for v in ambiguous + list(good):
+        assert d(v) == d(v) == d(v)
+
+
+def test_the_identity_functions_never_call_the_version_dependent_primitive():
+    """E-9 — قفلِ ساختاری: مسیرِ هویت نباید مستقیماً `b64decode` صدا بزند.
+
+    آزمونِ رفتاری بالا فقط *امروز* را می‌بندد؛ این آزمون **الگو** را می‌بندد:
+    اگر کسی فردا در `dedup_key` دوباره `base64.b64decode(...)` بنویسد،
+    ممکن است روی مفسرِ CI هم نتیجهٔ درست بدهد و آزمونِ رفتاری سبز بماند،
+    در حالی که هویت دوباره نسخه‌وابسته شده است.
+
+    از AST استفاده می‌شود، نه جست‌وجویِ متن: در همین فایل و در `core.py`
+    نامِ `b64decode` داخلِ **کامنت** آمده (برای توضیحِ همین باگ)، و آزمونِ
+    متنی روی مستندسازی مثبتِ کاذب می‌دهد — درسِ ثبت‌شدهٔ همین مخزن.
+    """
+    import ast as _ast
+    import inspect as _inspect
+
+    tree = _ast.parse(_inspect.getsource(core))
+    funcs = {n.name: n for n in tree.body if isinstance(n, _ast.FunctionDef)}
+
+    identity_path = ["dedup_key", "stable_label", "endpoint_of", "brand_remark"]
+    for name in identity_path:
+        assert name in funcs, f"تابعِ «{name}» در core.py پیدا نشد"
+        offenders = []
+        for sub in _ast.walk(funcs[name]):
+            if isinstance(sub, _ast.Attribute) and "b64decode" in sub.attr:
+                offenders.append(f"{name}: .{sub.attr} (خط {sub.lineno})")
+            elif isinstance(sub, _ast.Name) and "b64decode" in sub.id:
+                offenders.append(f"{name}: {sub.id} (خط {sub.lineno})")
+        assert not offenders, (
+            "مسیرِ هویت مستقیماً از پریمیتیوِ نسخه‌وابسته استفاده می‌کند "
+            f"⇒ {offenders}. از `core.decode_base64_text()` استفاده کنید.")
+
+    # روی معکوس هم صحت‌سنجی: آزمون باید *بتواند* تخلف را ببیند. اگر هیچ
+    # تابعی در فایل b64decode نداشته باشد، آزمونِ بالا بی‌معنی و همیشه‌سبز
+    # است. `try_base64_decode` استثنایِ **عمدی** است: روی *بدنهٔ منبع* کار
+    # می‌کند نه روی هویت، و باید بیشینه‌بخشنده بماند.
+    assert "try_base64_decode" in funcs, "تابعِ استثنا حذف/تغییرِ نام شده است"
+    exception_hits = [
+        sub.attr for sub in _ast.walk(funcs["try_base64_decode"])
+        if isinstance(sub, _ast.Attribute) and "b64decode" in sub.attr]
+    assert exception_hits, (
+        "`try_base64_decode` دیگر b64decode صدا نمی‌زند ⇒ یا رفتارش عوض شده "
+        "یا آزمونِ باقیِ این تابع سنجهٔ خود را از دست داده است")
+
+    # و خودِ پریمیتیوِ قطعی باید فقط یک الفبا داشته باشد (urlsafe کافی است،
+    # چون پیش از دیکود نویسه‌های `-_` و `+/` هر دو مجاز شمرده می‌شوند).
+    assert "decode_base64_text" in funcs, "پریمیتیوِ قطعی حذف شده است"
+    prim = [sub.attr for sub in _ast.walk(funcs["decode_base64_text"])
+            if isinstance(sub, _ast.Attribute) and "b64decode" in sub.attr]
+    assert prim == ["urlsafe_b64decode"], (
+        f"decode_base64_text باید تنها از urlsafe_b64decode استفاده کند، "
+        f"دیده شد: {prim}")
+
+
+def test_workflow_pins_python_precisely_because_identity_depends_on_it():
+    """E-10 — پینِ `python-version` در ورک‌فلو **بارکش** است، نه تزئینی.
+
+    با اصلاحِ فاز E، `dedup_key` دیگر بین ۳.۱۰ و ۳.۱۳ فرق نمی‌کند (اثباتِ
+    md5 روی کلِ ۸٬۱۳۶ کلید). ولی پینِ دقیق همچنان لازم است: هر رفتارِ
+    نسخه‌وابستهٔ *بعدی* در کتابخانهٔ استانداردْ می‌تواند هویت را جابه‌جا کند و
+    نتیجه‌اش «بازنویسیِ کلِ فایلِ خروجی در یک ران» است. این آزمون سه چیز را
+    قفل می‌کند:
+
+      ۱) حداقل یک مرحلهٔ `setup-python` وجود دارد (حذفش باید آزمون را بشکند)
+      ۲) هر مرحله پینِ *صریح* دارد — نه غایب، نه `3.x`، نه فقط `3`
+      ۳) مقدار در YAML **رشته** است. اگر بی‌نقل‌قول نوشته شود، YAML آن را
+         عدد می‌خواند و `3.10` به `3.1` تبدیل می‌شود — نسخه‌ای که وجود ندارد
+         و CI را می‌شکند یا بدتر، نسخهٔ نادرست نصب می‌کند.
+    """
+    doc = yaml.safe_load(_workflow_text())
+    jobs = doc.get("jobs") or {}
+    assert jobs, "ورک‌فلو هیچ jobای ندارد"
+
+    pins = []
+    for job_name, job in jobs.items():
+        for step in (job.get("steps") or []):
+            uses = str(step.get("uses") or "")
+            if "actions/setup-python" in uses:
+                pins.append((job_name, uses, (step.get("with") or {}).get(
+                    "python-version")))
+
+    assert pins, (
+        "هیچ مرحلهٔ actions/setup-python پیدا نشد ⇒ CI روی Pythonِ پیش‌فرضِ "
+        "runner اجرا می‌شود که GitHub بی‌اطلاع ما ارتقایش می‌دهد، و هویتِ "
+        "کانفیگ‌ها می‌تواند یک‌شبه جابه‌جا شود")
+
+    for job_name, uses, pin in pins:
+        assert pin is not None, (
+            f"[{job_name}/{uses}] بدونِ python-version ⇒ پین وجود ندارد")
+        assert isinstance(pin, str), (
+            f"[{job_name}] python-version باید در YAML نقل‌قول شود؛ الان "
+            f"{type(pin).__name__} است ({pin!r}) — «3.10» بی‌نقل‌قول به «3.1» "
+            f"تبدیل می‌شود")
+        pin_s = pin.strip()
+        assert pin_s, f"[{job_name}] python-version تهی است"
+        bits = pin_s.split(".")
+        assert len(bits) >= 2, (
+            f"[{job_name}] پینِ «{pin_s}» دقیق نیست؛ حداقل major.minor لازم است")
+        assert all(b.isdigit() for b in bits[:2]), (
+            f"[{job_name}] پینِ «{pin_s}» شاملِ محدودهٔ شناور است (مثلِ x/*) — "
+            f"نسخه باید عددیِ صریح باشد")
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# E-6 / E-11 — دروازهٔ انتشارِ برند و انتسابِ درستِ آمارِ حذفِ مبدل‌ها
+# ──────────────────────────────────────────────────────────────────────────────
+
+
+def _e6_sources(lines):
+    """یک «منبع» ساختگی برای `aggregate.process_category` بساز."""
+    url = "https://example.invalid/e6"
+    return {url: list(lines)}, [url]
+
+
+def test_the_publish_gate_drops_unbranded_lines_instead_of_publishing_them():
+    """E-6 — اگر برندینگ روی خطی شکست بخورد، آن خط **منتشر نمی‌شود**.
+
+    ناوردایِ محصول (سیاستِ مالک، بالای `core.py`): هر نودِ منتشرشده باید برند
+    داشته باشد. `brand_remark` امروز روی ۱۰۰٫۰۰٪ خطوط موفق است، ولی «امروز
+    موفق است» ضمانتِ فردا نیست: قالبی تازه از بالادست می‌تواند مسیری بسازد که
+    برندینگ خاموشانه ردش کند.
+
+    چهار سناریو سنجیده می‌شود — چون هر چهار، رفتارِ *متفاوتی* از دروازه
+    می‌خواهند و آزمونی که فقط یکی را ببیند، بقیه را باز می‌گذارد:
+
+      ۱) خطِ سالم        → منتشر می‌شود، هیچ شمارنده‌ای تکان نمی‌خورد
+      ۲) برندینگِ شکسته  → حذف + شمارش، و **اجرا ادامه می‌یابد** (نه abort)
+      ۳) شکستِ گذرا      → تلاشِ دوم نجاتش می‌دهد و جدا شمرده می‌شود
+      ۴) شکستِ جزئی      → فقط خطِ بد می‌افتد، خطوطِ خوبِ همان دور می‌مانند
+    """
+    _e4_freeze_country("test-node.example.com", 443)
+    corpus = [ln for _k, ln in _e4_corpus()]
+    per_source, urls = _e6_sources(corpus)
+
+    # ── ۱) خطِ سالم: صفر مداخله ─────────────────────────────────────────────
+    r = aggregate.process_category(per_source, urls, {})
+    assert r.unique, "پیکره باید کانفیگِ یکتا تولید کند"
+    assert r.unbranded_dropped == 0, (
+        f"دروازه {r.unbranded_dropped} خطِ سالم را انداخت ⇒ رگرسیون")
+    assert r.unbranded_rebranded == 0, "خطِ سالم نباید نیاز به برندِ دوباره داشته باشد"
+    assert all(core.is_branded(x) for x in r.unique), (
+        "خروجیِ دروازه باید ۱۰۰٪ برنددار باشد")
+    healthy_count = len(r.unique)
+
+    orig = core.brand_remark
+    try:
+        # ── ۲) برندینگِ کاملاً شکسته ────────────────────────────────────────
+        core.brand_remark = lambda line, idx=None: (
+            line.split("#")[0] + "#no-brand")
+        r2 = aggregate.process_category(per_source, urls, {})
+        assert r2.unique == [], (
+            f"{len(r2.unique)} خطِ بی‌برند منتشر شد ⇒ نقضِ ناوردایِ محصول")
+        assert r2.unbranded_dropped == healthy_count, (
+            f"شمارشِ حذف غلط: {r2.unbranded_dropped} != {healthy_count}")
+        # سقفِ نمونه‌ها: `health.json` را کاربران دانلود می‌کنند
+        assert len(r2.unbranded_samples) <= 3, (
+            f"{len(r2.unbranded_samples)} نمونه ذخیره شد ⇒ health.json باد می‌کند")
+        assert r2.unbranded_samples, "بدونِ نمونه، ریشه‌یابی ناممکن است"
+        assert all(len(s) <= 160 for s in r2.unbranded_samples), (
+            "نمونه‌ها باید کوتاه شوند")
+
+        # ── ۳) شکستِ گذرا: تلاشِ دوم نجات می‌دهد ────────────────────────────
+        calls = {"n": 0}
+
+        def _flaky(line, idx=None):
+            calls["n"] += 1
+            if calls["n"] % 2 == 1:
+                return line.split("#")[0] + "#no-brand"
+            return orig(line, idx)
+
+        core.brand_remark = _flaky
+        r3 = aggregate.process_category(per_source, urls, {})
+        assert r3.unbranded_dropped == 0, (
+            "تلاشِ دوباره موفق بود ولی خط حذف شد")
+        assert r3.unbranded_rebranded == healthy_count, (
+            f"شمارشِ rebranded غلط: {r3.unbranded_rebranded}")
+        assert len(r3.unique) == healthy_count and all(
+            core.is_branded(x) for x in r3.unique)
+
+        # ── ۴) شکستِ جزئی: خطوطِ خوب قربانیِ خطِ بد نشوند ───────────────────
+        #
+        # نکتهٔ ظریف که اولین طرحِ این آزمون را غلط کرد: دروازه برای هر خط
+        # `brand_remark` را **دو بار** صدا می‌زند (تلاش + تلاشِ دوباره). پس
+        # شمارشِ فراخوانی، خطِ قربانی را مشخص نمی‌کند — تلاشِ دومْ خطِ بد را
+        # نجات می‌داد و آزمون رفتارِ درست را «شکست» می‌دید. قربانی باید با
+        # *هویتِ خط* شناسایی شود تا هر دو تلاش شکست بخورد.
+        victim_core = None
+        for _k, ln in _e4_corpus():
+            if _k == "vless":
+                victim_core = ln.split("#")[0]
+                break
+        assert victim_core, "پیکره باید نمونهٔ vless داشته باشد"
+
+        def _one_bad(line, idx=None):
+            if line.split("#")[0] == victim_core:
+                return line.split("#")[0] + "#no-brand"
+            return orig(line, idx)
+
+        core.brand_remark = _one_bad
+        r4 = aggregate.process_category(per_source, urls, {})
+        assert r4.unbranded_dropped >= 1, "خطِ بد باید حذف شود"
+        assert r4.unbranded_rebranded == 0, (
+            "خطِ بد در هر دو تلاش بی‌برند بود، پس نباید rebranded شمرده شود")
+        assert len(r4.unique) >= healthy_count - 2, (
+            f"شکستِ یک خط، {healthy_count - len(r4.unique)} خط را برد ⇒ "
+            f"دروازه بیش‌ازحد تنبیه‌گر است")
+        assert all(core.is_branded(x) for x in r4.unique)
+    finally:
+        core.brand_remark = orig
+    assert core.brand_remark is orig, "monkeypatch بازگردانده نشد"
+
+
+def test_is_branded_reads_the_remark_the_user_actually_sees():
+    """E-6 — تعریفِ «برنددار» باید همان چیزی باشد که کاربر می‌بیند.
+
+    این آزمون دو خطای *دقیقاً مقابلِ هم* را می‌بندد:
+
+      • منفیِ کاذب — `BRAND_CHANNEL in line`: در `vmess://` ریمارک درونِ JSONِ
+        base64شده است و در متنِ خام دیده نمی‌شود. اندازه‌گیریِ زنده: از ۸٬۱۳۶
+        خطِ منتشرشده، ۲٬۳۵۶ خط رشتهٔ برند را در متنِ خام **ندارند** ولی همه
+        در کلاینت برنددار دیده می‌شوند. با آن تعریفِ ساده، دروازه ۲٬۳۵۶ نودِ
+        سالم را می‌انداخت.
+      • مثبتِ کاذب — برند جایی غیر از ریمارک (مثلاً در query یا نامِ میزبان)
+        نباید «برنددار» شمرده شود، چون کاربر چیزی نمی‌بیند.
+    """
+    brand = core.BRAND_CHANNEL
+    _e4_freeze_country("test-node.example.com", 443)
+
+    # همهٔ اعضای پیکره پس از برندینگ باید «برنددار» تشخیص داده شوند
+    for kind, line in _e4_corpus():
+        b = core.brand_remark(line, 1)
+        assert core.is_branded(b), (
+            f"[{kind}] برندخورده است ولی is_branded منفی داد: {b[:140]!r}")
+        assert brand in core.remark_of(b), f"[{kind}] ریمارک برند ندارد"
+
+    # منفیِ کاذبِ تعریفِ ساده را *اثبات* کن: باید حداقل یک vmess باشد که
+    # رشتهٔ برند در متنِ خامش نیست ولی is_branded مثبت است.
+    hidden = [core.brand_remark(ln, 1) for k, ln in _e4_corpus()
+              if k == "vmess-json"]
+    assert hidden, "پیکره باید vmess-json داشته باشد"
+    assert any(brand not in h for h in hidden), (
+        "وکتورِ آزمون بی‌سنجه است: باید vmessای باشد که برند را در متنِ خام "
+        "نشان ندهد")
+    assert all(core.is_branded(h) for h in hidden), (
+        "vmessِ برنددار باید مثبت تشخیص داده شود (منفیِ کاذبِ تعریفِ ساده)")
+
+    # مثبتِ کاذب: برند در query، نه در ریمارک
+    uu = "eb78e1f0-d921-4ca9-a889-261fcc5a0547"
+    sneaky = f"vless://{uu}@test-node.example.com:443?sni={brand}#plain-name"
+    assert not core.is_branded(sneaky), (
+        "برندِ بیرونِ ریمارک نباید «برنددار» شمرده شود — کاربر آن را نمی‌بیند")
+    assert core.remark_of(sneaky) == "plain-name"
+
+    # خطِ بی‌ریمارک و ورودی‌های مرزی
+    for v in ("", "   ", f"vless://{uu}@test-node.example.com:443"):
+        assert core.remark_of(v) == ""
+        assert not core.is_branded(v)
+
+
+def test_health_report_attributes_converter_drops_to_the_right_category():
+    """E-11 — عددِ حذفِ مبدل در `health.json` باید به دستهٔ درست تعلق داشته باشد.
+
+    ریشهٔ باگ (اندازه‌گیری‌شده): `converters._drops` سراسری است و
+    `build_clash_yaml`/`build_singbox_json` در شروعِ کار `clear_target()`
+    می‌زنند. فایل‌ها به ترتیبِ all → heavy → light نوشته می‌شوند و گزارشِ
+    سلامت **بعد** از همهٔ آن‌ها ساخته می‌شد، پس عددِ منتشرشده فقط به `light`
+    تعلق داشت. رویِ دادهٔ زنده: منتشر می‌شد clash=۲۱ / singbox=۱۰۲ در حالی که
+    مقدارِ درستِ `all` برابرِ clash=۹۳ / singbox=۳۵۶ بود — یعنی خطای بیش از
+    چهاربرابر در همان سنجه‌ای که برای «هشدارِ حذفِ ناگهانیِ هزاران کانفیگ»
+    ساخته شده بود.
+    """
+    _e4_freeze_country("test-node.example.com", 443)
+    branded = [core.brand_remark(ln, i + 1)
+               for i, (_k, ln) in enumerate(_e4_corpus())]
+
+    class _R:
+        def __init__(self, u):
+            self.unique = list(u)
+            self.broken = []
+            self.duplicates = []
+            self.total_seen = len(u)
+            self.active_sources = 1
+            self.protocol_counts = {}
+            self.unbranded_dropped = 0
+            self.unbranded_rebranded = 0
+            self.unbranded_samples = []
+
+    # دو دسته با تعدادِ حذفِ *متفاوت* — وگرنه آزمون سنجه‌ای ندارد
+    big = _R(branded)
+    small = _R(branded[:6])
+    results = {"all": big, "light": small}
+
+    import tempfile as _tf
+    with _tf.TemporaryDirectory() as td:
+        # الف) رفتارِ باگ‌دار را بازتولید کن: snapshot فقط در پایان
+        for cat, rr in results.items():
+            aggregate.write_category(td, cat, rr)
+        buggy = converters.drop_stats()
+
+        # ب) رفتارِ درست: snapshot پس از هر دسته
+        per_cat = {}
+        for cat, rr in results.items():
+            aggregate.write_category(td, cat, rr)
+            per_cat[cat] = converters.drop_stats()
+
+    a_total = per_cat["all"]["clash"]["total"]
+    l_total = per_cat["light"]["clash"]["total"]
+    assert a_total != l_total, (
+        f"وکتورِ آزمون بی‌سنجه است: all و light هر دو {a_total} حذف دارند")
+    assert buggy["clash"]["total"] == l_total, (
+        "فرضِ ریشهٔ باگ تأیید نشد — سنجهٔ این آزمون نامعتبر است")
+
+    health = aggregate.build_health_report(1.0, per_cat, results)
+    assert health["converters"]["clash"]["total"] == a_total, (
+        f"عددِ منتشرشده {health['converters']['clash']['total']} است ولی "
+        f"دستهٔ `all` — همان لینکِ پیش‌فرضِ کاربران — {a_total} حذف داشت")
+    assert health["converters_by_category"], "تفکیکِ دسته‌ها منتشر نمی‌شود"
+    assert set(health["converters_by_category"]) == set(results), (
+        "همهٔ دسته‌ها باید در تفکیک باشند")
+
+    # شمارنده‌های دروازهٔ برند هم باید رصدپذیر باشند
+    assert health["brand_gate"] is not None, "brand_gate در گزارش نیست"
+    for cat in results:
+        assert health["brand_gate"][cat] == {
+            "dropped": 0, "rebranded": 0, "samples": []}, (
+            f"brand_gate[{cat}] نادرست است")
+
+    # سازگاریِ عقب‌رو: امضای قدیمی نباید بشکند (مصرف‌کننده‌های بیرونی)
+    old = aggregate.build_health_report(1.0)
+    assert "converters" in old and old["converters_by_category"] is None
+    assert old["brand_gate"] is None
+    assert set(old) >= {"brand", "checked_at", "summary", "sources",
+                        "converters", "geo"}, "کلیدهای قدیمیِ گزارش حفظ نشدند"
+
+
+def test_the_drop_stats_snapshot_happens_inside_the_per_category_loop():
+    """E-11 — نقطهٔ *فراخوانی* هم قفل شود، نه فقط تابعِ گزارش.
+
+    آزمونِ بالا `build_health_report` را مستقیم صدا می‌زند و صحتِ آن را ثابت
+    می‌کند، ولی باگِ اصلی در **جای فراخوانی** بود: snapshot باید *درونِ* حلقهٔ
+    دسته‌ها و بلافاصله پس از `write_category` گرفته شود، وگرنه
+    `clear_target()`ِ دستهٔ بعدی آن را پاک می‌کند. اگر کسی فردا آن خط را از
+    حلقه بیرون ببرد، همان باگ برمی‌گردد و هیچ آزمونِ رفتاری آن را نمی‌بیند
+    (چون `main()` شبکه می‌خواهد و در این مجموعه اجرا نمی‌شود).
+
+    از AST استفاده می‌شود، نه جست‌وجویِ متن: توضیحاتِ خودِ `aggregate.py` نامِ
+    `drop_stats` را برای شرحِ همین باگ نقل می‌کنند.
+    """
+    import ast as _ast
+    import inspect as _inspect
+
+    tree = _ast.parse(_inspect.getsource(aggregate))
+    main_fn = [n for n in tree.body
+               if isinstance(n, _ast.FunctionDef) and n.name == "main"]
+    assert main_fn, "تابعِ main در aggregate.py پیدا نشد"
+
+    def _called(node):
+        names = set()
+        for s in _ast.walk(node):
+            if isinstance(s, _ast.Call):
+                f = s.func
+                nm = (f.attr if isinstance(f, _ast.Attribute)
+                      else (f.id if isinstance(f, _ast.Name) else ""))
+                if nm:
+                    names.add(nm)
+        return names
+
+    write_loops = [n for n in _ast.walk(main_fn[0])
+                   if isinstance(n, _ast.For) and "write_category" in _called(n)]
+    assert write_loops, "حلقه‌ای که write_category صدا می‌زند پیدا نشد"
+    for loop in write_loops:
+        assert "drop_stats" in _called(loop), (
+            f"حلقهٔ نوشتنِ دسته‌ها (خط {loop.lineno}) snapshotِ drop_stats "
+            f"نمی‌گیرد ⇒ عددِ health.json دوباره به آخرین دسته تعلق می‌گیرد")
+
+    # و گزارش باید با هر دو آرگومانِ تازه صدا زده شود، نه با امضای قدیمی
+    health_calls = [s for s in _ast.walk(main_fn[0])
+                   if isinstance(s, _ast.Call)
+                   and isinstance(s.func, _ast.Name)
+                   and s.func.id == "build_health_report"]
+    assert health_calls, "main باید build_health_report را صدا بزند"
+    for c in health_calls:
+        assert len(c.args) + len(c.keywords) >= 3, (
+            "build_health_report بدونِ تفکیکِ دسته‌ها و نتایج صدا زده شده ⇒ "
+            "گزارش به رفتارِ باگ‌دارِ قبلی برمی‌گردد")
+
+
+# ──────────────────────────────────────────────────────────────────────────────
 # اجرا بدون pytest
 # ──────────────────────────────────────────────────────────────────────────────
 

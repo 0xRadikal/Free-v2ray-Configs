@@ -211,6 +211,14 @@ class CategoryResult:
         self.total_seen = 0
         self.active_sources = 0
         self.protocol_counts: Dict[str, int] = {}
+        # ── دروازهٔ برندینگ (E-6) ────────────────────────────────────────────
+        # خطوطی که حتی بعد از تلاشِ دوباره برند نخوردند و **منتشر نشدند**.
+        # امروز اندازه‌گیری‌شده = ۰ (روی ۸٬۱۳۶ خطِ زندهٔ منتشرشده). نگه‌داشتنِ
+        # شمارنده برای وقتی است که صفر نماند: بی‌شمارنده، نقضِ ناوردا بی‌صدا
+        # می‌شد و کسی نمی‌فهمید.
+        self.unbranded_dropped = 0
+        self.unbranded_rebranded = 0
+        self.unbranded_samples: List[str] = []
 
 
 def process_category(
@@ -294,6 +302,44 @@ def process_category(
 
     for idx, line in enumerate(ordered, start=1):
         branded = core.brand_remark(line, idx)
+
+        # ══════════════════════════════════════════════════════════════════════
+        # 🔒 دروازهٔ ایمن‌ازکارِ برندینگ (E-6)
+        # ══════════════════════════════════════════════════════════════════════
+        # سیاستِ مالکِ مخزن (بالای `core.py`): «همیشه» باید آیدیِ کانال روی
+        # کانفیگ‌ها باشد. `brand_remark` امروز روی ۱۰۰٫۰۰٪ خطوط موفق است
+        # (اندازه‌گیری‌شده)، ولی «امروز موفق است» ضمانت نیست: یک قالبِ تازهٔ
+        # بالادست می‌تواند مسیری بسازد که برندینگ خاموشانه ردش کند و کانفیگِ
+        # بی‌برند — یا بدتر، با تبلیغِ کانالِ رقیب — منتشر شود.
+        #
+        # سه تصمیمِ عمدی، هر کدام با دلیل:
+        #
+        #  ۱) **یک بار تلاشِ دوباره.** `brand_remark` خودتوان است (اندازه‌گیری‌شده
+        #     روی پیکرهٔ خصمانه: ۵۶ نمونه × ۵ اعمالِ متوالی)، پس اعمالِ دوباره
+        #     روی خطِ سالم بی‌اثر است و فقط حالتِ گذرا را نجات می‌دهد.
+        #
+        #  ۲) **حذفِ همان یک خط، نه توقفِ اجرا.** وسوسه‌ی «abort» غلط است:
+        #     یک خطِ بدشکل نباید کلِ اشتراکِ کاربران را خالی کند. دروازهٔ
+        #     `if not res_all.unique` پایین‌تر، حالتِ فروپاشیِ کامل را جدا
+        #     پوشش می‌دهد.
+        #
+        #  ۳) **حذف، نه انتشارِ بی‌برند.** چون ناوردا، الزامِ محصول است. سکوت
+        #     هم ممنوع: شمارش و نمونه در `health.json` می‌رود تا دیده شود.
+        # ══════════════════════════════════════════════════════════════════════
+        if not core.is_branded(branded):
+            retry = core.brand_remark(branded, idx)
+            if core.is_branded(retry):
+                branded = retry
+                r.unbranded_rebranded += 1
+            else:
+                r.unbranded_dropped += 1
+                # نمونه‌ها سقف دارند: `health.json` را مصرف‌کنندگان دانلود
+                # می‌کنند و نباید با هزاران رشته باد کند. سه نمونه برای
+                # ریشه‌یابیِ الگو کافی است.
+                if len(r.unbranded_samples) < 3:
+                    r.unbranded_samples.append(branded[:160])
+                continue
+
         r.unique.append(branded)
         proto = core.protocol_of(branded)
         if proto:
@@ -578,7 +624,11 @@ def build_index(results: Dict[str, CategoryResult], proto_counts: Dict[str, int]
     }
 
 
-def build_health_report(elapsed: float) -> dict:
+def build_health_report(
+    elapsed: float,
+    conv_by_category: Optional[Dict[str, dict]] = None,
+    results: Optional[Dict[str, "CategoryResult"]] = None,
+) -> dict:
     """گزارشِ کاملِ سلامتِ هر منبع — برای مانیتورینگ و دیباگِ منابعِ مرده.
 
     از این نسخه، گزارش سه بخشِ تازه هم دارد:
@@ -603,10 +653,40 @@ def build_health_report(elapsed: float) -> dict:
         tier = "light" if url in LIGHT_SOURCES else "heavy"
         items.append({"url": url, "tier": tier, **h})
 
+    # ═════════════════════════════════════════════════════════════════════════
+    # آمارِ حذفِ مبدل‌ها — اصلاحِ یک عددِ غلطِ منتشرشده (E-11)
+    # ═════════════════════════════════════════════════════════════════════════
+    # `converters._drops` یک شمارشگرِ **سراسری** است و `build_clash_yaml` /
+    # `build_singbox_json` در شروعِ کار `clear_target()` می‌زنند. فایل‌ها به
+    # ترتیبِ all → heavy → light نوشته می‌شوند، و این گزارش **بعد** از همهٔ
+    # آن نوشتن‌ها ساخته می‌شود — پس تا پیش از این، عددِ منتشرشده فقط به
+    # دستهٔ **light** تعلق داشت در حالی که مانندِ آمارِ کل خوانده می‌شد.
+    # اندازه‌گیریِ زنده (فاز E): light = ۲۱ حذف، در حالی که all = ۹۳.
+    #
+    # راه‌حل: خط‌لوله پس از نوشتنِ هر دسته، یک snapshot می‌گیرد و همه را
+    # اینجا می‌دهد. کلیدِ `converters` عمداً به دستهٔ `all` می‌ماند (همانی که
+    # لینکِ پیش‌فرضِ کاربران است) تا مصرف‌کننده‌های فعلی نشکنند؛ تفکیکِ
+    # کامل در کلیدِ تازهٔ `converters_by_category` می‌آید.
+    #
+    # اگر خط‌لوله snapshot نداد (مسیرِ قدیمی/آزمونی)، رفتارِ قبلی حفظ
+    # می‌شود تا امضای تابع سازگارِ عقب‌رو بماند.
+    conv_by_cat = dict(conv_by_category or {})
     try:
-        conv_stats = converters.drop_stats()
+        conv_stats = conv_by_cat.get("all") or converters.drop_stats()
     except Exception:
         conv_stats = None
+
+    # ── دروازهٔ برندینگ (E-6) — رصدپذیری ──────────────────────────────
+    # این اعداد باید همیشه صفر باشند. هر عددِ غیرِصفر یعنی قالبی از
+    # بالادست آمده که `brand_remark` بلد نیست — یعنی کارِ توسعهٔ فوری.
+    brand_gate = None
+    if results:
+        brand_gate = {
+            cat: {"dropped": r.unbranded_dropped,
+                  "rebranded": r.unbranded_rebranded,
+                  "samples": list(r.unbranded_samples)}
+            for cat, r in results.items()
+        }
 
     geo_stats = None
     if geo is not None:
@@ -628,6 +708,8 @@ def build_health_report(elapsed: float) -> dict:
         },
         "sources": items,
         "converters": conv_stats,
+        "converters_by_category": conv_by_cat or None,
+        "brand_gate": brand_gate,
         "geo": geo_stats,
     }
 
@@ -766,9 +848,24 @@ def main() -> int:
     mem = advance_memory(mem, per_source, LIGHT_SOURCES + HEAVY_SOURCES, state_path)
 
     log("💾 Writing output files …")
+    # snapshot ِآمارِ حذف **بلافاصله پس از هر دسته** گرفته می‌شود، وگرنه
+    # `clear_target()`ِ دستهٔ بعدی آن را پاک می‌کند (ریشهٔ باگِ E-11).
+    conv_by_cat: Dict[str, dict] = {}
     for cat, r in results.items():
         write_category(out_dir, cat, r)
+        try:
+            conv_by_cat[cat] = converters.drop_stats()
+        except Exception:
+            pass
         write_archive(out_dir, cat, r)
+
+    # گزارشِ دروازهٔ برندینگ (E-6) — در لاگ هم دیده شود، نه فقط در فایل
+    for cat, r in results.items():
+        if r.unbranded_dropped or r.unbranded_rebranded:
+            log(f"  ⚠️ brand gate [{cat}]: dropped={r.unbranded_dropped} "
+                f"rebranded={r.unbranded_rebranded}")
+            for s in r.unbranded_samples:
+                log(f"       ↳ {s}")
 
     proto_counts = write_protocols(out_dir, res_all.unique)
     log(f"  • protocols: " + ", ".join(f"{k}={v}" for k, v in proto_counts.items() if v))
@@ -779,7 +876,7 @@ def main() -> int:
                 json.dumps(index, ensure_ascii=False, indent=2))
 
     # ── گزارشِ سلامتِ منابع (حرفه‌ای) ─────────────────────────────────────────
-    health = build_health_report(elapsed)
+    health = build_health_report(elapsed, conv_by_cat, results)
     _write_text(os.path.join(out_dir, "health.json"),
                 json.dumps(health, ensure_ascii=False, indent=2))
     hs = health["summary"]
