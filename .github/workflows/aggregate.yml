@@ -136,7 +136,9 @@ jobs:
           #   هر ۵ دقیقه یک اجرای کاملِ سنگین به‌جای هر ۱۵ دقیقه — یعنی سه
           #   برابر کامیت و سه برابر رشدِ حجم.
           if git ls-remote --exit-code --heads origin "$PUBLISH_BRANCH" >/dev/null 2>&1; then
-            git fetch --depth=1 origin "$PUBLISH_BRANCH" >/dev/null 2>&1 || true
+            # عمق محدود است، ولی سقفِ زمانی هم لازم دارد تا دروازه نتواند
+            # روی یک اتصالِ گیرکرده بی‌نهایت بماند.
+            timeout 120 git fetch --depth=1 origin "$PUBLISH_BRANCH" >/dev/null 2>&1 || true
             git show "FETCH_HEAD:index.json" > /tmp/gate_index.json 2>/dev/null || true
           fi
           if [ ! -s /tmp/gate_index.json ]; then
@@ -643,9 +645,18 @@ jobs:
       #     • نبودِ پوشهٔ archive/ → بدونِ کرشِ «pathspec did not match».
       - name: 🚀 Publish outputs to `main` (rolling squash — O(1) history)
         if: steps.gate.outputs.should_run == 'true'
+        # ⏱️ سقفِ زمانیِ خودِ step — قبلاً **هیچ** سقفی نداشت.
+        #    این مرحله چند عملیاتِ شبکه‌ای دارد و تنها سقفِ موجود، سقفِ
+        #    کلِ job (۱۵ دقیقه) بود؛ یعنی یک fetchِ گیرکرده می‌توانست کلِ
+        #    job را ببلعد و مرحلهٔ purge را هم قربانی کند. ۸ دقیقه در برابرِ
+        #    سرآمدِ سنجیده‌شدهٔ ۷ ثانیه‌ای، ~۶۸ برابر حاشیه دارد.
+        timeout-minutes: 8
         env:
           PUBLISH_BRANCH: ${{ env.PUBLISH_BRANCH }}
           OUT_MARK: ${{ env.OUT_MARK }}
+          # سقفِ هر عملیاتِ fetch به‌تنهایی (ثانیه). بدترین fetchِ سنجیده‌شدهٔ
+          # سالم ۲.۸ ثانیه بود، پس ۱۲۰ ثانیه ~۴۳ برابر حاشیه دارد.
+          FETCH_TIMEOUT: '120'
         run: |
           set -euo pipefail
           git config user.name  "raydikalx-bot[actions]"
@@ -711,9 +722,40 @@ jobs:
           # نه اینکه پاکش کنیم. (این سناریو در هارنس واقعاً تزریق و تست شد.)
           PUBLISHED=0
           for attempt in 1 2 3 4 5; do
-            # ۱) وضعیتِ واقعیِ remote را بخوان.
-            git fetch --no-tags --force origin \
-              "+refs/heads/$PUBLISH_BRANCH:refs/remotes/origin/$PUBLISH_BRANCH"
+            # ۱) وضعیتِ واقعیِ remote را بخوان — با عمقِ **محدود**.
+            #
+            # ⚠️⚠️ نقصِ سنجیده‌شده: همین fetch بدونِ `--depth`، روی یک کلونِ
+            #   shallow و در لحظه‌ای که نوکِ remote جابه‌جا شده باشد، **کلِ
+            #   تاریخِ مخزن** را دانلود می‌کند — نه یک کامیت.
+            #
+            #   چرا: انتشار خودش force-push است، پس کامیتی که checkout روی آن
+            #   نشسته بعد از انتشارِ اجرای دیگر **از دسترس خارج** می‌شود. کلونِ
+            #   shallow فقط همان یک کامیت را به‌عنوان «have» دارد و آن have
+            #   دیگر جزوِ تاریخِ نوکِ جدید نیست؛ پس سرور مبنایی برای ساختنِ
+            #   بستهٔ کوچک ندارد و کلِ تاریخ را می‌فرستد.
+            #
+            #   روی همین مخزنِ واقعی (۳.۵۵ گیگابایت) اندازه گرفتم:
+            #     بدونِ --depth، نوکِ جابه‌جاشده → Enumerating 149,895 objects،
+            #        دریافتِ 3.55 GiB، ‏۹۶ ثانیه شبکه + ۲۱۴ ثانیه حلِ delta
+            #        = **۳۵۲.۶ ثانیه**
+            #     با --depth=2 در همان شرایط → Enumerating **121** objects،
+            #        **۲.۸ ثانیه** (۱۲۶ برابر سریع‌تر، و کرانمند)
+            #   در حالتِ عادی (نوکِ ثابت) هم بهتر است: ۲.۲۸ ثانیه در برابرِ
+            #   ۳.۴۴ ثانیه، چون anchor در همان یک رفت‌وبرگشت می‌آید و پلهٔ
+            #   بعدی لازم نمی‌شود.
+            #   اثباتِ صحت: هر چهار استراتژیِ آزموده‌شده درختِ **یکسان**
+            #   ساختند (tree=baac1772، files=66).
+            #
+            #   `timeout` هم لازم است، چون این یک عملیاتِ شبکه‌ایِ بی‌سقف است.
+            #   ⚠️ زیرِ `set -euo pipefail` نمی‌توان لختش گذاشت: شکستِ fetch
+            #   کلِ step را می‌کشد و دورِ انتشار از دست می‌رود. پس با `if !`
+            #   می‌گیریمش و مثلِ هر خطای گذرای دیگر دوباره تلاش می‌کنیم.
+            if ! timeout "${FETCH_TIMEOUT:-120}" git fetch --no-tags --force --depth=2 origin \
+                 "+refs/heads/$PUBLISH_BRANCH:refs/remotes/origin/$PUBLISH_BRANCH"; then
+              echo "⚠️ tip fetch failed or exceeded ${FETCH_TIMEOUT:-120}s (attempt $attempt) — retrying …"
+              sleep $((attempt * 2))
+              continue
+            fi
 
             TIP=$(git rev-parse "refs/remotes/origin/$PUBLISH_BRANCH")
 
@@ -737,12 +779,23 @@ jobs:
             #   تاریخ دارد؛ کلونِ کاملش در هر دور (۹۶ بار در روز) نه از نظرِ
             #   زمان و نه پهنای‌باند قابل‌قبول نیست. پس فقط به‌اندازهٔ نیاز
             #   عمیق می‌کنیم — معمولاً ۱ تا ۲ کامیت.
+            #   نردبانِ عمق: پلهٔ اول (۲) را همان fetchِ بالا گرفته است، پس
+            #   در حالتِ عادی این حلقه **هیچ عملیاتِ شبکه‌ای اضافه‌ای ندارد**.
+            #   پله‌های بعدی فقط برای حالتِ نامنتظرِ «چند کامیتِ خروجیِ روی هم»
+            #   است (rolling-squash عادی همیشه یک کامیت می‌گذارد، ولی اگر یک
+            #   force-pushِ دستی یا نسخهٔ قدیمی‌تر چند کامیت گذاشته باشد، step
+            #   نباید fail-closed شود). این حالت در هارنس واقعاً تزریق و تست شد.
+            #
+            #   ⚠️ چرا `--depth` مطلق و نه `--deepen` نسبی: `--deepen` روی
+            #   کلونی که نوکش عوض شده مبنای مشخصی ندارد و همان مسیرِ
+            #   «کلِ تاریخ» را باز می‌کند؛ `--depth=N` سقفِ صریح و کرانمند
+            #   می‌گذارد. بیشترین پله ۱۲۸ کامیت است — یعنی حتی در بدترین حالت
+            #   هم چند مرتبه کوچک‌تر از تاریخِ کاملِ مخزن.
             ANCHOR=""
-            for deep in 0 2 4 8 32; do
-              if [ "$deep" -gt 0 ]; then
-                echo "   ↕️ deepening history by $deep to locate the source anchor …"
-                git fetch --no-tags --deepen="$deep" origin "$PUBLISH_BRANCH" 2>/dev/null || true
-                git fetch --no-tags --force origin \
+            for depth in 2 4 8 32 128; do
+              if [ "$depth" -gt 2 ]; then
+                echo "   ↕️ widening shallow depth to $depth to locate the source anchor …"
+                timeout "${FETCH_TIMEOUT:-120}" git fetch --no-tags --force --depth="$depth" origin \
                   "+refs/heads/$PUBLISH_BRANCH:refs/remotes/origin/$PUBLISH_BRANCH" 2>/dev/null || true
               fi
               ANCHOR=$(git log --format='%H%x09%s' "$TIP" \
@@ -750,7 +803,7 @@ jobs:
               [ -n "$ANCHOR" ] && break
             done
             if [ -z "$ANCHOR" ]; then
-              echo "❌ no source anchor found on '$PUBLISH_BRANCH' even after deepening to 32."
+              echo "❌ no source anchor found on '$PUBLISH_BRANCH' even at shallow depth 128."
               echo "   یعنی یا کلِ تاریخ '$OUT_MARK' دارد یا تاریخ ناقص است."
               echo "   برای جلوگیری از خرابی، انتشار انجام نمی‌شود."
               exit 1
@@ -874,7 +927,10 @@ jobs:
           fi
 
           # ── ۷) گزارشِ نهایی: تأیید کن شاخه دقیقاً یک کامیتِ خروجی دارد ─────
-          git fetch --no-tags --force origin \
+          #    این fetch هم باید `--depth` و `timeout` داشته باشد: هرچند
+          #    `|| true` دارد و step را نمی‌کشد، ولی بی‌سقف بودنش یعنی می‌تواند
+          #    همان ۳۵۲ ثانیه را **بعد از** انتشارِ موفق هم بسوزاند.
+          timeout "${FETCH_TIMEOUT:-120}" git fetch --no-tags --force --depth=2 origin \
             "+refs/heads/$PUBLISH_BRANCH:refs/remotes/origin/$PUBLISH_BRANCH" >/dev/null 2>&1 || true
           NEW_TIP=$(git rev-parse "refs/remotes/origin/$PUBLISH_BRANCH" 2>/dev/null || echo "?")
           if [ "$NEW_TIP" != "?" ]; then

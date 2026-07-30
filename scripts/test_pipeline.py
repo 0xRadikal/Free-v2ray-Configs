@@ -786,12 +786,118 @@ def test_publish_step_uses_rolling_squash_and_never_orphans_the_source():
     # ۴) گاردِ رگرسیونِ سورس باید وجود داشته باشد.
     assert "is_output_path" in run, \
         "the step must classify paths and refuse to regress source files"
-    assert "deepen" in run, \
-        "the step must deepen a shallow checkout, otherwise no anchor is found"
+    # ۴-ب) کلونِ CI عمق ۱ دارد، پس step باید تاریخ را باز کند تا anchor پیدا شود.
+    #
+    # ⚠️ این شرط قبلاً «وجودِ رشتهٔ deepen» بود. آن مکانیزم عوض شد چون
+    # اندازه‌گیری نشان داد `--deepen` نسبی روی کلونی که نوکش force-push شده
+    # مبنای مشخصی ندارد و همان مسیرِ «دانلودِ کلِ تاریخ» را باز می‌کند؛ حالا
+    # نردبانِ عمقِ **مطلق** (`--depth=N`) استفاده می‌شود که در هر پله کرانمند
+    # است. شرط را به خودِ خاصیت گره می‌زنیم، نه به نامِ یک سوییچِ خاص.
+    assert _re.search(r"for\s+depth\s+in\s+[\d\s]+;\s*do", run), \
+        ("the step must widen a shallow checkout through a bounded depth "
+         "ladder, otherwise no anchor is found on a depth=1 checkout")
+    assert _re.search(r"git fetch[^\n]*--depth=\"?\$depth\"?", run), \
+        "the depth ladder must actually pass its rung to git fetch"
 
     # ۵) گاردهای fail-closed باید سرِ جایشان باشند.
     for guard in ("refusing to publish", "EMPTY tree", "MUST_EXIST"):
         assert guard in run, f"missing fail-closed guard: {guard}"
+
+
+def test_every_workflow_fetch_is_bounded_and_time_capped():
+    """هر `git fetch` در workflow باید هم عمقِ محدود داشته باشد و هم سقفِ زمانی.
+
+    چرا این تست وجود دارد — با اندازه‌گیریِ واقعی روی همین مخزنِ ۳.۵۵ گیگابایتی،
+    نه حدس:
+
+      کلونِ CI (‏actions/checkout@v4) عمق ۱ دارد. مرحلهٔ انتشار خودش force-push
+      است، پس کامیتی که checkout روی آن نشسته، به‌محضِ انتشارِ یک اجرای دیگر
+      **از دسترس خارج** می‌شود. در آن لحظه تنها «have»ِ کلونِ shallow دیگر جزوِ
+      تاریخِ نوکِ جدید نیست، سرور مبنایی برای بستهٔ کوچک ندارد و کلِ تاریخ را
+      می‌فرستد. سنجشِ A/B روی همان نوکِ جابه‌جاشده:
+
+        بدون --depth  → Enumerating 149,895 objects، دریافتِ 3.55 GiB،
+                        ۹۶ ثانیه شبکه + ۲۱۴ ثانیه حلِ delta = ۳۵۲.۶ ثانیه
+        با  --depth=2 → Enumerating       121 objects،            ۲.۸ ثانیه
+
+      و این فقط نظری نیست: اجرای واقعیِ 30521888746 همین مسیر را ۲۷۰ ثانیه
+      سوزاند (۹۸.۵٪ از کلِ ۲۷۴ ثانیهٔ آن مرحله).
+
+    و چرا `timeout` **جدا** لازم است: محدودکردنِ عمق حجم را کم می‌کند ولی یک
+    عملیاتِ شبکه‌ای همچنان می‌تواند «معلق» بماند. با یک شنوندهٔ بی‌پاسخ اندازه
+    گرفتم: نسخهٔ بی‌سقف تا سقفِ بیرونیِ ۹۰ ثانیه معلق ماند (rc=124)، و نسخهٔ
+    باسقف در ۴۵ ثانیه خودش fail-closed شد (rc=1) و شاخه دست‌نخورده ماند.
+    """
+    import re as _re
+
+    repo = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    wf = os.path.join(repo, ".github", "workflows", "aggregate.yml")
+    doc = yaml.safe_load(open(wf, encoding="utf-8"))
+    job = doc["jobs"][list(doc["jobs"])[0]]
+
+    fetches = []           # (step-name, logical command line)
+    for step in job["steps"]:
+        run = step.get("run") or ""
+        # خطوطِ ادامه‌دار (\) را به یک «فرمانِ منطقی» بچسبان، وگرنه سوییچ‌هایی
+        # که در خطِ بعدی آمده‌اند دیده نمی‌شوند و تست الکی سبز/سرخ می‌شود.
+        logical, buf = [], ""
+        for raw in run.split("\n"):
+            stripped = raw.strip()
+            if stripped.endswith("\\"):
+                buf += stripped[:-1].rstrip() + " "
+                continue
+            logical.append(buf + stripped)
+            buf = ""
+        if buf:
+            logical.append(buf)
+        for cmd in logical:
+            if _re.search(r"\bgit fetch\b", cmd):
+                fetches.append((str(step.get("name", "?")), cmd))
+
+    # ★ ضدِ تستِ توخالی: اگر الگو بشکند و هیچ fetchی پیدا نشود، تست باید
+    #   بترکد — نه اینکه بی‌صدا سبز شود.
+    assert len(fetches) >= 4, \
+        f"the fetch scanner found only {len(fetches)} fetch commands — pattern broken"
+
+    unbounded = [(n, c) for n, c in fetches if not _re.search(r"--depth[= ]", c)]
+    assert not unbounded, (
+        "every `git fetch` must carry an explicit --depth. Without it, a fetch "
+        "into the shallow CI checkout re-downloads the ENTIRE 3.55 GiB history "
+        "(measured: 149,895 objects / 352.6s) whenever the remote tip has moved."
+        f" Offenders: {unbounded}"
+    )
+
+    uncapped = [(n, c) for n, c in fetches
+                if not _re.search(r"\btimeout\s+\S+\s+git fetch\b", c)]
+    assert not uncapped, (
+        "every `git fetch` must be wrapped in `timeout`, because a half-open "
+        "connection hangs forever (measured: rc=124 at a 90s outer cap). "
+        f"Offenders: {uncapped}"
+    )
+
+    # هیچ fetchی نباید زیرِ `set -euo pipefail` کلِ مرحله را بکشد: یا با
+    # `if ! …` گرفته می‌شود (و دور را دوباره تلاش می‌کند)، یا `|| true` دارد.
+    unguarded = [(n, c) for n, c in fetches
+                 if not c.lstrip().startswith("if !") and "|| true" not in c]
+    assert not unguarded, (
+        "a bare failing/timing-out fetch under `set -euo pipefail` kills the "
+        "whole publish step and forfeits the round; guard it with `if ! …` + "
+        f"retry, or `|| true`. Offenders: {unguarded}"
+    )
+
+    # سقفِ زمانیِ خودِ مرحلهٔ انتشار — قبلاً هیچ سقفی نداشت و تنها سقفِ موجود
+    # سقفِ کلِ job بود؛ یعنی یک عملیاتِ گیرکرده می‌توانست مرحلهٔ purge را هم
+    # قربانی کند.
+    pub = [s for s in job["steps"] if "git push" in (s.get("run") or "")]
+    assert len(pub) == 1
+    step_cap = pub[0].get("timeout-minutes")
+    assert isinstance(step_cap, int) and step_cap > 0, \
+        "the publish step MUST declare its own timeout-minutes"
+    job_cap = job.get("timeout-minutes")
+    assert isinstance(job_cap, int) and step_cap <= job_cap, (
+        f"publish step cap ({step_cap}m) must not exceed the job cap ({job_cap}m), "
+        "otherwise the step ceiling is decorative"
+    )
 
 
 def test_remark_tag_is_content_derived_not_positional():
