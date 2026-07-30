@@ -590,9 +590,34 @@ def dedup_key(line: str) -> str:
         try:
             without_remark = line.split("#")[0].strip()
             rest = without_remark[5:]
-            if "@" in rest:
-                userinfo, hostpart = rest.rsplit("@", 1)
-                hostpart = hostpart.split("?")[0]
+            # جدا کردنِ authority از query — پیش از هر rsplit روی '@'.
+            #
+            # چرا: پیش از این `rest.rsplit("@", 1)` روی **کلِ** رشته اجرا می‌شد.
+            # اگر query خودش '@' داشت (در دادهٔ واقعی فراوان است، مثلِ
+            # `?note=@SomeChannel`)، آخرین '@' داخلِ query بود و نتیجه:
+            #
+            #   ss://<b64>@1.2.3.4:11201?note=@FreeOnlineVPN
+            #     userinfo → "<b64>@1.2.3.4:11201?note="   (دیگر base64 نیست)
+            #     hostpart → "FreeOnlineVPN"
+            #     host     → ""            port → "FreeOnlineVPN"
+            #
+            # یعنی هویتِ endpoint کاملاً نابود می‌شد. شمارشِ زنده روی پیکره:
+            # ۱۴ کلید از ۳٬۰۰۶ خطِ ss (۱۲ موردِ '@' در query + ۲ موردِ '/'
+            # چسبیده به port). پس از وصله: ۰ کلید با hostِ خالی یا portِ
+            # غیرعددی. پارتیشنِ یکتاسازی عوض نمی‌شود (splits=0, merges=0).
+            #
+            # قاعده **عیناً** همان است که `endpoint_of()` در همین فایل به‌کار
+            # می‌برد: (۱) برشِ query  (۲) rsplit روی '@'  (۳) برشِ path.
+            # عمداً سرِ '/' *قبل از* rsplit نمی‌بُریم: userinfoِ SS2022 حاویِ
+            # base64ِ استاندارد است و '/' و '+' رمزنگاری‌نشده دارد، مثلِ
+            # `ss://2022-blake3-aes-256-gcm:bw2o/kKF…=:o0BV…=@host:port` —
+            # بریدن سرِ '/' آن را به شاخهٔ legacy می‌انداخت و کلید را خراب‌تر
+            # می‌کرد.
+            authority = rest.split("?", 1)[0]
+            if "@" in authority:
+                userinfo, hostpart = authority.rsplit("@", 1)
+                # host:port هرگز '/' ندارد؛ userinfo می‌تواند داشته باشد.
+                hostpart = hostpart.split("/", 1)[0]
                 decoded_ui = decode_base64_text(userinfo)
                 if decoded_ui and ":" in decoded_ui:
                     userinfo = decoded_ui

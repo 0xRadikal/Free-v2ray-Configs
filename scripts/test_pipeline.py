@@ -5305,6 +5305,340 @@ def test_the_drop_stats_snapshot_happens_inside_the_per_category_loop():
 # اجرا بدون pytest
 # ──────────────────────────────────────────────────────────────────────────────
 
+# ══════════════════════════════════════════════════════════════════════════════
+# فاز F — پارسِ authority در شاخهٔ ss:// از dedup_key
+#
+# پیش از این فاز، شاخهٔ ss هیچ تستی نداشت (`grep sip002` → صفر). نقص: عبارتِ
+# `rest.rsplit("@", 1)` روی **کلِ** بدنه اجرا می‌شد، پس '@'ِ داخلِ query
+# (مثلِ `?note=@SomeChannel`) به‌عنوان مرزِ userinfo/host گرفته می‌شد و
+# host خالی و port نامِ کانال می‌شد. شمارشِ زنده: ۱۴ کلید از ۳٬۰۰۶ خطِ ss.
+# ══════════════════════════════════════════════════════════════════════════════
+
+def _f_ss_parts(key: str):
+    """(userinfo, host, port) را از کلیدِ `ss:sip002:...` بیرون می‌کشد."""
+    assert key.startswith("ss:sip002:"), f"not a sip002 key: {key!r}"
+    body = key[len("ss:sip002:"):]
+    body, _, port = body.rpartition(":")
+    userinfo, _, host = body.rpartition("@")
+    return userinfo, host, port
+
+
+def _f_ss_key_old_algorithm(line: str) -> str:
+    """بازسازیِ **الگوریتمِ قدیمِ باگ‌دار** — فقط برای تستِ کنترل.
+
+    این تابع عمداً کدِ قبل از وصله را تکرار می‌کند تا بتوانیم اثبات کنیم
+    تست‌های این بلوک واقعاً ابطال‌پذیرند: اگر وصله برگردد، خروجی همین می‌شود.
+    """
+    without_remark = line.split("#")[0].strip()
+    rest = without_remark[5:]
+    if "@" in rest:
+        userinfo, hostpart = rest.rsplit("@", 1)
+        hostpart = hostpart.split("?")[0]
+        decoded_ui = core.decode_base64_text(userinfo)
+        if decoded_ui and ":" in decoded_ui:
+            userinfo = decoded_ui
+        userinfo = urllib.parse.unquote(userinfo).lower()
+        host, _, port = hostpart.rpartition(":")
+        return f"ss:sip002:{userinfo}@{host.lower()}:{port}"
+    return ""
+
+
+# userinfoِ base64 که به `chacha20-ietf-poly1305:deadbeefcafe1234` باز می‌شود.
+_F_UI_B64 = base64.b64encode(
+    b"chacha20-ietf-poly1305:deadbeefcafe1234").decode("ascii")
+
+
+def test_zz_f_ss_at_in_query_does_not_destroy_endpoint():
+    """S1 — '@' داخلِ query نباید host/port را نابود کند."""
+    line = f"ss://{_F_UI_B64}@1.2.3.4:11201?note=@SomeChannel#tag"
+    ui, host, port = _f_ss_parts(core.dedup_key(line))
+    assert host == "1.2.3.4", f"host={host!r}"
+    assert port == "11201", f"port={port!r}"
+    assert "note=" not in ui, f"query leaked into userinfo: {ui!r}"
+    assert "somechannel" not in ui.lower(), f"tag leaked: {ui!r}"
+
+
+def test_zz_f_ss_two_at_in_query():
+    """S2 — دو '@' در query هم باید بی‌اثر باشد."""
+    line = f"ss://{_F_UI_B64}@1.2.3.4:11201?note=@A&ref=@B"
+    _ui, host, port = _f_ss_parts(core.dedup_key(line))
+    assert (host, port) == ("1.2.3.4", "11201"), (host, port)
+
+
+def test_zz_f_ss_slash_before_query_port_clean():
+    """S3 — '/' قبل از '?' نباید به port بچسبد."""
+    line = f"ss://{_F_UI_B64}@1.2.3.4:443/?plugin=obfs-local"
+    _ui, host, port = _f_ss_parts(core.dedup_key(line))
+    assert port == "443", f"port polluted by slash: {port!r}"
+    assert host == "1.2.3.4", f"host={host!r}"
+
+
+def test_zz_f_ss_2022_userinfo_with_slash_preserved():
+    """S4 — userinfoِ SS2022 با '/' و '+' و '=' باید حفظ شود و host درست بیاید.
+
+    این حالت رگرسیونِ *کاندیدِ اولِ خودم* بود: بریدنِ authority سرِ نخستین '/'
+    (قاعدهٔ خالصِ RFC 3986) این خط را به شاخهٔ legacy می‌انداخت و کلید را
+    خراب‌تر می‌کرد. الگوریتمِ درست فقط سرِ '?' می‌بُرد.
+    """
+    ui = "2022-blake3-aes-256-gcm:bw2o/kKFuOWo+xcI3F6PqNg=:o0BV/LUba3D+ZA="
+    line = f"ss://{ui}@5.6.7.8:8388"
+    key = core.dedup_key(line)
+    assert key.startswith("ss:sip002:"), f"fell back: {key!r}"
+    got_ui, host, port = _f_ss_parts(key)
+    assert (host, port) == ("5.6.7.8", "8388"), (host, port)
+    assert "bw2o/kkfuowo+xci3f6pqng=" in got_ui, f"userinfo mangled: {got_ui!r}"
+
+
+def test_zz_f_ss_base64_userinfo_decoded():
+    """S5 — userinfoِ base64 باید به `method:password` باز شود."""
+    line = f"ss://{_F_UI_B64}@1.2.3.4:11201?note=@X"
+    ui, _h, _p = _f_ss_parts(core.dedup_key(line))
+    assert ui == "chacha20-ietf-poly1305:deadbeefcafe1234", f"ui={ui!r}"
+
+
+def test_zz_f_ss_plain_userinfo_kept():
+    """S6 — userinfoِ متنی نباید تحریف شود."""
+    line = "ss://aes-256-gcm:hunter2@1.2.3.4:8388"
+    ui, host, port = _f_ss_parts(core.dedup_key(line))
+    assert ui == "aes-256-gcm:hunter2", f"ui={ui!r}"
+    assert (host, port) == ("1.2.3.4", "8388")
+
+
+def test_zz_f_ss_ipv6_bracketed():
+    """S7 — IPv6ِ کروشه‌دار: port باید درست جدا شود."""
+    line = f"ss://{_F_UI_B64}@[2001:db8::1]:8388?note=@Y"
+    _ui, host, port = _f_ss_parts(core.dedup_key(line))
+    assert port == "8388", f"port={port!r}"
+    assert "2001:db8::1" in host, f"host={host!r}"
+
+
+def test_zz_f_ss_legacy_no_at():
+    """S8 — بدنهٔ legacy (بی '@') باید ss:legacy بدهد."""
+    body = base64.b64encode(b"aes-256-gcm:pw@1.2.3.4:8388").decode("ascii")
+    key = core.dedup_key(f"ss://{body}")
+    assert key.startswith("ss:legacy:"), f"key={key!r}"
+    assert "1.2.3.4" in key
+
+
+def test_zz_f_ss_legacy_not_base64_fallback():
+    """S9 — legacyِ غیر-base64 باید fallbackِ قطعی بدهد، نه استثنا."""
+    key = core.dedup_key("ss://!!!not-base64-at-all!!!")
+    assert key == "ss://!!!not-base64-at-all!!!", f"key={key!r}"
+    assert key == core.dedup_key("ss://!!!not-base64-at-all!!!")
+
+
+def test_zz_f_ss_no_query_semantics_unchanged():
+    """S10 — بدونِ query و path، وصله نباید هیچ چیزی را عوض کند."""
+    line = f"ss://{_F_UI_B64}@1.2.3.4:8388"
+    assert core.dedup_key(line) == _f_ss_key_old_algorithm(line)
+
+
+def test_zz_f_ss_fragment_with_at_stripped():
+    """S11 — '@' داخلِ fragment نباید به کلید نفوذ کند."""
+    a = f"ss://{_F_UI_B64}@1.2.3.4:8388"
+    b = f"ss://{_F_UI_B64}@1.2.3.4:8388#@SomeChannel"
+    assert core.dedup_key(a) == core.dedup_key(b)
+
+
+def test_zz_f_ss_percent_encoded_userinfo():
+    """S12 — percent-encoding در userinfo باید unquote شود."""
+    line = "ss://aes-256-gcm:p%40ss@1.2.3.4:8388?note=@Z"
+    ui, host, port = _f_ss_parts(core.dedup_key(line))
+    assert ui == "aes-256-gcm:p@ss", f"ui={ui!r}"
+    assert (host, port) == ("1.2.3.4", "8388")
+
+
+def test_zz_f_ss_host_lowercased():
+    """S13 — hostِ حروف‌بزرگ باید یکسان‌سازی شود."""
+    up = f"ss://{_F_UI_B64}@Example.COM:8388?note=@Q"
+    lo = f"ss://{_F_UI_B64}@example.com:8388?note=@Q"
+    assert core.dedup_key(up) == core.dedup_key(lo)
+
+
+def test_zz_f_ss_note_tag_does_not_split_identity():
+    """S14 — دو URI که فقط در `?note=` فرق دارند باید **یک** هویت باشند."""
+    a = f"ss://{_F_UI_B64}@1.2.3.4:8388?note=@ChannelA"
+    b = f"ss://{_F_UI_B64}@1.2.3.4:8388?note=@ChannelB"
+    assert core.dedup_key(a) == core.dedup_key(b), "same server split by tag"
+    # و اثبات اینکه قبلاً این‌طور نبود:
+    assert _f_ss_key_old_algorithm(a) != _f_ss_key_old_algorithm(b)
+
+
+def test_zz_f_ss_query_presence_does_not_split_identity():
+    """★ S14b — **همان سرور** با و بدونِ query باید یک هویت باشد.
+
+    این حالت با S14 فرق دارد و مهم‌تر است: S14 دو خط را مقایسه می‌کند که
+    **هر دو** query دارند؛ اینجا یکی query دارد و دیگری ندارد.
+
+    چرا مهم است — و چرا باید صادقانه ثبت شود: در کدِ قدیم این دو خط
+    **دو کلیدِ متفاوت** می‌ساختند (خطِ باquery کلیدِ خراب با hostِ خالی
+    می‌گرفت)، پس یک سرور **دو بار** شمرده می‌شد. با وصله هر دو یک کلید
+    می‌شوند؛ یعنی وصله می‌تواند باعثِ **ادغامِ درست** شود و تعدادِ نودِ
+    منتشرشده را کمی کم کند.
+
+    این را با اجرای واقعی سنجیدم (HEAD در برابرِ درختِ کاری):
+        old → ۲ کلیدِ یکتا   |   new → ۱ کلیدِ یکتا
+    در پیکرهٔ امروز چنین جفتی هم‌زمان وجود ندارد، پس `merges = 0` سنجیده شد و
+    اثرِ عملیِ امروز صفر است — ولی مدعیِ «هرگز ادغام نمی‌شود» **نیستم**.
+    """
+    a = f"ss://{_F_UI_B64}@1.2.3.4:8388?note=@Chan"
+    b = f"ss://{_F_UI_B64}@1.2.3.4:8388"
+    assert core.dedup_key(a) == core.dedup_key(b), (
+        f"same server split by query presence: {core.dedup_key(a)!r} != "
+        f"{core.dedup_key(b)!r}"
+    )
+    # شاهدِ ابطال‌پذیری: الگوریتمِ قدیم این دو را از هم جدا می‌کرد
+    assert _f_ss_key_old_algorithm(a) != _f_ss_key_old_algorithm(b), (
+        "control invalid: old algorithm already merged these"
+    )
+
+
+def test_zz_f_ss_fragment_does_not_split_identity():
+    """S15 — تفاوت در fragment نباید هویت را بشکند."""
+    a = f"ss://{_F_UI_B64}@1.2.3.4:8388#one"
+    b = f"ss://{_F_UI_B64}@1.2.3.4:8388#two"
+    assert core.dedup_key(a) == core.dedup_key(b)
+
+
+def test_zz_f_ss_different_host_not_merged():
+    """S16 — hostِ متفاوت با queryِ یکسان نباید ادغام شود (ادغامِ کاذب)."""
+    a = f"ss://{_F_UI_B64}@1.2.3.4:8388?note=@Same"
+    b = f"ss://{_F_UI_B64}@5.6.7.8:8388?note=@Same"
+    assert core.dedup_key(a) != core.dedup_key(b)
+
+
+def test_zz_f_ss_key_deterministic():
+    """S17 — کلید باید قطعی باشد (چند بار صدا زدن، یک خروجی)."""
+    lines = [
+        f"ss://{_F_UI_B64}@1.2.3.4:8388?note=@X#t",
+        "ss://aes-256-gcm:pw@[2001:db8::2]:443/?plugin=p",
+        "ss://!!!bad!!!",
+    ]
+    for ln in lines:
+        keys = {core.dedup_key(ln) for _ in range(5)}
+        assert len(keys) == 1, f"non-deterministic for {ln!r}: {keys}"
+
+
+def test_zz_f_ss_last_at_is_the_delimiter():
+    """authority با چند '@': مرزِ userinfo/host **آخرین** '@' است.
+
+    RFC 3986 اجازهٔ '@'ِ رمزنگاری‌نشده در userinfo را نمی‌دهد، و
+    `endpoint_of()` هم همین قاعده را به‌کار می‌برد.
+
+    ⚠️ **هشدارِ صداقت — این تست جهشِ M5 را نمی‌کُشد.**
+    تبدیلِ `rsplit("@", 1)` → `split("@", 1)` این تست را **نمی‌شکند**، و من
+    این را با اجرایِ واقعیِ جهش سنجیدم (نه حدس). دلیلش «بازچینشِ رشتهٔ کلید»
+    است: قالبِ کلید `f"{userinfo}@{host}:{port}"` است، پس هرجای authority را
+    که بشکنید، `userinfo + "@" + host` دوباره **همان** authority را می‌سازد و
+    رشتهٔ کلید تغییر نمی‌کند — هرچند `host` در باطن آلوده است
+    (`word@1.2.3.4` به‌جای `1.2.3.4`).
+    کُشتنِ M5 نیازمندِ ورودی‌ای است که در آن تبدیل‌های **نامتقارنِ** روی
+    userinfo (percent-decode / base64-decode) رشته را واقعاً جابه‌جا کنند؛
+    آن تست جداگانه است: `test_zz_f_ss_userinfo_spans_to_last_at`.
+    """
+    line = "ss://aes-256-gcm:pw@word@1.2.3.4:8388?note=@Chan"
+    ui, host, port = _f_ss_parts(core.dedup_key(line))
+    assert host == "1.2.3.4", f"host={host!r} (باید از آخرین '@' جدا شود)"
+    assert port == "8388", f"port={port!r}"
+    assert ui == "aes-256-gcm:pw@word", f"ui={ui!r}"
+    # و هم‌خوانی با endpoint_of
+    assert core.endpoint_of(line) == "1.2.3.4"
+
+
+def test_zz_f_ss_userinfo_spans_to_last_at():
+    """★ تستی که واقعاً جهشِ M5 (`rsplit`→`split`) را می‌کُشد.
+
+    **ویژگیِ سنجیده‌شده:** percent-decoding باید روی **کلِ** userinfo — یعنی
+    هرچه پیش از آخرین '@' است — اعمال شود، چون کلِ آن userinfo است.
+
+    چرا این ورودی کار می‌کند و ورودیِ سادهٔ دو-'@' نه: `unquote()` فقط روی
+    userinfo اجرا می‌شود و روی host نه. پس اگر بخشِ percent-encoded **بینِ**
+    دو '@' بنشیند، جای مرز تعیین می‌کند که آن بخش رمزگشایی شود یا نه، و
+    «بازچینشِ رشتهٔ کلید» دیگر جهش را پنهان نمی‌کند.
+
+    اندازه‌گیریِ واقعی (جهش روی نسخهٔ کپیِ `core.py`، نه بازنویسیِ دستی):
+        rsplit → ss:sip002:aes-256-gcm:pw@ab@1.2.3.4:8388     ← درست
+        split  → ss:sip002:aes-256-gcm:pw@%41%42@1.2.3.4:8388 ← جهش
+
+    توجه: `%41%42` یعنی `AB`، و چون کلید lowercase می‌شود انتظارِ `ab` داریم.
+    """
+    line = "ss://aes-256-gcm:pw@%41%42@1.2.3.4:8388"
+    key = core.dedup_key(line)
+    ui, host, port = _f_ss_parts(key)
+    # ۱) نقطهٔ برش درست است → host/port سالم
+    assert host == "1.2.3.4", f"host={host!r}"
+    assert port == "8388", f"port={port!r}"
+    # ۲) percent-decoding روی کلِ userinfo (تا آخرین '@') اعمال شده
+    assert ui == "aes-256-gcm:pw@ab", f"ui={ui!r}"
+    # ۳) هیچ percent-encoding رمزگشایی‌نشده‌ای در کلید نمانده باشد
+    assert "%41" not in key and "%42" not in key, f"key={key!r}"
+    # ۴) شاهدِ دوم و مستقل: '/'ِ رمزنگاری‌شده هم باید رمزگشایی شود
+    line2 = "ss://aes-256-gcm:pw@a%2Fb@1.2.3.4:8388"
+    key2 = core.dedup_key(line2)
+    ui2, host2, port2 = _f_ss_parts(key2)
+    assert ui2 == "aes-256-gcm:pw@a/b", f"ui2={ui2!r}"
+    assert host2 == "1.2.3.4" and port2 == "8388"
+    assert "%2f" not in key2 and "%2F" not in key2, f"key2={key2!r}"
+    # ۵) و هم‌خوانی با endpoint_of در هر دو
+    assert core.endpoint_of(line) == "1.2.3.4"
+    assert core.endpoint_of(line2) == "1.2.3.4"
+
+
+def test_zz_f_ss_host_agrees_with_endpoint_of():
+    """★ ناوردایِ بین‌تابعی: hostِ کلید باید با `endpoint_of` یکی باشد.
+
+    `endpoint_of()` از پیش قاعدهٔ درست را داشت (برشِ query → rsplit '@' →
+    برشِ path). این تست دو تابع را به هم گره می‌زند تا واگراییِ آینده گرفته شود.
+    """
+    cases = [
+        f"ss://{_F_UI_B64}@1.2.3.4:11201?note=@SomeChannel#tag",
+        f"ss://{_F_UI_B64}@1.2.3.4:443/?plugin=obfs",
+        "ss://aes-256-gcm:hunter2@example.com:8388",
+        f"ss://{_F_UI_B64}@[2001:db8::1]:8388?note=@Y",
+        "ss://aes-256-gcm:pw@word@9.9.9.9:1080?note=@N",   # دو '@' در authority
+    ]
+    for ln in cases:
+        _ui, host, _port = _f_ss_parts(core.dedup_key(ln))
+        want = core.endpoint_of(ln)
+        got = host.strip("[]")          # کلید کروشهٔ IPv6 را نگه می‌دارد
+        assert got == want, f"{ln!r}: key host={got!r} endpoint_of={want!r}"
+
+
+def test_zz_f_ss_control_patch_is_falsifiable():
+    """S18 — تستِ کنترلِ داربست: اثبات اینکه الگوریتمِ قدیم **می‌شکست**.
+
+    اگر بقیهٔ تست‌ها بدونِ وصله هم پاس شوند، داربست بی‌اثر است. این‌جا صریحاً
+    نشان می‌دهیم الگوریتمِ قدیم روی همان ورودی hostِ خالی و portِ غیرعددی
+    می‌ساخت، و وصلهٔ فعلی هر دو نشانه را از بین می‌برد.
+    """
+    line = f"ss://{_F_UI_B64}@1.2.3.4:11201?note=@FreeOnlineVPN"
+    old = _f_ss_key_old_algorithm(line)
+    _o_ui, o_host, o_port = _f_ss_parts(old)
+    assert o_host == "", f"control invalid: old host was {o_host!r}"
+    assert o_port == "FreeOnlineVPN", f"control invalid: old port {o_port!r}"
+    assert not o_port.isdigit()
+    _n_ui, n_host, n_port = _f_ss_parts(core.dedup_key(line))
+    assert n_host == "1.2.3.4" and n_port.isdigit()
+    assert old != core.dedup_key(line)
+
+
+def test_zz_f_ss_patch_scope_is_surgical():
+    """اثباتِ دامنه: وصله نباید هیچ پروتکلِ دیگری را عوض کند."""
+    others = [
+        "vless://11111111-1111-1111-1111-111111111111@1.2.3.4:443"
+        "?type=tcp&sni=a.com#x",
+        "trojan://pass@1.2.3.4:443?sni=b.com#y",
+        "hysteria2://pw@1.2.3.4:443?sni=c.com#z",
+        "vmess://" + base64.b64encode(
+            json.dumps({"add": "1.2.3.4", "port": 443, "id": "u",
+                        "net": "ws", "path": "/p"}).encode()).decode(),
+    ]
+    for ln in others:
+        k1 = core.dedup_key(ln)
+        k2 = core.dedup_key(ln)
+        assert k1 == k2 and k1 and not k1.startswith("ss:")
+
+
 def _run_all() -> int:
     tests = [(n, f) for n, f in sorted(globals().items())
              if n.startswith("test_") and callable(f)]
