@@ -5639,6 +5639,355 @@ def test_zz_f_ss_patch_scope_is_surgical():
         assert k1 == k2 and k1 and not k1.startswith("ss:")
 
 
+# ══════════════════════════════════════════════════════════════════════════════
+# فاز H — اعتبارسنجیِ مقدارِ fronting در `dedup_key` (همهٔ پروتکل‌ها جز ss)
+#
+# نقصِ ساختاری: `dedup_key` هرگاه `sni`/`host` وجود داشت، **میزبانِ واقعی را
+# دور می‌ریخت** (`host_for_key = ""`) و هویتِ سرور را به آن مقدار می‌سپرد. پس
+# هر دو سرورِ متفاوت با مقدارِ frontingِ مشترک یک هویت می‌شدند و در
+# `aggregate.py` (خطوط ۲۵۹–۲۶۳) دومی به `r.duplicates` می‌رفت و **هرگز منتشر
+# نمی‌شد** — یعنی حذفِ خاموشِ یک سرورِ سالم.
+#
+# دو واقعیتِ **مستندِ** پروتکلی که قاعده بر آن‌ها بنا شد:
+#   ۱. SNI یک افزونهٔ TLS است ⇒ با `security` = none/غایب هرگز ارسال نمی‌شود.
+#   ۲. در REALITY مقدارِ `serverName` عمداً دامنهٔ یک **سایتِ ثالث** است که
+#      گواهی‌اش قرض گرفته می‌شود (مستنداتِ رسمیِ XTLS)، نه میزبانِ خودِ سرور.
+#
+# سنجشِ زنده روی یک عکسِ ثابتِ ۱۸٬۷۳۵ خطی: کلیدهایی که ≥۲ نقطهٔ پایانیِ واقعیِ
+# متفاوت را در خود جمع کرده بودند **۶۴۱ → ۵۰۰**، و ادغامِ کاذبِ **تازه = ۰**.
+# ══════════════════════════════════════════════════════════════════════════════
+
+_H_UUID = "11111111-1111-1111-1111-111111111111"
+
+
+def _h_parts(key: str):
+    """(host_for_key, endpoint, port, مجموعهٔ پارامترها) از کلیدِ شاخهٔ عمومی."""
+    assert "|ep=" in key, f"not a generic key: {key!r}"
+    head, _, tail = key.partition("|ep=")
+    host_for_key = head.rpartition("@")[2]
+    body, _, query = tail.rpartition("?")
+    endpoint, _, port = body.rpartition(":")
+    return host_for_key, endpoint, port, {p for p in query.split("&") if p}
+
+
+def _h_vmess_parts(key: str):
+    """(add_for_key, fronting) از کلیدِ شاخهٔ vmess."""
+    assert key.startswith("vmess:") and "|ep=" in key, f"not vmess: {key!r}"
+    head, _, tail = key.partition("|ep=")
+    return head[len("vmess:"):], tail.split(":", 1)[0]
+
+
+def _h_old_fronting_generic(line: str) -> str:
+    """frontingِ **الگوریتمِ قدیم** برای شاخهٔ عمومی — فقط برای تستِ کنترل.
+
+    قاعدهٔ قدیم: `sni or host`، **بدونِ هیچ اعتبارسنجی**. این تابع عمداً
+    بازسازی می‌شود تا ثابت شود تست‌های این بلوک ابطال‌پذیرند: اگر وصله برگردد،
+    خروجی دوباره همین می‌شود.
+    """
+    without_remark = line.split("#")[0].strip()
+    parsed = urllib.parse.urlparse(without_remark)
+    raw = urllib.parse.parse_qs(parsed.query, keep_blank_values=True)
+
+    def _nv(name: str) -> str:
+        v = (raw.get(name, [""])[0] or "").strip().lower()
+        for _ in range(2):                      # همان دو دورِ unquote در core
+            nxt = urllib.parse.unquote(v)
+            if nxt == v:
+                break
+            v = nxt
+        return v.strip().lower()
+
+    return _nv("sni") or _nv("host")
+
+
+def _h_vless(query: str) -> str:
+    return f"vless://{_H_UUID}@1.2.3.4:443?{query}#tag"
+
+
+def _h_vmess(**kw) -> str:
+    obj = {"add": "1.2.3.4", "port": 443, "id": "u1", "net": "ws", "path": "/p"}
+    obj.update(kw)
+    return "vmess://" + base64.b64encode(
+        json.dumps(obj).encode("utf-8")).decode("ascii")
+
+
+# ── ۱) قاعدهٔ REALITY: sni دامنهٔ استتارِ ثالث است، نقطهٔ پایانی نیست ──────────
+
+def test_zz_h_reality_sni_keeps_real_host():
+    """REALITY + sni ⇒ میزبانِ واقعی باید در کلید بماند، نه دامنهٔ استتار."""
+    key = core.dedup_key(_h_vless("security=reality&sni=www.apple.com&pbk=K&type=tcp"))
+    host, ep, port, params = _h_parts(key)
+    assert host == "1.2.3.4", f"میزبانِ واقعی گم شد: {key!r}"
+    assert ep == "", f"دامنهٔ استتار به‌عنوان نقطهٔ پایانی نشست: {key!r}"
+    assert port == "443"
+    # مقدارِ معتبر ولی «ردشده با قاعدهٔ TLS» باید در query بماند (نوعِ ۲).
+    assert "sni=www.apple.com" in params, (
+        f"sni معتبر بود و باید به‌عنوان پارامترِ هویتی می‌ماند: {params!r}")
+
+
+def test_zz_h_security_none_sni_keeps_real_host():
+    """`security=none` ⇒ هیچ TLSی نیست ⇒ SNI ارسال نمی‌شود ⇒ بی‌اثر."""
+    key = core.dedup_key(_h_vless("security=none&sni=www.apple.com&type=tcp"))
+    host, ep, _p, params = _h_parts(key)
+    assert host == "1.2.3.4" and ep == "", key
+    assert "sni=www.apple.com" in params
+
+
+def test_zz_h_security_absent_sni_keeps_real_host():
+    """پارامترِ `security` غایب ⇒ همان حکمِ none."""
+    key = core.dedup_key(_h_vless("sni=www.apple.com&type=tcp"))
+    host, ep, _p, _q = _h_parts(key)
+    assert host == "1.2.3.4" and ep == "", key
+
+
+def test_zz_h_reality_sni_two_servers_stay_distinct():
+    """★ سنجهٔ اصلی: دو سرورِ REALITYِ متفاوت با استتارِ مشترک نباید یکی شوند."""
+    a = f"vless://{_H_UUID}@1.2.3.4:443?security=reality&sni=www.apple.com&type=tcp#a"
+    b = f"vless://{_H_UUID}@5.6.7.8:443?security=reality&sni=www.apple.com&type=tcp#b"
+    ka, kb = core.dedup_key(a), core.dedup_key(b)
+    assert ka != kb, (
+        "دو سرورِ متفاوت هم‌هویت شدند ⇒ یکی در aggregate به duplicates می‌رود "
+        f"و منتشر نمی‌شود: {ka!r}")
+    # و اثباتِ ابطال‌پذیری: با قاعدهٔ قدیم هم‌هویت **بودند**.
+    assert _h_old_fronting_generic(a) == _h_old_fronting_generic(b) != ""
+
+
+# ── ۲) مواردی که **نباید** عوض شوند ────────────────────────────────────────────
+
+def test_zz_h_tls_valid_sni_key_unchanged():
+    """`security=tls` + sniِ معتبر ⇒ کلید **دقیقاً** مثلِ قبل بماند."""
+    line = _h_vless("security=tls&sni=cdn.example.com&type=ws")
+    host, ep, _p, params = _h_parts(core.dedup_key(line))
+    assert ep == "cdn.example.com", "frontingِ مشروع نباید رد شود"
+    assert host == "", "با frontingِ پذیرفته‌شده میزبانِ واقعی حذف می‌شود"
+    assert "security=tls" in params and not any(p.startswith("sni=") for p in params)
+    # همان چیزی که الگوریتمِ قدیم می‌داد.
+    assert ep == _h_old_fronting_generic(line)
+
+
+def test_zz_h_host_param_unchanged_by_tls_rule():
+    """`host` هرگز به قاعدهٔ TLS مشروط نشد — فقط اعتبارِ نحوی."""
+    line = _h_vless("security=none&host=cdn.example.com&type=ws")
+    host, ep, _p, _q = _h_parts(core.dedup_key(line))
+    assert ep == "cdn.example.com" and host == "", (
+        "host با security=none هم fronting معتبر است (هدرِ HTTP، نه TLS)")
+    assert ep == _h_old_fronting_generic(line)
+
+
+def test_zz_h_trailing_dot_fqdn_accepted():
+    """FQDNِ لنگرانداخته به ریشه (`a.com.`) از نظرِ DNS معتبر است ⇒ پذیرش."""
+    line = _h_vless("security=tls&sni=ayar24gold.com.&type=ws")
+    _h, ep, _p, _q = _h_parts(core.dedup_key(line))
+    assert ep == "ayar24gold.com.", (
+        "نقطهٔ پایانی نباید باعثِ ردِ FQDN شود — این دقیقاً باگی بود که در "
+        "نسخهٔ اولِ ابزارِ سنجشِ خودم ۴ مثبتِ کاذب ساخت")
+
+
+def test_zz_h_ipv6_literal_fronting_accepted():
+    """لیترالِ IPv6 در کروشه مقدارِ نحوی‑معتبر است."""
+    line = _h_vless("security=tls&sni=%5B2001%3Adb8%3A%3A1%5D&type=ws")
+    _h, ep, _p, _q = _h_parts(core.dedup_key(line))
+    assert ep == "[2001:db8::1]", ep
+
+
+# ── ۳) مقادیرِ زباله: هم به‌عنوان نقطهٔ پایانی رد، هم از query حذف ─────────────
+
+def test_zz_h_garbage_fronting_rejected_and_popped():
+    """زباله هیچ اطلاعِ هویتی ندارد ⇒ باید **کاملاً** از کلید بیرون برود.
+
+    اگر فقط «تنزیل» شود و در query بماند، همان زباله هویت را می‌شکند: سنجیده
+    شد که ۳۶ افراز، **یک** نقطهٔ پایانیِ واقعی را به چند کلید می‌بردند.
+    """
+    cases = [
+        ("security=tls&sni=https%3A%2F%2Ft.me%2Fx&type=ws", "sni"),
+        ("security=tls&sni=t.me%2Fripaojiedian&type=ws", "sni"),
+        ("security=tls&sni=rd.autos.yahoo.com:40069&type=ws", "sni"),
+        ("security=tls&sni=v2raynplus--v2raynplus&type=ws", "sni"),
+        ("security=none&host=%7B%22host%22%3A%22a%22%7D&type=ws", "host"),
+        ("security=none&host=%2F%3Fbia%40mar&type=ws", "host"),
+        ("security=none&host=a.com%2Cb.com&type=ws", "host"),
+        ("security=none&host=d2e.cloudfront.net%3Aassets.opensignal.com&type=ws",
+         "host"),
+    ]
+    for query, which in cases:
+        line = _h_vless(query)
+        host, ep, _p, params = _h_parts(core.dedup_key(line))
+        assert host == "1.2.3.4", f"میزبانِ واقعی گم شد ({query}): {host!r}"
+        assert ep == "", f"زباله نقطهٔ پایانی شد ({query}): {ep!r}"
+        assert not any(p.startswith(which + "=") for p in params), (
+            f"زباله در query ماند و هویت را می‌شکند ({query}): {params!r}")
+        # ابطال‌پذیری: الگوریتمِ قدیم همین زباله را نقطهٔ پایانی می‌کرد.
+        assert _h_old_fronting_generic(line) not in ("",), query
+
+
+def test_zz_h_single_label_fronting_rejected():
+    """دامنهٔ frontingِ عمومی همیشه FQDN است؛ مقدارِ تک‌برچسبی نامِ کانال است."""
+    line = _h_vless("security=tls&sni=v2raynplus--v2raynplus--v2raynplus&type=ws")
+    host, ep, _p, _q = _h_parts(core.dedup_key(line))
+    assert host == "1.2.3.4" and ep == "", (
+        "پذیرشِ مقادیرِ تک‌برچسبی ۱۲ افرازِ هم‑نقطه‌پایانی باقی می‌گذاشت")
+
+
+# ── ۴) شاخهٔ vmess ────────────────────────────────────────────────────────────
+
+def test_zz_h_vmess_reality_sni_keeps_add():
+    add, front = _h_vmess_parts(core.dedup_key(
+        _h_vmess(tls="reality", sni="www.apple.com")))
+    assert add == "1.2.3.4" and front == "", (add, front)
+
+
+def test_zz_h_vmess_tls_valid_sni_unchanged():
+    add, front = _h_vmess_parts(core.dedup_key(
+        _h_vmess(tls="tls", sni="cdn.example.com")))
+    assert add == "" and front == "cdn.example.com", (add, front)
+
+
+def test_zz_h_vmess_host_kept_without_tls():
+    """در vmess هم `host` مشروط به TLS نیست."""
+    add, front = _h_vmess_parts(core.dedup_key(_h_vmess(host="cdn.example.com")))
+    assert add == "" and front == "cdn.example.com", (add, front)
+
+
+def test_zz_h_vmess_garbage_host_falls_back_to_add():
+    add, front = _h_vmess_parts(core.dedup_key(_h_vmess(host="t.me/chan")))
+    assert add == "1.2.3.4" and front == "", (add, front)
+
+
+def test_zz_h_vmess_invalid_host_valid_sni_shifts_to_sni():
+    """`host` نامعتبر و `sni` معتبر با tls ⇒ fronting به sni منتقل می‌شود."""
+    add, front = _h_vmess_parts(core.dedup_key(
+        _h_vmess(host="onelabel", sni="cdn.example.com", tls="tls")))
+    assert add == "" and front == "cdn.example.com", (add, front)
+
+
+# ── ۵) پروتکل‌های دیگر (اثباتِ اینکه وصله فقط ss را دست‌نخورده می‌گذارد) ───────
+
+def test_zz_h_other_schemes_follow_same_rule():
+    for line, want_host in (
+        ("trojan://pw@5.6.7.8:443?security=reality&sni=www.bing.com#t", "5.6.7.8"),
+        ("hysteria2://pw@5.6.7.8:443?sni=t.me%2Fripaojiedian#h", "5.6.7.8"),
+        ("tuic://u:p@5.6.7.8:443?security=none&sni=a.example.com#u", "5.6.7.8"),
+        ("trojan://pw@5.6.7.8:443?security=tls&sni=cdn.example.com#ok", ""),
+    ):
+        host, ep, _p, _q = _h_parts(core.dedup_key(line))
+        assert host == want_host, (line, host, ep)
+
+
+def test_zz_h_ss_branch_untouched():
+    """دامنهٔ وصلهٔ H: شاخهٔ ss (دستاوردِ فازِ F) باید دست‌نخورده بماند.
+
+    ⚠️ نسخهٔ اولِ همین تست را **خودم غلط** نوشتم: با `_f_ss_key_old_algorithm`
+    مقایسه کردم، در حالی که آن تابع عمداً بازسازیِ الگوریتمِ **باگ‌دارِ** پیش از
+    فازِ F است و برای موردِ `?note=@SomeChannel` باید نتیجهٔ *متفاوتی* بدهد.
+    پس ثابتِ درست این است: کلیدِ ss هنوز host/port را درست می‌دهد (یعنی وصلهٔ F
+    زنده است) و برای آن مورد **برابرِ** الگوریتمِ باگ‌دار نیست.
+    """
+    tricky = f"ss://{_F_UI_B64}@1.2.3.4:11201?note=@SomeChannel#tag"
+    ui, host, port = _f_ss_parts(core.dedup_key(tricky))
+    assert (host, port) == ("1.2.3.4", "11201"), (host, port)
+    assert ui == "chacha20-ietf-poly1305:deadbeefcafe1234", ui
+    assert core.dedup_key(tricky) != _f_ss_key_old_algorithm(tricky), (
+        "دستاوردِ فازِ F از دست رفته است")
+    for line, want in (
+        (f"ss://{_F_UI_B64}@1.2.3.4:8388", ("1.2.3.4", "8388")),
+        (f"ss://{_F_UI_B64}@[2001:db8::1]:8388?note=@Y", ("[2001:db8::1]", "8388")),
+        (f"ss://{_F_UI_B64}@1.2.3.4:443/?plugin=obfs-local", ("1.2.3.4", "443")),
+    ):
+        _u, h, p = _f_ss_parts(core.dedup_key(line))
+        assert (h, p) == want, (line, h, p)
+
+
+# ── ۶) ساختار و پایداری ──────────────────────────────────────────────────────
+
+def test_zz_h_other_identity_params_preserved():
+    """همهٔ پارامترهای هویتی جز sni/host باید بایت‑به‑بایت دست‌نخورده بمانند."""
+    line = _h_vless(
+        "security=reality&sni=www.apple.com&pbk=PBK&sid=SID&flow=xtls-rprx-vision"
+        "&type=grpc&mode=gun&servicename=SVC&encryption=none")
+    _h, _e, _p, params = _h_parts(core.dedup_key(line))
+    for expect in ("pbk=pbk", "sid=sid", "flow=xtls-rprx-vision",
+                   "type=grpc", "mode=gun", "servicename=svc",
+                   "security=reality"):
+        assert expect in params, (expect, params)
+    assert not any(p.startswith("host=") for p in params)
+
+
+def test_zz_h_kept_host_agrees_with_endpoint_of():
+    """وقتی fronting رد شد، میزبانِ کلید باید همان `endpoint_of` باشد."""
+    for query in ("security=reality&sni=www.apple.com",
+                  "security=none&sni=a.example.com",
+                  "security=tls&sni=t.me%2Fx",
+                  "security=none&host=%2Fjunk"):
+        line = _h_vless(query)
+        host, ep, _p, _q = _h_parts(core.dedup_key(line))
+        assert ep == "" and host == core.endpoint_of(line), (query, host, ep)
+
+
+def test_zz_h_dedup_key_is_deterministic():
+    lines = [_h_vless("security=reality&sni=www.apple.com&type=tcp"),
+             _h_vless("security=tls&sni=cdn.example.com&type=ws"),
+             _h_vmess(tls="reality", sni="www.apple.com"),
+             _h_vmess(host="t.me/chan")]
+    for ln in lines:
+        assert core.dedup_key(ln) == core.dedup_key(ln) != ""
+
+
+def test_zz_h_remark_does_not_affect_key():
+    a = _h_vless("security=reality&sni=www.apple.com&type=tcp")
+    b = a.replace("#tag", "#@SomeOtherChannel")
+    assert core.dedup_key(a) == core.dedup_key(b)
+
+
+# ── ۷) تست‌های واحدِ دو کمک‌تابع ───────────────────────────────────────────────
+
+def test_zz_h_is_plausible_fronting_host_table():
+    """جدولِ سنجیده‌شدهٔ کمک‌تابع — هر ردیف یک قاعدهٔ مستقل."""
+    ok = ["a.com", "a.b.c.com", "example.com.", "[2001:db8::1]", "1.2.3.4",
+          "xn--bcher-kva.com", "[x]",
+          ("a" * 60) + "." + ("b" * 60) + "." + ("c" * 60) + "." +
+          ("d" * 60) + ".com"]
+    bad = ["", "onelabel", "a..com", ".com", "com.", "-a.com", "a-.com",
+           "tést.com", "a b.com", "a/b.com", "a:b.com", "a@b.com",
+           '{"h":"a"}', "https://t.me/x", ("a" * 64) + ".com",
+           ("a" * 250) + ".com", "[]", "a.com..", "a.com:443", "a,b.com"]
+    for v in ok:
+        assert core._is_plausible_fronting_host(v) is True, repr(v[:40])
+    for v in bad:
+        assert core._is_plausible_fronting_host(v) is False, repr(v[:40])
+
+
+def test_zz_h_sni_is_endpoint_only_for_tls():
+    """فقط TLSِ معمولی؛ مقدار پیش از فراخوانی در core به حروفِ کوچک آمده است."""
+    assert core._sni_is_endpoint("tls") is True
+    for s in ("reality", "none", "", "xtls", "TLS"):
+        assert core._sni_is_endpoint(s) is False, s
+
+
+# ── ۸) تستِ کنترل (H‑9): اثبات اینکه الگوریتمِ قدیم نتیجهٔ دیگری می‌داد ────────
+
+def test_zz_h_control_old_algorithm_gave_different_result():
+    """اگر این تست بی‌اثر شود یعنی وصله کاری نکرده و بقیهٔ تست‌ها پوچ‌اند."""
+    changed = [
+        _h_vless("security=reality&sni=www.apple.com&type=tcp"),
+        _h_vless("security=none&sni=www.apple.com&type=tcp"),
+        _h_vless("security=tls&sni=https%3A%2F%2Ft.me%2Fx&type=ws"),
+        _h_vless("security=none&host=%2F%3Fbia%40mar&type=ws"),
+        _h_vless("security=tls&sni=v2raynplus--v2raynplus&type=ws"),
+    ]
+    for line in changed:
+        _h, ep, _p, _q = _h_parts(core.dedup_key(line))
+        old = _h_old_fronting_generic(line)
+        assert old != "", f"تستِ کنترل بی‌اثر است: {line!r}"
+        assert ep != old, (
+            f"وصله اثری نداشت — نقطهٔ پایانی همان frontingِ قدیم است: {old!r}")
+    unchanged = [_h_vless("security=tls&sni=cdn.example.com&type=ws"),
+                 _h_vless("security=none&host=cdn.example.com&type=ws")]
+    for line in unchanged:
+        _h, ep, _p, _q = _h_parts(core.dedup_key(line))
+        assert ep == _h_old_fronting_generic(line), (
+            f"وصله بیش از دامنهٔ خود عمل کرد: {line!r}")
+
+
 def _run_all() -> int:
     tests = [(n, f) for n, f in sorted(globals().items())
              if n.startswith("test_") and callable(f)]

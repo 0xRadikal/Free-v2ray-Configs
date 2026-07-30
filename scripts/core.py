@@ -533,6 +533,88 @@ def _norm_type(t: str) -> str:
     return "tcp" if t in ("", "raw", "none", "tcp") else t
 
 
+_FRONT_HOST_BAD_CHARS = frozenset(' \t\r\n/:@?#{}"\\,;|<>()[]')
+
+
+def _is_plausible_fronting_host(v: str) -> bool:
+    """آیا `v` می‌تواند واقعاً یک دامنهٔ fronting باشد؟ — **فقط نحوی، بدونِ DNS**.
+
+    چرا لازم است: `dedup_key` وقتی `sni`/`host` وجود دارد، **میزبانِ واقعی را
+    دور می‌ریزد** (`host_for_key = ""`) و هویتِ سرور را به همان مقدار می‌سپارد.
+    اگر آن مقدار زباله باشد، دو سرورِ کاملاً متفاوت که زبالهٔ مشترک دارند یک
+    هویت می‌شوند و در `aggregate.py` یکی‌شان به `duplicates` می‌رود و
+    **منتشر نمی‌شود**. نمونه‌های واقعیِ سنجیده‌شده در پیکرهٔ زنده:
+
+        sni=https%3A%2F%2Ft.me%2Foneclickvpnkeys → «https://t.me/oneclickvpnkeys»
+        sni=t.me%2Fripaojiedian                  → «t.me/ripaojiedian»
+        sni=rd.autos.yahoo.com:40069             → پورت داخلِ نامِ میزبان
+        host=d2e1v87ko56lyw.cloudfront.net:assets.opensignal.com
+        host={"host":"..."}                      → بلوکِ JSON
+        host=/?bia_telegram@marambashi_...       → مسیر و پارامتر
+        host=v2raynplus--v2raynplus--v2raynplus  → تک‌برچسبی، نامِ کانال
+
+    قاعده‌ها و دلیلِ هرکدام:
+      • بدونِ DNS و بدونِ فهرستِ TLD — این تابع روی **هر خط** صدا زده می‌شود، پس
+        باید خالص و ارزان بماند. (پس مثلاً `fuck.rkn` که TLDش در IANA نیست
+        **گرفته نمی‌شود** — آگاهانه بیرون از دامنه است.)
+      • حداقل یک نقطه لازم است: یک دامنهٔ frontingِ عمومی همیشه FQDN است.
+        اندازه‌گیری: پذیرشِ مقادیرِ تک‌برچسبی باعث می‌شد ۱۲ افراز، **یک** نقطهٔ
+        پایانیِ واقعی را به دو کلید ببرند.
+      • یک نقطهٔ پایانی (FQDNِ ریشه‌لنگر، مثلِ `example.com.`) قانونی است و
+        نباید رد شود؛ در نسخهٔ اولِ ابزارِ سنجشم همین مورد ۴ مثبتِ کاذب ساخت.
+    """
+    if not v or len(v) > 253:
+        return False
+    if v.startswith("[") and v.endswith("]") and len(v) > 2:
+        return True                              # لیترالِ IPv6
+    for ch in v:
+        if ch in _FRONT_HOST_BAD_CHARS:
+            return False
+    if v.endswith("."):
+        v = v[:-1]
+    if not v or ".." in v or "." not in v:
+        return False
+    for lab in v.split("."):
+        if not lab or len(lab) > 63:
+            return False
+        if lab[0] == "-" or lab[-1] == "-":
+            return False
+        for ch in lab:
+            if not (ch.isascii() and (ch.isalnum() or ch == "-")):
+                return False
+    return True
+
+
+def _sni_is_endpoint(security: str) -> bool:
+    """آیا `sni` را می‌توان «نقطهٔ پایانیِ واقعیِ» سرور شمرد؟
+
+    فقط برای TLSِ معمولی. دو واقعیتِ **مستندِ** پروتکلی:
+
+      ۱. SNI یک **افزونهٔ TLS** است. اگر `security` برابرِ none/غایب باشد هیچ
+         دست‌تکانیِ TLS رخ نمی‌دهد، پس کلاینت هرگز SNI نمی‌فرستد و آن پارامتر
+         **بی‌اثر** است؛ نمی‌تواند سازوکارِ رسیدن به یک backendِ متمایز باشد.
+
+      ۲. در **REALITY**، مقدارِ `serverName` عمداً دامنهٔ یک **سایتِ ثالث** است
+         که گواهی‌اش قرض گرفته می‌شود، نه میزبانِ خودِ سرور. مستنداتِ رسمیِ
+         XTLS (xtls.github.io/en/config/transports/reality.html):
+           «REALITY … uses the appearance and handshake characteristics of a
+            **target site** as camouflage.»
+           `serverNames`: «Usually this should stay consistent with `target`.»
+           «best practice … is still to **borrow certificates from the same
+            ASN**.»
+         پس دو سرورِ کاملاً متفاوت که یک دامنهٔ استتارِ مشترک قرض می‌گیرند،
+         پیش از این **یک هویت** شمرده می‌شدند و یکی‌شان حذف می‌شد.
+
+    اندازه‌گیریِ واقعی روی پیکرهٔ زنده (۱۸٬۷۳۵ خط): کلیدهایی که ≥۲ نقطهٔ پایانیِ
+    **واقعیِ متفاوت** را در خود جمع کرده بودند از **۶۴۱ به ۵۰۰** رسید، و
+    ادغامِ کاذبِ **تازه‌ساخته‌شده = ۰**.
+
+    ⚠️ پارامترِ `host` عمداً از این قاعده مستثناست: هدرِ HTTP `Host` سازوکارِ
+    دیگری است و در `type=ws` حتی بدونِ TLS هم مسیریابی می‌کند.
+    """
+    return security == "tls"
+
+
 def _norm_identity_value(key: str, val: str) -> str:
     v = (val or "").strip().lower()
     if key in ("sni", "host"):
@@ -575,6 +657,13 @@ def dedup_key(line: str) -> str:
             tls = "" if tls in ("", "none") else tls
             net = _norm_type(str(obj.get("net") or ""))
             path = str(obj.get("path") or "").rstrip("/")
+            # اعتبارسنجیِ مقدارِ fronting پیش از سپردنِ هویت به آن — چراییِ
+            # کامل در `_is_plausible_fronting_host` و `_sni_is_endpoint`.
+            if host and not _is_plausible_fronting_host(host):
+                host = ""
+            if sni and not (_is_plausible_fronting_host(sni)
+                            and _sni_is_endpoint(tls)):
+                sni = ""
             fronting = host or sni
             add_for_key = "" if fronting else add
             return (
@@ -654,6 +743,26 @@ def dedup_key(line: str) -> str:
         path = parsed.path.rstrip("/")
         sni_val = meaningful.get("sni", "")
         host_val = meaningful.get("host", "")
+        # ── اعتبارسنجیِ fronting ─────────────────────────────────────────────
+        # دو نوعِ **متفاوت** ردکردن، با پیامدهای متفاوت:
+        #   (۱) مقدار hostname معتبر **نیست** ⇒ زباله است و هیچ اطلاعِ هویتی
+        #       ندارد ⇒ کاملاً از `meaningful` حذف می‌شود. اگر فقط «تنزیل» شود و
+        #       در query بماند، همان زباله هویت را می‌شکند: سنجیده شد که ۳۶
+        #       افراز، **یک** نقطهٔ پایانیِ واقعی را به چند کلید می‌بردند، چون
+        #       یک خط `host=/?bia_telegram@…` داشت و خطِ دیگر نداشت.
+        #   (۲) مقدار معتبر است ولی قاعدهٔ TLS/REALITY آن را نقطهٔ پایانی
+        #       نمی‌داند ⇒ یک پارامترِ واقعیِ کانفیگ است و **در query می‌ماند**،
+        #       تا تمایزهای امروزی حفظ شوند و افرازِ تازه‌ای ساخته نشود.
+        security_val = meaningful.get("security", "")
+        if sni_val and not _is_plausible_fronting_host(sni_val):
+            sni_val = ""
+            meaningful.pop("sni", None)                       # (۱)
+        elif sni_val and not _sni_is_endpoint(security_val):
+            sni_val = ""                                      # (۲)
+        if host_val and not _is_plausible_fronting_host(host_val):
+            host_val = ""
+            meaningful.pop("host", None)                      # (۱)
+        # ─────────────────────────────────────────────────────────────────────
         fronting_domain = sni_val or host_val
         if fronting_domain:
             endpoint = fronting_domain
