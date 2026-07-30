@@ -913,6 +913,79 @@ def test_index_advertises_the_publish_branch_key():
     assert f"/{aggregate.GH_BRANCH}/" in idx["self_url"], idx["self_url"]
 
 
+def test_no_tracked_file_advertises_a_retired_branch():
+    """T13 — هیچ فایلِ مخزن نباید URLِ محتوایی روی شاخه‌ای غیر از شاخهٔ انتشار بدهد.
+
+    باگِ واقعیِ کشف‌شده و اندازه‌گیری‌شده: خروجی‌ها یک بار به شاخهٔ orphanِ `data`
+    منتقل شدند و README به مدتِ **۸ ساعت و ۲۱ دقیقه و ۲۹ ثانیه**
+    (کامیت `1c85af3` در 2026-07-28T22:33:08Z تا `d5a31d8` در 2026-07-29T06:54:37Z)
+    نُه لینکِ `…/data/…` را تبلیغ کرد. آن شاخه در 2026-07-30 بازنشسته شد، پس هر
+    لینکِ جامانده حالا یک ۴۰۴ است.
+
+    تستِ قبلی (`test_docs_advertise_the_default_branch_only`) فقط دو README را
+    می‌خواند. این تست عمداً **کلِ درختِ ردگیری‌شده** را می‌خواند، چون آن دفعه
+    نشتی نه‌فقط در README بود: `index.json` هم `raw_base`/`self_url` را روی شاخهٔ
+    اشتباه منتشر می‌کرد و مصرف‌کنندهٔ ماشینی از همان فایل ۵۶ لینکِ دیگر را کشف
+    می‌کرد.
+
+    نکتهٔ اندازه‌گیری‌شده: فقط دو هاستِ *محتوا* سنجیده می‌شوند
+    (`raw.githubusercontent.com` و `cdn.jsdelivr.net`). نشانِ وضعیتِ
+    `github.com/<owner>/<repo>/actions/...` در سطرِ ۳ هر دو README عمداً مطابقت
+    نمی‌کند، چون آن URL محتوای اشتراک نیست و شاخه‌ای در مسیرش ندارد.
+    """
+    import re as _re
+    import subprocess as _sp
+    import aggregate
+
+    repo = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    owner, name, branch = aggregate.GH_USER, aggregate.GH_REPO, aggregate.GH_BRANCH
+
+    # فهرستِ فایل‌ها از خودِ گیت گرفته می‌شود تا فایل‌های موقتِ محلی
+    # (که در چک‌اوتِ CI وجود ندارند) مثبتِ کاذب نسازند. اگر گیت نبود،
+    # به پیمایشِ فایل‌سیستم برمی‌گردیم — تست نباید به گیت وابسته باشد.
+    try:
+        out = _sp.run(["git", "-C", repo, "ls-files", "-z"],
+                      capture_output=True, check=True).stdout
+        files = [f.decode("utf-8") for f in out.split(b"\0") if f]
+    except Exception:
+        files = []
+        for root, dirs, names in os.walk(repo):
+            dirs[:] = [d for d in dirs if d not in (".git", ".wrangler", "node_modules")]
+            for n in names:
+                files.append(os.path.relpath(os.path.join(root, n), repo))
+    assert len(files) >= 20, f"suspiciously few files to scan: {len(files)}"
+
+    pats = (
+        _re.compile(_re.escape(f"raw.githubusercontent.com/{owner}/{name}/")
+                    + r"([A-Za-z0-9_.\-]+)"),
+        _re.compile(_re.escape(f"cdn.jsdelivr.net/gh/{owner}/{name}@")
+                    + r"([A-Za-z0-9_.\-]+)"),
+    )
+
+    seen = 0
+    offenders = []
+    for rel in files:
+        path = os.path.join(repo, rel)
+        if not os.path.isfile(path):
+            continue
+        try:
+            txt = open(path, encoding="utf-8", errors="replace").read()
+        except OSError:
+            continue
+        for pat in pats:
+            for m in pat.finditer(txt):
+                seen += 1
+                if m.group(1) != branch:
+                    offenders.append(f"{rel}: {m.group(0)}")
+
+    assert not offenders, (
+        f"{len(offenders)} content URL(s) still pinned to a retired branch "
+        f"(publish branch is {branch!r}):\n  " + "\n  ".join(offenders[:20]))
+    # ★ تستِ توخالی ممنوع: اگر الگو هیچ‌چیز پیدا نکند، assertِ بالا هم بی‌معنی است.
+    assert seen >= 40, \
+        f"the scanner matched only {seen} content URLs — the pattern is broken"
+
+
 # ──────────────────────────────────────────────────────────────────────────────
 # C3/C4/C12/C13 — حذفِ حدسِ دوحرفی و مرزِ واژه در کلیدواژه‌ها
 #
