@@ -61,6 +61,7 @@ import json
 import os
 import statistics
 import sys
+import time
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 from urllib.parse import parse_qs, unquote, urlsplit
 
@@ -68,6 +69,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import realtest  # noqa: E402
 import reachability  # noqa: E402
+import filters  # noqa: E402
 import converters  # noqa: E402
 import core  # noqa: E402
 
@@ -405,17 +407,184 @@ def write_buckets(out_dir: str, buckets: Dict[str, Any]) -> Dict[str, str]:
     return written
 
 
+#: از کجا کشورِ خروج پرسیده می‌شود. عمداً **همان میزبانی** است که خودِ آزمون
+#: به آن وصل می‌شود (`realtest.TEST_URL`)، پس نه دامنهٔ تازه‌ای اضافه می‌کند و
+#: نه وابستگیِ تازه‌ای. سنجیده شد: از سندباکس `loc=US colo=IAD` و از سرورِ
+#: آلمان `loc=DE colo=FRA` برمی‌گرداند.
+TRACE_URL = "https://cp.cloudflare.com/cdn-cgi/trace"
+
+
+def exit_country(timeout: float = 10.0) -> Optional[Dict[str, str]]:
+    """
+    کشورِ **خروجِ** ماشینی که آزمون را اجرا می‌کند.
+
+    چرا لازم است: برچسبِ `verified` یعنی «از دیدگاهِ همین ماشین کار کرد».
+    کاربرِ ایرانی که فهرست را از runnerِ آمریکایی می‌گیرد باید بداند این
+    سنجش از کجا انجام شده. بدونِ این فیلد، عددها بی‌قید و در نتیجه
+    گمراه‌کننده‌اند.
+
+    «بهترین تلاش» است: هر خطایی → `None`. یک گزارشِ ناقصِ سلامت هرگز نباید
+    انتشارِ کانفیگ‌ها را بشکند.
+    """
+    import urllib.request
+
+    try:
+        with urllib.request.urlopen(TRACE_URL, timeout=timeout) as resp:
+            body = resp.read(4096).decode("utf-8", "replace")
+    except Exception:  # noqa: BLE001
+        return None
+
+    out: Dict[str, str] = {}
+    for row in body.splitlines():
+        k, _, v = row.partition("=")
+        if k in ("loc", "colo") and v:
+            out[k] = v
+    if not out:
+        return None
+    out["source"] = TRACE_URL
+    return out
+
+
+def merge_health(out_dir: str, cascade: Dict[str, Any]) -> Optional[str]:
+    """
+    بلوکِ `cascade` را به `health.json`ِ موجود **می‌افزاید**.
+
+    چرا افزودن و نه ساختن: `aggregate.py` این فایل را می‌سازد و در ورک‌فلو
+    **پیش از** آبشار اجرا می‌شود (آبشار به `all/configs.txt`ِ همان اجرا
+    نیاز دارد). پس آمارِ لایه‌ها نمی‌تواند از `build_health_report` بیاید و
+    باید بعداً ادغام شود.
+
+    اگر فایل نباشد یا خراب باشد، بی‌صدا رد نمی‌شود — هشدار می‌دهد ولی
+    استثنا پرتاب نمی‌کند، چون این فیلد **مانیتورینگ** است نه محصول.
+    """
+    path = os.path.join(out_dir, "health.json")
+    if not os.path.exists(path):
+        print(f"⚠️ {path} نیست؛ آمارِ لایه‌ها ادغام نشد", file=sys.stderr)
+        return None
+    try:
+        with open(path, "r", encoding="utf-8") as fh:
+            doc = json.load(fh)
+    except Exception as exc:  # noqa: BLE001
+        print(f"⚠️ {path} خوانده نشد ({exc}); آمارِ لایه‌ها ادغام نشد",
+              file=sys.stderr)
+        return None
+    if not isinstance(doc, dict):
+        print(f"⚠️ {path} یک شیء JSON نیست؛ ادغام نشد", file=sys.stderr)
+        return None
+
+    doc["cascade"] = cascade
+    tmp = path + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as fh:
+        json.dump(doc, fh, ensure_ascii=False, indent=2)
+        fh.write("\n")
+    os.replace(tmp, path)  # اتمیک: یک health.jsonِ نیم‌نوشته بدتر از هیچ است
+    return path
+
+
+def _pct(part: int, whole: int) -> float:
+    """درصدِ `part` از `whole`؛ تقسیم بر صفر → صفر، نه استثنا.
+
+    یک اجرای با ورودیِ تهی نباید گزارشِ سلامت را بشکند.
+    """
+    if not whole:
+        return 0.0
+    return round(100.0 * part / whole, 2)
+
+
 def run_pipeline(lines: Iterable[str], out_dir: str,
                  rounds: int = None, fast_ms: int = None,
                  top_n: int = None, **kwargs: Any) -> Dict[str, Any]:
-    """آبشارِ کامل: L0/L1 → L2 → L3×n → سبدها → فایل‌ها."""
+    """آبشارِ کامل: L0/L1 → L2 → L3×n → سبدها → فایل‌ها → health.json."""
+    lines = list(lines)
+    t_all = time.time()
+
+    # ── چرا L0/L1 دوباره صدا زده می‌شود ────────────────────────────────────
+    # `check_lines` خودش `filters.filter_lines` را می‌زند ولی تنها *خلاصهٔ*
+    # آن (`filter`) را بیرون می‌دهد؛ تفکیکِ **دلیلِ حذف** در کلیدِ `dropped`
+    # می‌ماند و به بیرون نمی‌رسد. B13 همان تفکیک را می‌خواهد. دو راهِ دیگر
+    # بدتر بودند: دست‌بردن در `filters.py`/`reachability.py` که هر دو
+    # جهش‌آزمایی و commit شده‌اند، یا بازنویسیِ منطقِ لایه در همین فایل که
+    # هدفِ «چیدن، نه تکرار کردن» را نقض می‌کرد. هزینه سنجیده شد:
+    # L0/L1 روی ۸۱۵۸ کانفیگ ۰٫۳۵ ثانیه است ⇒ ۰٫۲٪ از ۱۴۹ ثانیهٔ آبشار.
+    t = time.time()
+    pre = filters.filter_lines(lines)
+    l01_s = round(time.time() - t, 2)
+
+    t = time.time()
     l2 = reachability.check_lines(lines)
+    l2_s = round(time.time() - t, 2)
     open_lines = l2["kept_open"]
+
+    t = time.time()
     rr = run_l3_round(open_lines, rounds=rounds, **kwargs)
+    l3_s = round(time.time() - t, 2)
+
     buckets = build_buckets(rr, fast_ms=fast_ms, top_n=top_n)
     paths = write_buckets(out_dir, buckets)
-    buckets["stats"]["l2"] = l2["stats"]
+    st = buckets["stats"]
+    st["l2"] = l2["stats"]
     buckets["paths"] = paths
+
+    total_s = round(time.time() - t_all, 2)
+    cascade = {
+        "exit_country": exit_country(),
+        "layers": {
+            "l0_l1": {
+                "in": pre["stats"]["input"],
+                "out": pre["stats"]["kept"],
+                "dropped": pre["dropped"],
+                "endpoints_unique": pre["stats"]["endpoints_unique"],
+                "dedup_saving_pct": pre["stats"]["dedup_saving_pct"],
+                "seconds": l01_s,
+            },
+            # چرا `in` اینجا از `pre` می‌آید و نه از `configs_in`:
+            # `reachability.check_lines` سطرهای **خام** را می‌گیرد و خودش
+            # L0/L1 را از نو می‌زند، پس `configs_in` همان ورودیِ خام است
+            # (سنجیده شد: ۳۰۰ در حالی که L0/L1 تنها ۲۹۵ را نگه داشته بود).
+            # گزارش‌کردنِ ۳۰۰ در زنجیره‌ای که لایهٔ قبل ۲۹۵ بیرون داده،
+            # خواننده را به این نتیجه می‌رساند که ۵ کانفیگ از هیچ‌جا پیدا
+            # شده. چیزی که L2 واقعاً می‌سنجد `pre["kept"]` است، پس زنجیره
+            # باید ۳۰۰ → ۲۹۵ → ۶۹ خوانده شود.
+            # عددِ خودِ `reachability` حذف نمی‌شود — با نامِ صریحِ
+            # `open_pct_of_raw_input` می‌ماند تا کسی گمان نکند یک عددِ
+            # سنجیده‌شده را دستکاری کرده‌ام؛ فقط دو پرسشِ متفاوت‌اند.
+            "l2": {
+                "in": pre["stats"]["kept"],
+                "out": l2["stats"]["configs_open"],
+                "open_pct": _pct(l2["stats"]["configs_open"],
+                                 pre["stats"]["kept"]),
+                "open_pct_of_raw_input": l2["stats"]["configs_open_pct"],
+                "dns_failed": l2["stats"]["dns_failed"],
+                "dns_seconds": l2["stats"]["dns_s"],
+                "tcp_seconds": l2["stats"]["tcp_s"],
+                "fd_before": l2["stats"]["fd_before"],
+                "fd_after": l2["stats"]["fd_after"],
+                "seconds": l2_s,
+            },
+            "l3": {
+                "in": len(open_lines),
+                "rounds": st["rounds"],
+                "per_run_ok": st["per_run_ok"],
+                "ever_ok": st["ever_ok"],
+                "stable": st["stable"],
+                "flaky_pct": st["flaky_pct"],
+                "seconds": l3_s,
+            },
+        },
+        "buckets": {
+            "verified": st["verified"],
+            "fast": st["fast"],
+            "secure": st["secure"],
+            "top": st["top"],
+            "top_short_by": st["top_short_by"],
+            "fast_threshold_ms": st["fast_threshold_ms"],
+        },
+        "total_seconds": total_s,
+    }
+    st["cascade"] = cascade
+    health = merge_health(out_dir, cascade)
+    if health:
+        buckets["paths"]["health.json"] = health
     return buckets
 
 

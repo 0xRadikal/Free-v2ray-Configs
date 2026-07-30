@@ -3389,6 +3389,268 @@ def test_pipeline_output_survives_the_publication_gate():
 
 
 # ──────────────────────────────────────────────────────────────────────────────
+# B13 — آمارِ هر لایه و کشورِ خروج در health.json
+# ──────────────────────────────────────────────────────────────────────────────
+
+def test_pipeline_merges_layer_stats_into_health_without_losing_anything():
+    """
+    `health.json` را `aggregate.py` می‌سازد و **پیش از** آبشار اجرا می‌شود.
+    پس ادغام باید افزایشی باشد: اگر آبشار فایل را بازنویسی کند، آمارِ
+    منابع و مبدل‌ها و GeoIP نابود می‌شود و مانیتورینگ کور می‌شود.
+    """
+    import tempfile
+
+    with tempfile.TemporaryDirectory() as out:
+        original = {
+            "brand": "@Raydikalx",
+            "summary": {"total": 21, "ok": 21, "empty": 0, "fail": 0},
+            "sources": [{"url": "https://example.invalid/a", "status": "ok"}],
+            "converters": {"dropped": 7},
+            "geo": {"db_loaded": True},
+        }
+        hp = os.path.join(out, "health.json")
+        with open(hp, "w", encoding="utf-8") as fh:
+            json.dump(original, fh)
+
+        cascade = {"exit_country": {"loc": "US"}, "total_seconds": 149.34}
+        got = pipeline.merge_health(out, cascade)
+        assert got == hp, f"مسیرِ برگشتی غلط: {got!r}"
+
+        with open(hp, encoding="utf-8") as fh:
+            after = json.load(fh)
+
+        # کلیدِ تازه هست
+        assert after.get("cascade") == cascade, (
+            f"بلوکِ cascade درست نوشته نشد: {after.get('cascade')!r}")
+        # و **هیچ** کلیدِ قبلی گم نشده
+        for k, v in original.items():
+            assert after.get(k) == v, (
+                f"ادغام کلیدِ «{k}» را خراب کرد: {after.get(k)!r} در برابر {v!r}")
+
+
+def test_pipeline_survives_a_missing_or_broken_health_file():
+    """
+    آمارِ سلامت **مانیتورینگ** است، نه محصول. اگر `health.json` نبود یا
+    خراب بود، آبشار باید هشدار بدهد و رد شود — نه آن‌که کلِ انتشارِ
+    کانفیگ‌ها را با یک استثنا بشکند.
+    """
+    import contextlib
+    import io
+    import tempfile
+
+    def _warned(fn):
+        """(خروجی, هشدارِ چاپ‌شده روی stderr) را برمی‌گرداند."""
+        buf = io.StringIO()
+        with contextlib.redirect_stderr(buf):
+            value = fn()
+        return value, buf.getvalue()
+
+    with tempfile.TemporaryDirectory() as out:
+        # ۱) فایل وجود ندارد
+        got, warn_absent = _warned(lambda: pipeline.merge_health(out, {"x": 1}))
+        assert got is None, "نبودنِ health.json باید None بدهد، نه استثنا"
+
+        # ۲) JSONِ خراب
+        hp = os.path.join(out, "health.json")
+        with open(hp, "w", encoding="utf-8") as fh:
+            fh.write("{ this is not json")
+        got, warn_broken = _warned(lambda: pipeline.merge_health(out, {"x": 1}))
+        assert got is None, "JSONِ خراب باید None بدهد، نه استثنا"
+
+        # ۳) JSONِ درست ولی نه یک شیء (مثلاً آرایه)
+        with open(hp, "w", encoding="utf-8") as fh:
+            json.dump([1, 2, 3], fh)
+        got, warn_notdict = _warned(lambda: pipeline.merge_health(out, {"x": 1}))
+        assert got is None, "آرایهٔ JSON باید None بدهد، نه استثنا"
+
+        # ── و سه شکستِ بالا باید از هم **قابلِ تشخیص** باشند ───────────────
+        # هر سه `None` برمی‌گردانند، پس تنها چیزی که در لاگِ CI می‌ماند
+        # همین هشدار است. اگر پیام‌ها یکی شوند، نگهدارنده نمی‌فهمد فایل
+        # ساخته نشده یا ساخته و خراب شده — دو عیبِ کاملاً متفاوت با دو
+        # راه‌حلِ متفاوت. (جهشِ m5 نشان داد نگهبانِ os.path.exists از نظرِ
+        # مقدارِ بازگشتی زائد است و ارزشش فقط همین تفکیکِ تشخیصی است؛
+        # پس همان ارزش اینجا صریحاً سنجیده می‌شود.)
+        assert warn_absent.strip(), "نبودنِ فایل باید هشدار بدهد، نه سکوت"
+        assert warn_broken.strip(), "خرابیِ JSON باید هشدار بدهد، نه سکوت"
+        assert warn_notdict.strip(), "نوعِ نادرست باید هشدار بدهد، نه سکوت"
+        assert "نیست" in warn_absent, (
+            f"هشدارِ «نبودنِ فایل» باید همین را بگوید: {warn_absent!r}")
+        assert warn_absent != warn_broken, (
+            "هشدارِ «فایل نیست» و «فایل خراب است» یکی شده‌اند؛ "
+            f"عیب‌یابی در CI کور می‌شود: {warn_absent!r}")
+        assert warn_broken != warn_notdict, (
+            "هشدارِ «JSONِ خراب» و «شیء نبودن» یکی شده‌اند: "
+            f"{warn_broken!r}")
+
+
+def test_pipeline_exit_country_never_raises_and_parses_the_real_format():
+    """
+    کشورِ خروج باید «بهترین تلاش» باشد. این تست شکلِ **واقعیِ** پاسخِ
+    `cdn-cgi/trace` را تزریق می‌کند (سنجیده شد: کلیدهای `key=value` در
+    خطوطِ جدا، شاملِ `loc` و `colo`) و بعد شبکه را می‌شکند تا ثابت شود
+    خطا به بالا پرت نمی‌شود.
+    """
+    import urllib.request
+
+    real_body = (b"fl=123abc\nh=cp.cloudflare.com\nip=203.0.113.7\n"
+                 b"ts=1785367152.1\nvisit_scheme=https\ncolo=IAD\n"
+                 b"sliver=none\nhttp=http/2\nloc=US\ntls=TLSv1.3\n")
+
+    class _Resp:
+        def read(self, n=-1):
+            return real_body
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+    orig = urllib.request.urlopen
+    try:
+        urllib.request.urlopen = lambda *a, **k: _Resp()
+        got = pipeline.exit_country()
+        assert got is not None, "پاسخِ سالم باید تجزیه شود"
+        assert got.get("loc") == "US", f"loc غلط: {got!r}"
+        assert got.get("colo") == "IAD", f"colo غلط: {got!r}"
+        assert got.get("source") == pipeline.TRACE_URL, f"source غلط: {got!r}"
+        # ip نباید در گزارشِ عمومی بیفتد
+        assert "ip" not in got, f"نشانیِ IP نباید منتشر شود: {got!r}"
+
+        # شبکه خراب ⇒ None، نه استثنا
+        def boom(*a, **k):
+            raise OSError("network is unreachable")
+
+        urllib.request.urlopen = boom
+        assert pipeline.exit_country() is None, (
+            "خطای شبکه باید None بدهد، نه استثنا")
+
+        # پاسخی که هیچ کلیدی ندارد — مثلاً صفحهٔ خطای یک captive portal یا
+        # یک پراکسیِ میانی. این حالت با «خطای شبکه» یکی نیست: اتصال موفق
+        # است ولی محتوا بی‌ربط. باید None بدهد، نه نقشهٔ تهی؛ چون `{}` در
+        # health.json یعنی «سنجیده شد و کشوری نداشت» در حالی که واقعیت
+        # «سنجیده نشد» است و این دو برای عیب‌یابی یکی نیستند.
+        # (این حالت با جهشِ m4 کشف شد: آزمونِ قبلی این شاخه را نمی‌سنجید.)
+        class _Html:
+            def read(self, n=-1):
+                return b"<html><body>403 Forbidden</body></html>"
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+
+        urllib.request.urlopen = lambda *a, **k: _Html()
+        got_html = pipeline.exit_country()
+        assert got_html is None, (
+            f"پاسخِ غیرقابل‌تجزیه باید None بدهد، نه {got_html!r}")
+    finally:
+        urllib.request.urlopen = orig
+
+
+def test_pipeline_reports_every_layer_with_input_output_time_and_reasons():
+    """
+    B13 چهار چیز می‌خواهد: ورودی، خروجی، زمان، و **دلیلِ حذف** برای هر لایه.
+    این تست ساختار را روی یک اجرای واقعیِ آبشار (با L3ِ بدل) می‌سنجد.
+    """
+    import tempfile
+
+    good = "vless://a@1.1.1.1:443?security=tls#a"
+    rows = [_pl_row(good, delay=100)]
+
+    # ── چرا ورودی **نامتقارن** است ─────────────────────────────────────────
+    # یک سطرِ نامعتبر لازم است تا «ورودیِ خام» و «چیزی که از L0/L1 رد شد»
+    # دو عددِ متفاوت باشند (سنجیده شد: input=2 ولی kept=1). با ورودیِ
+    # یک‌سطریِ سالم هر دو برابرِ ۱ می‌شوند و تست نسبت به این اشتباه که
+    # ورودیِ L2 از شمارشِ خام برداشته شود **کور** می‌ماند — دقیقاً همان
+    # اشتباهی که در اجرای زنده رخ داد (۳۰۰ در برابرِ ۲۹۵).
+    # همچنین دو نرخِ عبور از هم جدا می‌شوند: ۱/۲=۵۰٪ در برابرِ ۱/۱=۱۰۰٪.
+    lines = [good, "این یک کانفیگ نیست"]
+
+    with tempfile.TemporaryDirectory() as out:
+        with open(os.path.join(out, "health.json"), "w", encoding="utf-8") as fh:
+            json.dump({"brand": "@Raydikalx", "sources": []}, fh)
+
+        real_check = reachability.check_lines
+        real_country = pipeline.exit_country
+        try:
+            # بدل، رفتارِ **واقعیِ** `check_lines` را بازمی‌سازد: سطرهای خام
+            # را می‌گیرد و `configs_in` را برابرِ ورودیِ خام می‌گذارد،
+            # و `configs_open_pct` را هم نسبت به همان خام حساب می‌کند.
+            reachability.check_lines = lambda L: {
+                "kept_open": [good],
+                "stats": {"configs_in": 2, "configs_open": 1,
+                          "configs_open_pct": 50.0, "dns_failed": 0,
+                          "dns_s": 0.1, "tcp_s": 0.2,
+                          "fd_before": 4, "fd_after": 4},
+            }
+            pipeline.exit_country = lambda *a, **k: {"loc": "US", "colo": "IAD"}
+            with _StubL3([rows, rows, rows]):
+                res = pipeline.run_pipeline(lines, out)
+        finally:
+            reachability.check_lines = real_check
+            pipeline.exit_country = real_country
+
+        casc = res["stats"]["cascade"]
+        assert casc["exit_country"]["loc"] == "US", (
+            f"کشورِ خروج ثبت نشد: {casc.get('exit_country')!r}")
+
+        layers = casc["layers"]
+        for name in ("l0_l1", "l2", "l3"):
+            assert name in layers, f"لایهٔ «{name}» در گزارش نیست: {list(layers)}"
+            assert "seconds" in layers[name], f"زمانِ «{name}» ثبت نشده"
+            assert isinstance(layers[name]["seconds"], (int, float)), (
+                f"زمانِ «{name}» عدد نیست: {layers[name]['seconds']!r}")
+
+        for name in ("l0_l1", "l2"):
+            for k in ("in", "out"):
+                assert k in layers[name], f"«{k}» برای «{name}» ثبت نشده"
+
+        # دلیلِ حذف — همان چیزی که `check_lines` بیرون نمی‌دهد
+        dropped = layers["l0_l1"]["dropped"]
+        assert isinstance(dropped, dict), f"dropped باید نقشه باشد: {dropped!r}"
+        for reason in (filters.REASON_UNPARSABLE, filters.REASON_INVALID_PORT,
+                       filters.REASON_INVALID_UUID, filters.REASON_UNROUTABLE,
+                       filters.REASON_INVALID_SERVER):
+            assert reason in dropped, (
+                f"دلیلِ «{reason}» در گزارش نیست: {sorted(dropped)}")
+
+        assert layers["l3"]["rounds"] == 3, f"تعدادِ راند: {layers['l3']!r}"
+        assert casc["total_seconds"] >= 0
+
+        # ── زنجیره باید حسابی درست باشد ────────────────────────────────────
+        # خروجیِ هر لایه ورودیِ لایهٔ بعد است. این در یک اجرای واقعی نقض
+        # شده بود: `reachability.check_lines` سطرهای خام را می‌گیرد و
+        # `configs_in` را برابرِ ورودیِ **خام** می‌گذارد (۳۰۰) در حالی که
+        # L0/L1 تنها ۲۹۵ را نگه داشته بود. گزارش این‌طور خوانده می‌شد که
+        # ۵ کانفیگ از هیچ‌جا پیدا شده‌اند.
+        assert layers["l2"]["in"] == layers["l0_l1"]["out"], (
+            f"زنجیره پاره است: L0/L1 خروجی={layers['l0_l1']['out']} ولی "
+            f"ورودیِ L2={layers['l2']['in']}")
+        assert layers["l3"]["in"] == layers["l2"]["out"], (
+            f"زنجیره پاره است: L2 خروجی={layers['l2']['out']} ولی "
+            f"ورودیِ L3={layers['l3']['in']}")
+        # و `in`/`out` هر لایه باید با دلایلِ حذف جمع بزند
+        assert (layers["l0_l1"]["in"] - layers["l0_l1"]["out"]
+                == sum(layers["l0_l1"]["dropped"].values())), (
+            f"جمعِ دلایلِ حذف با اختلافِ ورودی/خروجی نمی‌خواند: "
+            f"{layers['l0_l1']!r}")
+        # درصدِ عبورِ L2 باید نسبت به ورودیِ **همان لایه** باشد
+        exp = round(100.0 * layers["l2"]["out"] / layers["l2"]["in"], 2)
+        assert abs(layers["l2"]["open_pct"] - exp) < 0.01, (
+            f"open_pct نسبت به ورودیِ لایه نیست: "
+            f"{layers['l2']['open_pct']} در برابرِ {exp}")
+
+        # و در health.json هم نشسته باشد
+        with open(os.path.join(out, "health.json"), encoding="utf-8") as fh:
+            doc = json.load(fh)
+        assert doc.get("brand") == "@Raydikalx", "ادغام brand را پاک کرد"
+        assert doc["cascade"]["layers"]["l3"]["rounds"] == 3, (
+            "بلوکِ cascade در health.json ننشست")
+
+
+# ──────────────────────────────────────────────────────────────────────────────
 # B5 در CI — گامِ آبشار در ورک‌فلو
 # ──────────────────────────────────────────────────────────────────────────────
 
