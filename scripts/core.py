@@ -538,6 +538,29 @@ def _norm_type(t: str) -> str:
     return "tcp" if t in ("", "raw", "none", "tcp") else t
 
 
+#: پروتکل‌هایی که `insecure` را واقعاً امیت می‌کنند: `converters.py:896`/`:915`
+#: (`skip-cert-verify` در clash) و `converters.py:1179`/`:1193`
+#: (`tls.insecure` در sing-box). vless/trojan هیچ‌کدام را نمی‌نویسند.
+_INSECURE_SCHEMES = frozenset({"hysteria2", "hy2", "tuic"})
+
+#: نگارشِ **حرف‌به‌حرفِ** کلیدهایی که `converters.py:691-692` و `:727`
+#: می‌خوانند. عمداً کوچک نمی‌شوند: اگر منبع `allowinsecure` تمام‌کوچک بنویسد،
+#: مبدّل آن را **نمی‌بیند** پس به خروجی نمی‌رسد و نباید در کلید وزن بگیرد.
+_INSECURE_KEYS = ("insecure", "allowInsecure", "allow_insecure")
+
+#: عیناً `converters.py:507` (`_truthy`).
+_TRUTHY_VALUES = frozenset({"1", "true", "yes", "on"})
+
+
+def _insecure_flag(raw_params: dict) -> str:
+    """«۱» یا «۰» — دقیقاً همان چیزی که مبدّل از این خط برداشت می‌کند."""
+    for k in _INSECURE_KEYS:
+        v = raw_params.get(k)
+        if v:
+            return "1" if str(v[0] or "").strip().lower() in _TRUTHY_VALUES else "0"
+    return "0"
+
+
 _FRONT_HOST_BAD_CHARS = frozenset(' \t\r\n/:@?#{}"\\,;|<>()[]')
 
 
@@ -717,9 +740,49 @@ def dedup_key(line: str) -> str:
             # کامل در `_is_plausible_fronting_host` و `_sni_is_endpoint`.
             if host and not _is_plausible_fronting_host(host):
                 host = ""
+            # `sni` تنها وقتی «نقطهٔ پایانی» است که TLS آن را نامِ سرور کند.
+            # این نگهبان دست‌نخورده می‌ماند؛ رسیدنِ `sni` به خروجی از راهِ
+            # **دیگر** (servername/هدرِ Host، بی‌نیاز از TLS) پایین‌تر با
+            # مؤلفهٔ `srv=` پوشش داده می‌شود — فاز K / K-D.
             if sni and not (_is_plausible_fronting_host(sni)
                             and _sni_is_endpoint(tls)):
                 sni = ""
+            # ★ فاز K / K-D — «نامِ سرورِ مؤثر» (effective servername).
+            #
+            # چرا لازم است: `converters.parse_proxy` در شاخهٔ vmess می‌نویسد
+            # `"sni": _clean_sni(obj.get("sni") or obj.get("host"))`
+            # (`converters.py:558`) و `_to_clash_proxy` آن را **بی‌قید و شرط**
+            # امیت می‌کند: `if p["sni"]: out["servername"] = p["sni"]`
+            # (`converters.py:854-855`) — نه TLS شرطش است و نه transport.
+            # پس `sni` حتی در `net=tcp`/`grpc` و بی‌TLS هم به خروجی می‌رسد.
+            # سنجشِ مستقیمِ بایت‌ها (۳ جفتِ همزاد، `/tmp/k5_diag.py`):
+            #     net=tcp  + sni  ⇒ clash `servername` هست / نیست  → متفاوت
+            #     host + sni متفاوت ⇒ `servername` دو مقدارِ متفاوت → متفاوت
+            #     net=grpc + sni  ⇒ `servername` هست / نیست        → متفاوت
+            # نگهبانِ بالا این مقدار را صفر می‌کند، پس بی این مؤلفه هر سه
+            # جفت **یک کلید** می‌گرفتند و یکی خاموش به `r.duplicates` می‌رفت
+            # (زیانِ «الف»: حذفِ بی‌صدا). در پیکرهٔ امروز چنین جفتی نیست، پس
+            # نقصْ **نهفته** بود؛ ولی جهتِ زیان همان است و باید بسته شود.
+            #
+            # چرا `sni or host` و نه `sni` تنها: مبدّل همین fallback را دارد.
+            # نسخهٔ بی‌fallback سنجیده شد و **۳ افرازِ کاذب** ساخت، چون در
+            # پیکره خطوطی هستند که `sni == host` دارند و خطِ همزادشان `sni`
+            # ندارد — خروجی‌شان مو‌به‌مو یکسان است. با fallback: **۰**.
+            #
+            # کاملیِ اثبات‌شده: هر دو مصرف‌کنندهٔ خروجی تابعی از همین جفت‌اند —
+            # `servername = sni or host` و هدرِ Host در ws/h2/grpc
+            # (`converters.py:792` و `:1102`) `= host or sni`. کلید هم `host`
+            # را دارد و هم `sni or host`، پس جفت را یکتا تعیین می‌کند.
+            #
+            # سنجش روی پیکرهٔ کامل (۱۸٬۷۳۵ خط): این مؤلفه به‌تنهایی جای
+            # نگهبانِ فهرست‌محورِ K-C را می‌گیرد و **افرازِ یکسان** می‌سازد
+            # (loss ۴۷→۴۲، افرازِ کاذب ۰، گروهِ شکافته‌شده ۰) — پس فهرستِ
+            # `_HOST_HEADER_NETS` که داوریِ دستی دربارهٔ transportها بود
+            # حذف شد و یک دستهٔ کاملِ خطای آینده با آن رفت.
+            srv = _norm_identity_value(
+                "sni", str(obj.get("sni") or "") or str(obj.get("host") or ""))
+            if srv and not _is_plausible_fronting_host(srv):
+                srv = ""
             # ★ فاز J / J-7b: `host or sni` این دو را قاطی می‌کرد، پس
             # «host=X, sni=∅» و «host=∅, sni=X» یک کلید می‌گرفتند و یکی
             # خاموش حذف می‌شد — در حالی که محصول آن‌ها را به **دو فیلدِ
@@ -738,6 +801,16 @@ def dedup_key(line: str) -> str:
                 # قاعدهٔ «در تردید، ادغام نکن» می‌شکافیم.
                 f":{net}:{path}:{tls}"
                 f":{_norm_aid(obj.get('aid'))}"
+                # ★ فاز K / K-A: `scy` رمزنگاریِ VMess است و امیت می‌شود:
+                # `converters.py:551` آن را می‌خواند، `:852` به `cipher`
+                # (clash) و `:1143` به `security` (sing-box) می‌نویسد —
+                # **حرف‌به‌حرف و بی‌کوچک‌سازی**. پس کلید هم عیناً همان را
+                # می‌گیرد؛ کوچک‌کردنش «AUTO» و «auto» را ادغام می‌کرد در
+                # حالی که خروجی‌شان متفاوت است. سنجیده شد: ۱ کانفیگ نجات،
+                # ۰ افرازِ کاذب.
+                f":{str(obj.get('scy') or 'auto')}"
+                # ★ فاز K / K-D — چرایی در بالا، کنارِ محاسبهٔ `srv`.
+                f":srv={srv}"
             )
         except Exception:
             return line.split("#")[0].strip()[:120]
@@ -815,6 +888,13 @@ def dedup_key(line: str) -> str:
             nv = _norm_identity_value(kl, str(pv[0]) if pv else "")
             if nv != "":
                 meaningful[kl] = nv
+        # ★ فاز K / K-B: `insecure` تفاوتِ «گواهی را بررسی کن» و «نکن» است و
+        # در hysteria2/tuic به خروجی می‌رسد، پس هویت‌ساز است. دامنه‌اش عامدانه
+        # همان دو پروتکل است: افزودنِ بی‌دامنه سنجیده شد و **۷۶ افرازِ کاذب**
+        # ساخت، چون `_to_clash_proxy` برای vless/trojan هیچ `skip-cert-verify`
+        # نمی‌نویسد ⇒ پارامترِ نارسا. با دامنه: ۱ کانفیگ نجات، ۰ افرازِ کاذب.
+        if parsed.scheme.lower() in _INSECURE_SCHEMES:
+            meaningful["insecure"] = _insecure_flag(raw_params)
         username = urllib.parse.unquote(parsed.username or "").lower()
         password = urllib.parse.unquote(parsed.password or "").lower()
         conn_host = (parsed.hostname or "").lower()

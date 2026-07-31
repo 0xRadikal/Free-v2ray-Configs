@@ -6696,6 +6696,196 @@ def test_zz_j_phase_f_h_i_gains_intact():
         "دو میزبانِ متفاوت با fronting مشترک ادغام شدند ⇒ حذفِ خاموش")
 
 
+# ──────────────────────────────────────────────────────────────────────────────
+# فاز K — سه نقصِ اثبات‌شدهٔ کلید که تفاوتِ **رسیده‌به‌خروجی** را می‌بلعیدند
+#
+# روشِ داوری در همهٔ این تست‌ها یکی است و از خودِ محصول می‌آید: دو خط را
+# `dedup_key` تنها وقتی می‌تواند یکی بشمارد که `_to_clash_proxy` و
+# `_to_singbox_outbound` برایشان بایتِ یکسان بدهند. اگر خروجی متفاوت باشد و
+# کلید یکی، بازندهٔ گروه خاموش به `r.duplicates` می‌رود (`aggregate.py:259`)
+# ⇒ **حذفِ بی‌صدای یک کانفیگِ متمایز**. پس هر تست هر دو سو را می‌سنجد.
+# ──────────────────────────────────────────────────────────────────────────────
+
+_K_HY2 = ("hysteria2://pw@1.2.3.4:443?sni=a.example.com"
+          "&obfs=salamander&obfs-password=x")
+_K_TUIC = "tuic://uuid:pw@1.2.3.4:443?sni=a.example.com&congestion_control=bbr"
+_K_VLESS = "vless://u@1.2.3.4:443?security=tls&sni=a.example.com&type=tcp"
+_K_TROJAN = "trojan://pw@1.2.3.4:443?security=tls&sni=a.example.com&type=tcp"
+
+
+def _k_vm(**kw) -> str:
+    """vmess با پایهٔ **بی‌TLS** — چون نقصِ K-D دقیقاً در همین حالت بود."""
+    obj = {"add": "1.2.3.4", "port": "80",
+           "id": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+           "net": "ws", "path": "/x", "tls": "", "aid": "0"}
+    obj.update(kw)
+    return _j_vmess_obj(obj)
+
+
+def _k_emit(line: str):
+    """بایتِ خروجیِ محصول برای یک خط — نام/تگ حذف می‌شود چون هویت نیست."""
+    p = converters.parse_proxy(line)
+    if not p:
+        return None
+    import copy as _copy
+    cl = converters._to_clash_proxy(_copy.deepcopy(p))
+    sb = converters._to_singbox_outbound(_copy.deepcopy(p))
+    if cl:
+        cl.pop("name", None)
+    if sb:
+        sb.pop("tag", None)
+    return json.dumps([cl, sb], sort_keys=True, default=str)
+
+
+def _k_pair(a: str, b: str, want_same: bool, why: str) -> None:
+    """کلید و خروجی باید **هم‌داستان** باشند؛ ناهم‌داستانی خودش نقص است."""
+    ke = core.dedup_key(a) == core.dedup_key(b)
+    oe = _k_emit(a) == _k_emit(b)
+    assert oe == want_same, (
+        f"فرضِ تست دربارهٔ خروجی غلط است ({why}): "
+        f"خروجی {'یکسان' if oe else 'متفاوت'} شد")
+    assert ke == want_same, (
+        f"{why}: خروجی {'یکسان' if oe else 'متفاوت'} است ولی کلید "
+        f"{'یکی' if ke else 'دوتا'} شد\n  A={core.dedup_key(a)!r}\n  B={core.dedup_key(b)!r}")
+
+
+# ── K-A: رمزنگاریِ vmess (`scy`) ─────────────────────────────────────────────
+
+def test_zz_k_vmess_scy_is_identity():
+    """`scy` به `cipher` (clash) و `security` (sing-box) می‌رسد."""
+    _k_pair(_k_vm(scy="none"), _k_vm(scy="auto"), False, "scy=none در برابر auto")
+    _k_pair(_k_vm(scy="zero"), _k_vm(scy="auto"), False, "scy=zero در برابر auto")
+
+
+def test_zz_k_vmess_scy_absent_equals_auto():
+    """`converters.py:551` غایب را `auto` می‌کند، پس کلید هم باید یکی کند."""
+    _k_pair(_k_vm(), _k_vm(scy="auto"), True, "scy غایب در برابر auto")
+
+
+def test_zz_k_vmess_scy_case_preserved_like_the_product():
+    """مبدّل مقدار را **حرف‌به‌حرف** امیت می‌کند؛ کوچک‌سازی ادغامِ کاذب بود."""
+    _k_pair(_k_vm(scy="AUTO"), _k_vm(scy="auto"), False, "scy=AUTO در برابر auto")
+
+
+# ── K-B: `insecure` در hysteria2/tuic ───────────────────────────────────────
+
+def test_zz_k_insecure_is_identity_for_hysteria2_and_tuic():
+    """`skip-cert-verify` (clash) و `tls.insecure` (sing-box) امیت می‌شوند."""
+    for base in (_K_HY2, _K_TUIC):
+        _k_pair(base + "&insecure=1", base + "&insecure=0", False,
+                f"insecure=1/0 در {base.split(':')[0]}")
+        _k_pair(base + "&insecure=1", base, False,
+                f"insecure=1 در برابر غایب در {base.split(':')[0]}")
+
+
+def test_zz_k_insecure_absent_equals_false():
+    """غایب و هر مقدارِ نادرست ⇒ همان خروجی، پس همان کلید."""
+    for base in (_K_HY2, _K_TUIC):
+        for falsy in ("0", "false", "no", "off", ""):
+            _k_pair(base + f"&insecure={falsy}", base, True,
+                    f"insecure={falsy!r} باید با غایب یکی باشد")
+
+
+def test_zz_k_insecure_truthy_spellings_fold():
+    """`_truthy` مبدّل (`converters.py:507`) دقیقاً همین چهار مقدار را می‌پذیرد."""
+    keys = {core.dedup_key(_K_HY2 + f"&insecure={v}")
+            for v in ("1", "true", "yes", "on", "TRUE", " 1 ")}
+    assert len(keys) == 1, f"نگارش‌های هم‌معنا جدا افتادند: {keys}"
+    # نگارشِ حرف‌به‌حرفِ کلیدها — `converters.py:691`/`:727` دقیقاً همین‌ها را می‌خواند
+    for alt in ("allowInsecure", "allow_insecure"):
+        assert core.dedup_key(_K_HY2 + f"&{alt}=1") == \
+            core.dedup_key(_K_HY2 + "&insecure=1"), f"{alt} نادیده گرفته شد"
+
+
+def test_zz_k_insecure_has_no_weight_where_it_is_never_emitted():
+    """در vless/trojan هیچ‌کدام از دو مبدّل آن را نمی‌نویسد ⇒ نباید بشکافد.
+
+    نسخهٔ بی‌دامنهٔ این قاعده سنجیده شد: **۷۶ افرازِ کاذب**.
+    """
+    for base in (_K_VLESS, _K_TROJAN):
+        _k_pair(base + "&insecure=1", base, True,
+                f"insecure در {base.split(':')[0]} نارساست")
+
+
+# ── K-D: نامِ سرورِ مؤثر (`sni or host`) ────────────────────────────────────
+
+def test_zz_k_vmess_sni_reaches_output_without_tls():
+    """`converters.py:854-855` `servername` را **بی‌قید** امیت می‌کند.
+
+    پس در `net=tcp` و `net=grpc` — که هیچ هدرِ Host هم ندارند — باز هم
+    تفاوت به خروجی می‌رسد. این نقص **نهفته** بود: در پیکرهٔ آن روز جفتش
+    نبود، ولی جهتش «حذفِ خاموش» است.
+    """
+    for net in ("tcp", "grpc", "ws", "httpupgrade", "h2"):
+        _k_pair(_k_vm(net=net, sni="front.example.com"), _k_vm(net=net),
+                False, f"sni در net={net}")
+
+
+def test_zz_k_vmess_sni_falls_back_to_host_like_the_product():
+    """`sni or host` — بی این fallback ۳ افرازِ کاذبِ سنجیده‌شده می‌ساخت."""
+    for net in ("ws", "tcp", "grpc"):
+        _k_pair(_k_vm(net=net, host="h.example.com", sni="h.example.com"),
+                _k_vm(net=net, host="h.example.com"), True,
+                f"sni==host در net={net} باید یکی شود")
+
+
+def test_zz_k_vmess_host_dominant_sni_still_splits():
+    """`host` هست ولی `sni` متفاوت ⇒ `servername` دو مقدارِ متفاوت."""
+    _k_pair(_k_vm(host="h.example.com", sni="front.example.com"),
+            _k_vm(host="h.example.com"), False, "host + sniِ متفاوت")
+
+
+def test_zz_k_vmess_two_different_snis_split():
+    _k_pair(_k_vm(sni="a.example.com"), _k_vm(sni="b.example.com"), False,
+            "دو sniِ متفاوت")
+
+
+def test_zz_k_vmess_garbage_sni_does_not_split():
+    """`_clean_sni` زباله را دور می‌ریزد، پس کلید هم نباید رویش بشکافد."""
+    _k_pair(_k_vm(sni="t.me/x"), _k_vm(), True, "sniِ زباله در برابر غایب")
+    _k_pair(_k_vm(sni="t.me/x"), _k_vm(sni="https%3A%2F%2Ft.me%2Fone"), True,
+            "دو زبالهٔ متفاوت، هر دو حذف‌شده")
+
+
+def test_zz_k_srv_component_is_vmess_scoped_and_present():
+    """مؤلفه فقط در شاخهٔ vmess است — شاخهٔ عمومی سازوکارِ خودش را دارد."""
+    assert "srv=" in core.dedup_key(_k_vm()), core.dedup_key(_k_vm())
+    for other in (_K_VLESS, _K_TROJAN, _K_HY2, _K_TUIC):
+        assert "srv=" not in core.dedup_key(other), other
+
+
+def test_zz_k_srv_is_deterministic_and_never_empty_key():
+    line = _k_vm(sni="front.example.com", net="grpc")
+    keys = {core.dedup_key(line) for _ in range(5)}
+    assert len(keys) == 1 and keys.pop() != "", "کلید ناپایدار یا تهی"
+
+
+def test_zz_k_phase_hij_endpoint_marking_intact():
+    """مسیرِ TLS دست‌نخورده: `ep=host~sni` و شکافتنِ دو میزبانِ متفاوت."""
+    k = core.dedup_key(_k_vm(tls="tls", sni="front.example.com"))
+    assert "~front.example.com" in k, k
+    a = core.dedup_key(_k_vm(add="1.2.3.4", tls="tls", host="cdn.example.com"))
+    b = core.dedup_key(_k_vm(add="5.6.7.8", tls="tls", host="cdn.example.com"))
+    assert a != b, "دو میزبانِ واقعیِ متفاوت با fronting مشترک ادغام شدند"
+
+
+def test_zz_k_key_and_product_never_disagree():
+    """جمعِ همهٔ سناریوهای فاز K در یک جدول — کلید و خروجی هم‌داستان‌اند."""
+    cases = [
+        (_k_vm(), _k_vm(scy="auto"), True),
+        (_k_vm(scy="AUTO"), _k_vm(scy="auto"), False),
+        (_k_vm(net="tcp", sni="f.example.com"), _k_vm(net="tcp"), False),
+        (_k_vm(net="grpc", sni="f.example.com"), _k_vm(net="grpc"), False),
+        (_k_vm(host="h.example.com", sni="h.example.com"),
+         _k_vm(host="h.example.com"), True),
+        (_k_vm(sni="t.me/x"), _k_vm(), True),
+        (_K_HY2 + "&insecure=1", _K_HY2, False),
+        (_K_VLESS + "&insecure=1", _K_VLESS, True),
+    ]
+    for a, b, same in cases:
+        _k_pair(a, b, same, "جدولِ جمعیِ فاز K")
+
+
 def _run_all() -> int:
     tests = [(n, f) for n, f in sorted(globals().items())
              if n.startswith("test_") and callable(f)]
