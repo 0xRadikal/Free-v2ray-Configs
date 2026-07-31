@@ -5416,8 +5416,18 @@ def test_zz_f_ss_legacy_no_at():
     """S8 — بدنهٔ legacy (بی '@') باید ss:legacy بدهد."""
     body = base64.b64encode(b"aes-256-gcm:pw@1.2.3.4:8388").decode("ascii")
     key = core.dedup_key(f"ss://{body}")
-    assert key.startswith("ss:legacy:"), f"key={key!r}"
+    # ★ فاز J / J-4: بدنهٔ رمزگشودهٔ legacy دقیقاً
+    # `method:pass@host:port` است — همان چیزی که شاخهٔ sip002 از
+    # اجزا می‌سازد؛ پس یکسان‌سازی هم‌ارزی است، نه ادغامِ
+    # کاذب: برخورد تنها وقتی رخ می‌دهد که method و گذرواژه و
+    # میزبان و پورت هر چهار یکی باشند ⇒ همان سرور.
+    assert key == "ss:sip002:aes-256-gcm:pw@1.2.3.4:8388", f"key={key!r}"
     assert "1.2.3.4" in key
+    # ★ خودِ هدفِ J-4: همین کانفیگ در فرمِ sip002 باید **همان**
+    # کلید را بدهد. پیش از وصله دو کلیدِ متفاوت می‌ساختند و
+    # یک کانفیگ دو بار منتشر می‌شد (اندازه‌گیری: ۴ مورد).
+    _ui = base64.b64encode(b"aes-256-gcm:pw").decode("ascii")
+    assert core.dedup_key(f"ss://{_ui}@1.2.3.4:8388") == key
 
 
 def test_zz_f_ss_legacy_not_base64_fallback():
@@ -5843,7 +5853,16 @@ def test_zz_h_vmess_reality_sni_keeps_add():
 def test_zz_h_vmess_tls_valid_sni_unchanged():
     add, front = _h_vmess_parts(core.dedup_key(
         _h_vmess(tls="tls", sni="cdn.example.com")))
-    assert front == "cdn.example.com", (add, front)
+    # ★ فاز J / J-7b: `fronting` دیگر `host or sni` نیست؛ دو منبع
+    # صریحاً تفکیک می‌شوند («میزبان~sni»)، چون محصول آن‌ها را به
+    # دو فیلدِ متفاوت امیت می‌کند (`Host` و `servername`) و یکی‌کردنِ
+    # آن‌ها یک مصنوع را خاموش حذف می‌کرد.
+    assert front == "~cdn.example.com", (add, front)
+    # ★ دروازهٔ تمایز: همان مقدار اگر از `host` بیاید باید کلیدِ
+    # دیگری بدهد — وگرنه تفکیک بی‌معناست.
+    _a2, f2 = _h_vmess_parts(core.dedup_key(
+        _h_vmess(tls="tls", host="cdn.example.com")))
+    assert f2 != front, (front, f2)
     assert add == "1.2.3.4", "فازِ I: `add` باید در کلید بماند"
 
 
@@ -5863,7 +5882,10 @@ def test_zz_h_vmess_invalid_host_valid_sni_shifts_to_sni():
     """`host` نامعتبر و `sni` معتبر با tls ⇒ fronting به sni منتقل می‌شود."""
     add, front = _h_vmess_parts(core.dedup_key(
         _h_vmess(host="onelabel", sni="cdn.example.com", tls="tls")))
-    assert front == "cdn.example.com", (add, front)
+    # ★ فاز J / J-7b: اطلاعاتِ فاز H دست‌نخورده می‌مانَد (sni در
+    # کلید می‌آید)، فقط اکنون **منبعش** هم ثبت می‌شود.
+    assert front == "~cdn.example.com", (add, front)
+    assert "cdn.example.com" in front
     assert add == "1.2.3.4", "فازِ I: `add` باید در کلید بماند"
 
 
@@ -5918,8 +5940,12 @@ def test_zz_h_other_identity_params_preserved():
         "security=reality&sni=www.apple.com&pbk=PBK&sid=SID&flow=xtls-rprx-vision"
         "&type=grpc&mode=gun&servicename=SVC&encryption=none")
     _h, _e, _p, params = _h_parts(core.dedup_key(line))
-    for expect in ("pbk=pbk", "sid=sid", "flow=xtls-rprx-vision",
-                   "type=grpc", "mode=gun", "servicename=svc",
+    # ★ فاز J / J-7e: پارامترهای **حساس به بزرگی/کوچکی** دیگر
+    # کوچک نمی‌شوند (`pbk` base64url است، `servicename` مانندِ مسیر
+    # حساس است)، ولی `sid` عامداً کوچک می‌ماند چون shortId
+    # مبنای ۱۶ است و hex غیرحساس است.
+    for expect in ("pbk=PBK", "sid=sid", "flow=xtls-rprx-vision",
+                   "type=grpc", "mode=gun", "servicename=SVC",
                    "security=reality"):
         assert expect in params, (expect, params)
     assert not any(p.startswith("host=") for p in params)
@@ -6209,6 +6235,465 @@ def test_zz_i_patch_scope_no_fronting_unchanged():
         assert host == "1.2.3.4", f"میزبان گم شد: {key!r}"
         assert _i_old_key_generic(key) == key, (
             f"وصله بیرونِ دامنهٔ خود اثر گذاشت: {key!r}")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# فاز J — سناریوهای رفتاری + کنترل‌های ابطال‌پذیر
+# ══════════════════════════════════════════════════════════════════════════════
+#
+# چرا این بلوک وجود دارد
+# ──────────────────────
+# فازِ J یازده یافته را سنجید و از میانِ آن‌ها **نُه** تغییر را روی
+# `core.py` نشاند (J-1…J-4 و J-7a…J-7e). هر تغییر با «اوراکلِ هم‌ارزیِ
+# برگرفته از خودِ محصول» اثبات شد: دو خط تنها آن‌گاه هم‌ارزند که همین
+# مخزن از هر دو خروجیِ **مو‌به‌موی یکسان** بسازد
+# (`converters.parse_proxy` + `_to_clash_proxy` + `_to_singbox_outbound`،
+# منهای `name`/`tag` که آرایشی‌اند).
+#
+# دو زیانِ **متفاوت** — که هرگز با هم جمع نمی‌شوند:
+#   (الف) ادغامِ کاذب  ⇒ بازنده به `r.duplicates` می‌رود و **هرگز منتشر
+#         نمی‌شود** (`aggregate.py:259-263`) ⇒ **حذفِ خاموش**.
+#   (ب)  افرازِ کاذب   ⇒ همان سرور **چند بار** منتشر می‌شود ⇒ فقط شلوغی.
+# (الف) از (ب) مهم‌تر است چون پیامدش **از جنسِ دیگری** است. پس قاعده:
+# «در تردید، ادغام نکن» و «وقتی هم‌ارزی **اثبات** شد، نشکاف».
+#
+# ⚠️ هر تستِ این بلوک یک **کنترلِ ابطال‌پذیر** هم دارد: در کنارِ «چه چیزی
+# حالا یکی می‌شود» همیشه «چه چیزی هنوز باید جدا بماند» هم سنجیده می‌شود،
+# تا تستی که با خاموش‌کردنِ کلِ یکتاسازی هم سبز بماند وجود نداشته باشد.
+
+_J_UUID = "22222222-2222-2222-2222-222222222222"
+_J_PBK = "jWVk2Z7eFkyDcu2xgzqX8JsPbZuCVhHUWD463Vfgazw"
+
+
+def _j_vless(query: str, host: str = "1.2.3.4", port: int = 443,
+             uuid: str = _J_UUID) -> str:
+    return f"vless://{uuid}@{host}:{port}?{query}#tag"
+
+
+def _j_vmess_obj(obj: dict) -> str:
+    """vmess از یک dictِ **دقیقاً همان** — بدونِ هیچ پیش‌فرضِ تزریقی."""
+    return "vmess://" + base64.b64encode(
+        json.dumps(obj).encode("utf-8")).decode("ascii")
+
+
+_J_VM_BASE = {"add": "9.9.9.9", "port": 8443, "id": "u9", "net": "ws",
+              "path": "/p"}
+
+
+def _j_vmess(**kw) -> str:
+    obj = dict(_J_VM_BASE)
+    obj.update(kw)
+    return _j_vmess_obj(obj)
+
+
+def _j_query_of(key: str) -> set:
+    """مجموعهٔ جفت‌های queryِ داخلِ کلیدِ شاخهٔ عمومی."""
+    if "?" not in key:
+        return set()
+    return {p for p in key.split("?", 1)[1].split("&") if p}
+
+
+def _j_old_norm_identity_value(key: str, val: str) -> str:
+    """بازپیاده‌سازیِ نرمال‌سازِ **پیش از فاز J** — برای کنترلِ ابطال‌پذیری.
+
+    این تابع عمداً در فایلِ تست زندگی می‌کند و از `core` نمی‌آید: کارش
+    این است که نشان دهد قاعدهٔ جدید واقعاً چیزی را عوض کرده، نه اینکه
+    تست‌ها همان‌طوری هم سبز می‌شدند.
+    """
+    v = (val or "").strip().lower()
+    if key in ("sni", "host"):
+        for _ in range(2):
+            nv = urllib.parse.unquote(v)
+            if nv == v:
+                break
+            v = nv
+        v = v.strip().lower()
+    if key == "type":
+        return core._norm_type(v)          # ← «tcp» برمی‌گشت و در کلید می‌ماند
+    if key in ("encryption", "security", "headertype"):
+        return "" if v in ("", "none") else v
+    return v                               # ← همه‌چیز کوچک‌شده
+
+
+# ── J-1) `&amp;` — نقصِ **تجزیه‌گر**، نه یکتاسازی ─────────────────────────────
+
+def test_zz_j_amp_entity_repaired_in_ingestion_funnel():
+    """`&amp;` در قیفِ یگانهٔ ورود (`extract_valid_lines`) ترمیم می‌شود.
+
+    باگِ واقعی: ۱۰ کانفیگِ منتشرشده در پیکرهٔ زنده، `&amp;` داشتند؛ یعنی
+    `security=tls&amp;sni=…` یک پارامترِ **واحد** به نامِ `security` با
+    مقدارِ `tls&amp;sni=…` می‌شد و همهٔ پارامترهای بعدی نابود می‌شدند.
+    تنها فراخوانندهٔ این تابع `aggregate.py:159` است، پس همین یک نقطه
+    کافی است و `converters.py` دست‌نخورده می‌ماند.
+    """
+    broken = _j_vless("security=tls&amp;sni=cdn.example.com&amp;type=ws")
+    clean = _j_vless("security=tls&sni=cdn.example.com&type=ws")
+    got = core.extract_valid_lines(broken)
+    assert len(got) == 1, f"قیفِ ورود خط را انداخت: {got!r}"
+    assert "&amp;" not in got[0], f"`&amp;` ترمیم نشد: {got[0]!r}"
+    assert got[0] == clean, f"ترمیم دقیق نبود:\n  {got[0]!r}\n  {clean!r}"
+    assert core.dedup_key(got[0]) == core.dedup_key(clean), (
+        "خطِ ترمیم‌شده و خطِ سالم باید یک کلید بگیرند")
+
+
+def test_zz_j_amp_control_raw_line_really_is_broken():
+    """کنترلِ ابطال‌پذیر: خطِ **ترمیم‌نشده** واقعاً خروجیِ خراب می‌دهد.
+
+    اگر این تست شکست بخورد، یعنی `&amp;` بی‌آزار بود و ترمیمِ J-1 بی‌دلیل.
+    سنجشِ واقعی: `network` از `ws` به `tcp` فرومی‌ریزد و `sni` خالی می‌شود.
+    """
+    broken = _j_vless("security=tls&amp;sni=cdn.example.com&amp;type=ws")
+    clean = _j_vless("security=tls&sni=cdn.example.com&type=ws")
+    p_bad = converters.parse_proxy(broken)
+    p_ok = converters.parse_proxy(clean)
+    assert p_bad is not None and p_ok is not None, "هر دو خط باید تجزیه شوند"
+    assert p_bad != p_ok, "خطِ خراب و سالم خروجیِ یکسان دادند ⇒ J-1 بی‌دلیل بود"
+    assert p_ok.get("network") == "ws", f"خطِ سالم: {p_ok.get('network')!r}"
+    assert p_bad.get("network") == "tcp", (
+        f"انتظار فروریزیِ network به tcp، دیده شد: {p_bad.get('network')!r}")
+    assert p_ok.get("sni") == "cdn.example.com", p_ok.get("sni")
+    assert not p_bad.get("sni"), f"sniِ خطِ خراب باید خالی باشد: {p_bad.get('sni')!r}"
+
+
+def test_zz_j_amp_repair_precision_non_separator_untouched():
+    """`&amp;` که **جداکننده نیست** دست‌نخورده می‌ماند (قاعدهٔ محافظه‌کارانه).
+
+    سنجش روی پیکرهٔ ۱۸٬۷۳۵ خطی: از ۵۵ رخدادِ `&amp;`، هر ۵۵ جداکننده
+    بودند و ۰ مورد استثنا. ولی قاعده عمداً شرطی است تا اگر روزی `&amp;`
+    داخلِ **مقدار** بیاید، خرابش نکند.
+    """
+    line = _j_vless("security=tls&note=a&amp;b&type=ws")
+    got = core.extract_valid_lines(line)[0]
+    assert "&amp;b" in got, f"`&amp;` غیرِ جداکننده ترمیم شد: {got!r}"
+    line2 = f"vless://{_J_UUID}@1.2.3.4:443?path=%2Fa&amp;%2Fb&type=ws#t"
+    assert core.extract_valid_lines(line2)[0].count("&amp;") == 1, (
+        "`&amp;` پیش از یک مقدارِ درصدرمز نباید جداکننده شمرده شود")
+
+
+def test_zz_j_amp_repair_is_idempotent_and_key_stable():
+    """ترمیم idempotent است و روی خطِ بی‌`&amp;` هیچ اثری ندارد."""
+    broken = _j_vless("security=tls&amp;sni=cdn.example.com&amp;type=ws")
+    once = core._repair_amp_separator(broken)
+    assert core._repair_amp_separator(once) == once, "ترمیم idempotent نیست"
+    for neutral in (_j_vless("security=tls&sni=a.example.com&type=ws"),
+                    _j_vmess(tls="tls", sni="a.example.com"),
+                    "trojan://pw@1.2.3.4:443?type=tcp#t"):
+        assert core._repair_amp_separator(neutral) == neutral, (
+            f"خطِ بی‌`&amp;` عوض شد: {neutral!r}")
+
+
+# ── J-2) vmess `tls`: هر مقداری که محصول «TLS» نمی‌شمارد ≡ بی‌TLS ────────────
+
+def test_zz_j_vmess_tls_auto_equals_absent():
+    """`tls:"auto"` ≡ `tls:""` ≡ `tls:"none"` — خروجی مو‌به‌مو یکسان است.
+
+    پنج شاهدِ مستقل: ویکیِ v2rayN (`auto` به `scy` تعلق دارد)،
+    `Global.cs:62-63`، `V2rayOutboundService.cs:401,452` (بی‌`else`)،
+    `SingboxOutboundService.cs:391` (بازگشتِ زودهنگام)، و ★ قاطع‌ترین:
+    `converters.py:553` که مقدار را به یک **بولین** بدل می‌کند
+    (`in ("tls","reality")`). در پیکره ۲۸ خط `tls:auto` داشتند.
+    """
+    k_auto = core.dedup_key(_j_vmess(tls="auto"))
+    k_absent = core.dedup_key(_j_vmess())
+    k_none = core.dedup_key(_j_vmess(tls="none"))
+    k_empty = core.dedup_key(_j_vmess(tls=""))
+    assert k_auto == k_absent == k_none == k_empty, (
+        f"مقادیرِ هم‌ارزِ tls جدا افتادند:\n  auto={k_auto!r}\n"
+        f"  absent={k_absent!r}\n  none={k_none!r}\n  empty={k_empty!r}")
+
+
+def test_zz_j_vmess_tls_real_values_still_split():
+    """کنترل: مقادیرِ **واقعیِ** TLS هرگز ادغام نمی‌شوند.
+
+    `xtls` عامدانه در فهرستِ مجاز مانده تا این قاعده فقط بتواند بشکافد،
+    نه ادغام کند (جهتِ محافظه‌کارانه؛ در پیکره هیچ `xtls` نبود).
+    """
+    keys = {
+        "absent": core.dedup_key(_j_vmess()),
+        "tls": core.dedup_key(_j_vmess(tls="tls")),
+        "reality": core.dedup_key(_j_vmess(tls="reality")),
+        "xtls": core.dedup_key(_j_vmess(tls="xtls")),
+    }
+    assert len(set(keys.values())) == 4, (
+        f"مقادیرِ متمایزِ TLS ادغام شدند: {keys!r}")
+
+
+# ── J-3) تقارنِ `type` پیش‌فرض با **غیبتِ** `type` ───────────────────────────
+
+def test_zz_j_type_default_symmetric_with_absence():
+    """`?type=tcp` ≡ `?type=raw` ≡ `?type=none` ≡ بی‌`type` (۸ نشرِ تکراری).
+
+    نامتقارنی: `_norm_type` برای مقادیرِ پیش‌فرض «tcp» برمی‌گرداند و
+    حلقهٔ شاخهٔ عمومی آن را با شرطِ `nv != ""` نگه می‌داشت — اما `type`ِ
+    **غایب** هرگز واردِ `meaningful` نمی‌شد. پس یک سرورِ واحد دو کلید
+    می‌گرفت و دو بار منتشر می‌شد.
+    """
+    base = "security=tls&sni=cdn.example.com"
+    keys = [core.dedup_key(_j_vless(q)) for q in (
+        base, base + "&type=tcp", base + "&type=raw", base + "&type=none",
+        base + "&type=TCP", base + "&type=%20tcp%20")]
+    assert len(set(keys)) == 1, f"تقارنِ typeِ پیش‌فرض شکست: {set(keys)!r}"
+    assert not any(p.startswith("type=") for p in _j_query_of(keys[0])), (
+        f"`type`ِ پیش‌فرض نباید در کلید بنشیند: {keys[0]!r}")
+
+
+def test_zz_j_type_real_transport_still_splits():
+    """کنترل: لایهٔ انتقالِ **واقعی** همچنان تمایز می‌سازد."""
+    base = "security=tls&sni=cdn.example.com"
+    keys = {t: core.dedup_key(_j_vless(base + f"&type={t}"))
+            for t in ("ws", "grpc", "http", "h2", "xhttp")}
+    keys["absent"] = core.dedup_key(_j_vless(base))
+    assert len(set(keys.values())) == 6, f"انتقال‌ها ادغام شدند: {keys!r}"
+
+
+def test_zz_j_norm_type_deliberately_untouched():
+    """`_norm_type` عامدانه دست‌نخورده مانده — شاخهٔ vmess به آن وابسته است.
+
+    در شاخهٔ vmess مقدارِ `net` **موضعی** در کلید نوشته می‌شود و آنجا
+    «» باید همان «tcp» بماند؛ اگر `_norm_type` را عوض می‌کردیم،
+    `net:""` و `net:"tcp"` جدا می‌شدند (افرازِ کاذبِ تازه).
+    """
+    assert core._norm_type("") == "tcp", core._norm_type("")
+    assert core._norm_type("raw") == "tcp", core._norm_type("raw")
+    assert core._norm_type("none") == "tcp", core._norm_type("none")
+    assert core._norm_type("ws") == "ws", core._norm_type("ws")
+    assert core.dedup_key(_j_vmess(net="")) == core.dedup_key(_j_vmess(net="tcp")), (
+        "شاخهٔ vmess: `net` خالی و `tcp` باید یکی بمانند")
+
+
+# ── J-4) دو فرمِ Shadowsocks یکی می‌شوند ─────────────────────────────────────
+
+def test_zz_j_ss_legacy_unified_with_sip002():
+    """فرمِ قدیمِ ss (بی‌`@`) به همان کلیدِ SIP002 می‌رسد (۴ نشرِ تکراری).
+
+    بدنهٔ رمزگشایی‌شدهٔ فرمِ قدیم دقیقاً `method:pass@host:port` است —
+    همان چیزی که شاخهٔ SIP002 از اجزای جدا می‌سازد.
+    """
+    legacy = "ss://" + base64.b64encode(
+        b"aes-256-gcm:pw@1.2.3.4:8388").decode("ascii").rstrip("=") + "#x"
+    sip002 = "ss://" + base64.b64encode(
+        b"aes-256-gcm:pw").decode("ascii").rstrip("=") + "@1.2.3.4:8388#x"
+    k_leg, k_sip = core.dedup_key(legacy), core.dedup_key(sip002)
+    assert k_leg == k_sip, f"دو فرمِ ss جدا ماندند:\n  {k_leg!r}\n  {k_sip!r}"
+    assert k_leg == "ss:sip002:aes-256-gcm:pw@1.2.3.4:8388", k_leg
+    assert not k_leg.startswith("ss:legacy:"), k_leg
+
+
+def test_zz_j_ss_legacy_distinct_parts_still_split():
+    """کنترل: ادغامِ کاذب ساختاراً ناممکن است — هر چهار جزء باید یکی باشند."""
+    def leg(body: bytes) -> str:
+        return "ss://" + base64.b64encode(body).decode("ascii").rstrip("=") + "#x"
+    keys = {
+        "base": core.dedup_key(leg(b"aes-256-gcm:pw@1.2.3.4:8388")),
+        "pass": core.dedup_key(leg(b"aes-256-gcm:pw2@1.2.3.4:8388")),
+        "host": core.dedup_key(leg(b"aes-256-gcm:pw@5.6.7.8:8388")),
+        "port": core.dedup_key(leg(b"aes-256-gcm:pw@1.2.3.4:9999")),
+        "method": core.dedup_key(leg(b"chacha20-ietf-poly1305:pw@1.2.3.4:8388")),
+    }
+    assert len(set(keys.values())) == 5, f"اجزای متفاوتِ ss ادغام شدند: {keys!r}"
+
+
+def test_zz_j_ss_legacy_not_base64_still_falls_back():
+    """بدنهٔ غیرِbase64 باید به مسیرِ fallback برود، نه استثنا بدهد."""
+    k = core.dedup_key("ss://!!!not-base64!!!#x")
+    assert k == "ss://!!!not-base64!!!", k
+    k2 = core.dedup_key("ss://" + base64.b64encode(
+        b"no-at-sign-here").decode("ascii").rstrip("=") + "#x")
+    assert k2.startswith("ss:legacy:"), (
+        f"بدنهٔ base64ِ بی‌`@` باید legacy بماند: {k2!r}")
+
+
+# ── J-7a) `alpn` و `extra` هویتی‌اند ────────────────────────────────────────
+
+def test_zz_j_alpn_and_extra_are_identity():
+    """`alpn`/`extra` بر «رسیدن» مؤثرند ⇒ نبودشان در کلید = حذفِ خاموش."""
+    base = "security=tls&sni=cdn.example.com&type=ws"
+    k_none = core.dedup_key(_j_vless(base))
+    k_h3 = core.dedup_key(_j_vless(base + "&alpn=h3"))
+    k_h2 = core.dedup_key(_j_vless(base + "&alpn=h2"))
+    assert len({k_none, k_h3, k_h2}) == 3, (
+        f"alpn هویت نساخت: {(k_none, k_h3, k_h2)!r}")
+    assert "alpn=h3" in _j_query_of(k_h3), k_h3
+    k_ex = core.dedup_key(_j_vless(base + "&extra=%7B%22a%22%3A1%7D"))
+    assert k_ex != k_none, f"extra هویت نساخت: {k_ex!r}"
+
+
+def test_zz_j_alpn_same_value_still_collapses():
+    """کنترل: `alpn` یکسان با ترتیبِ متفاوتِ پارامتر ⇒ همان یک کلید."""
+    a = _j_vless("security=tls&sni=cdn.example.com&type=ws&alpn=h3")
+    b = _j_vless("alpn=h3&type=ws&sni=cdn.example.com&security=tls")
+    assert core.dedup_key(a) == core.dedup_key(b), (
+        f"ترتیبِ پارامتر کلید را عوض کرد:\n  {core.dedup_key(a)!r}\n"
+        f"  {core.dedup_key(b)!r}")
+
+
+# ── J-7b) vmess: `host` و `sni` دو مصنوعِ متمایزند ──────────────────────────
+
+def test_zz_j_vmess_host_and_sni_no_longer_conflated():
+    """`host or sni` این دو را قاطی می‌کرد ⇒ یکی خاموش حذف می‌شد.
+
+    محصول آن‌ها را به **دو فیلدِ متفاوت** امیت می‌کند: هدرِ `Host` در
+    clash و `servername`/`server_name` در TLS.
+    """
+    k_host = core.dedup_key(_j_vmess(host="cdn.example.com", tls="tls"))
+    k_sni = core.dedup_key(_j_vmess(sni="cdn.example.com", tls="tls"))
+    assert k_host != k_sni, f"host و sni یک کلید گرفتند: {k_host!r}"
+    assert "~" not in k_host.split("|ep=", 1)[1].split(":", 1)[0], k_host
+    assert k_sni.split("|ep=", 1)[1].startswith("~cdn.example.com"), k_sni
+    k_both = core.dedup_key(_j_vmess(host="a.example.com",
+                                     sni="cdn.example.com", tls="tls"))
+    assert len({k_host, k_sni, k_both}) == 3, (
+        f"سه ترکیبِ متمایزِ fronting ادغام شدند: {(k_host, k_sni, k_both)!r}")
+    # کنترل: مقدارِ یکسان در همان جایگاه ⇒ همان کلید.
+    assert core.dedup_key(_j_vmess(host="cdn.example.com", tls="tls",
+                                   ps="برچسبِ دیگر")) == k_host
+
+
+# ── J-7c) vmess `alterId` ───────────────────────────────────────────────────
+
+def test_zz_j_vmess_alter_id_normalized_like_the_product():
+    """`aid` غایب ≡ `0` ≡ `"0"` ≡ `""` ≡ زباله؛ ولی `4` جداست.
+
+    محصول مقدار را با `converters._safe_int(obj.get("aid"), 0)` می‌خواند،
+    پس همهٔ صورت‌های «صفر» خروجیِ مو‌به‌مو یکسان می‌دهند (افرازِ کاذبِ
+    اجتناب‌پذیر = زیانِ ب). ولی هم‌ارزیِ `aid` **واقعی** اثبات نشد
+    (`mihomo/transport/vmess/vmess.go:107` آن را به `newAlterIDs`
+    می‌دهد) ⇒ بر پایهٔ «در تردید، ادغام نکن» می‌شکافیم.
+    """
+    assert core._norm_aid(None) == "0", core._norm_aid(None)
+    assert core._norm_aid("") == "0"
+    assert core._norm_aid(" 4 ") == "4"
+    assert core._norm_aid("xx") == "0", "مقدارِ نامعتبر باید به پیش‌فرض برود"
+    assert core._norm_aid("07") == "7"
+    zeros = {core.dedup_key(_j_vmess()),
+             core.dedup_key(_j_vmess(aid=0)),
+             core.dedup_key(_j_vmess(aid="0")),
+             core.dedup_key(_j_vmess(aid="")),
+             core.dedup_key(_j_vmess(aid="xx"))}
+    assert len(zeros) == 1, f"صورت‌های «صفر»ِ aid جدا افتادند: {zeros!r}"
+    k4 = core.dedup_key(_j_vmess(aid=4))
+    assert k4 not in zeros, f"aid=4 با صفر ادغام شد: {k4!r}"
+    assert core.dedup_key(_j_vmess(aid=4)) != core.dedup_key(_j_vmess(aid=64))
+
+
+# ── J-7d) vmess `path`: تنها هم‌ارزیِ **اثبات‌شده** ─────────────────────────
+
+def test_zz_j_vmess_path_root_equivalent_but_trailing_slash_not():
+    """`""` ≡ `"/"`؛ ولی `/abc/` ≢ `/abc`.
+
+    شاهد: `mihomo/transport/vmess/websocket.go:350-351` اگر مسیر با `/`
+    شروع نشود، `/` را **جلوش می‌گذارد** ⇒ «» و «/» یکی‌اند. ولی
+    `rstrip("/")` پیشین `/abc/` را هم با `/abc` یکی می‌کرد که دو مسیرِ
+    متفاوتِ HTTP‌اند (RFC 3986 §6.2.2) ⇒ ادغامِ کاذبِ نهفته.
+    """
+    no_path = {"add": "9.9.9.9", "port": 8443, "id": "u9", "net": "ws"}
+    k_absent = core.dedup_key(_j_vmess_obj(no_path))
+    k_empty = core.dedup_key(_j_vmess_obj(dict(no_path, path="")))
+    k_slash = core.dedup_key(_j_vmess_obj(dict(no_path, path="/")))
+    assert k_absent == k_empty == k_slash, (
+        f"«» و «/» جدا افتادند: {(k_absent, k_empty, k_slash)!r}")
+    k_abc = core.dedup_key(_j_vmess(path="/abc"))
+    k_abc_slash = core.dedup_key(_j_vmess(path="/abc/"))
+    assert k_abc != k_abc_slash, (
+        f"`/abc` و `/abc/` ادغام شدند (ادغامِ کاذب): {k_abc!r}")
+    assert k_abc != k_slash and k_abc_slash != k_slash
+
+
+# ── J-7e) حساسیت به بزرگی/کوچکی — نقصِ واقعیِ یکتاسازی ─────────────────────
+
+def test_zz_j_case_sensitive_params_preserved():
+    """`path`/`servicename`/`pbk`/`presharedkey` باید عیناً بمانند (۲۷ مصنوع).
+
+    RFC 3986 §6.2.2.1: تنها `scheme` و `host` بی‌حساس به بزرگی‌اند.
+    در پیکرهٔ زنده `path=TG%40ZDYZ2` و `path=tg%40zdyz2` یک کلید
+    می‌گرفتند و یکی خاموش حذف می‌شد. دربارهٔ `pbk` بدتر است: base64url
+    است و کوچک‌سازی یک **کلیدِ عمومیِ دیگر** می‌سازد.
+    """
+    base = "security=tls&sni=cdn.example.com&type=ws"
+    k_up = core.dedup_key(_j_vless(base + "&path=%2FTG%40ZDYZ2"))
+    k_lo = core.dedup_key(_j_vless(base + "&path=%2Ftg%40zdyz2"))
+    assert k_up != k_lo, f"دو مسیرِ متفاوت یک کلید گرفتند: {k_up!r}"
+    assert "path=/TG@ZDYZ2" in _j_query_of(k_up), k_up
+    rq = f"security=reality&sni=www.apple.com&type=grpc&pbk={_J_PBK}"
+    k_pbk = core.dedup_key(_j_vless(rq))
+    assert f"pbk={_J_PBK}" in _j_query_of(k_pbk), (
+        f"`pbk` کوچک شد ⇒ کلیدِ عمومیِ دیگری ساخته شد: {k_pbk!r}")
+    assert k_pbk != core.dedup_key(_j_vless(
+        f"security=reality&sni=www.apple.com&type=grpc&pbk={_J_PBK.lower()}"))
+    k_svc = core.dedup_key(_j_vless(
+        "security=tls&sni=a.example.com&type=grpc&servicename=SvcName"))
+    assert "servicename=SvcName" in _j_query_of(k_svc), k_svc
+
+
+def test_zz_j_case_insensitive_params_still_folded():
+    """کنترل: پارامترهایی که واقعاً بی‌حساس‌اند همچنان تا می‌خورند.
+
+    `sid` (shortId) هگز است، `flow` یک شناسهٔ ثابت، و `sni`/`host` نامِ
+    میزبان‌اند (RFC 3986 §6.2.2.1) ⇒ کوچک‌سازی درست است.
+    """
+    rq = f"security=reality&sni=www.apple.com&type=grpc&pbk={_J_PBK}"
+    assert core.dedup_key(_j_vless(rq + "&sid=ABCD")) == \
+        core.dedup_key(_j_vless(rq + "&sid=abcd")), "sid نباید حساس شود"
+    assert core.dedup_key(_j_vless(
+        "security=tls&sni=a.example.com&type=tcp&flow=XTLS-RPRX-VISION")) == \
+        core.dedup_key(_j_vless(
+            "security=tls&sni=a.example.com&type=tcp&flow=xtls-rprx-vision"))
+    assert core.dedup_key(_j_vless("security=tls&sni=CDN.Example.COM&type=ws")) == \
+        core.dedup_key(_j_vless("security=tls&sni=cdn.example.com&type=ws"))
+
+
+# ── کنترلِ کلان: قواعدِ قدیم واقعاً چیزِ دیگری می‌گفتند ─────────────────────
+
+def test_zz_j_control_old_rules_really_differed():
+    """اثباتِ غیرِتُهی‌بودنِ فازِ J: قاعدهٔ قدیم و جدید هم‌ارز نیستند.
+
+    اگر این تست شکست بخورد، یعنی هیچ‌یک از تست‌های بالا چیزی را تثبیت
+    نمی‌کند — همان‌قدر با قاعدهٔ قدیم هم سبز می‌شدند.
+    """
+    # (۱) `type` پیش‌فرض: قدیم «tcp» می‌داد و در کلید می‌نشست، جدید «».
+    assert _j_old_norm_identity_value("type", "tcp") == "tcp"
+    assert core._norm_identity_value("type", "tcp") == "", (
+        core._norm_identity_value("type", "tcp"))
+    # (۲) بزرگی/کوچکی: قدیم `path` را تا می‌زد، جدید نه.
+    assert _j_old_norm_identity_value("path", "/TG@ZDYZ2") == \
+        _j_old_norm_identity_value("path", "/tg@zdyz2"), "قاعدهٔ قدیم تا می‌زد"
+    assert core._norm_identity_value("path", "/TG@ZDYZ2") != \
+        core._norm_identity_value("path", "/tg@zdyz2"), "قاعدهٔ جدید نباید تا بزند"
+    assert core._norm_identity_value("path", "/TG@ZDYZ2") == "/TG@ZDYZ2"
+    # (۳) `alpn`/`extra` پیش از J هرگز واردِ کلید نمی‌شدند.
+    for p in ("alpn", "extra"):
+        assert p in core._IDENTITY_PARAMS, f"{p} از فهرستِ هویت افتاد"
+    # (۴) پارامترهای حساس، صریحاً فهرست شده‌اند.
+    for p in ("path", "servicename", "pbk", "publickey", "presharedkey"):
+        assert p in core._CASE_SENSITIVE_PARAMS, f"{p} در فهرستِ حساس نیست"
+    # (۵) قواعدِ بی‌حساس نباید به فهرست راه یافته باشند.
+    for p in ("sni", "host", "sid", "flow", "security", "type"):
+        assert p not in core._CASE_SENSITIVE_PARAMS, (
+            f"{p} نباید حساس باشد — نامِ میزبان/هگز/شناسهٔ ثابت است")
+
+
+def test_zz_j_phase_f_h_i_gains_intact():
+    """دستاوردهای فازهای F/H/I پس از وصله‌های J هنوز برجایند.
+
+    این تست عمداً ترکیبی است: هر سه ویژگی در **همین** `dedup_key` زندگی
+    می‌کنند، پس اگر وصله‌های J چیزی را بشکنند، اینجا دیده می‌شود.
+    """
+    # F: '@' داخلِ query نباید هویتِ endpoint را نابود کند.
+    ui = base64.b64encode(b"aes-256-gcm:pw").decode("ascii").rstrip("=")
+    k_f = core.dedup_key(f"ss://{ui}@1.2.3.4:11201?note=@FreeVPN#x")
+    assert k_f == "ss:sip002:aes-256-gcm:pw@1.2.3.4:11201", k_f
+    # H: مقدارِ زبالهٔ fronting کاملاً از کلید حذف می‌شود (نه در ep، نه در query).
+    k_h = core.dedup_key(_j_vless(
+        "security=tls&sni=https%3A%2F%2Ft.me%2Fx&type=ws"))
+    assert "|ep=:" in k_h, f"زباله نقطهٔ پایانی شد: {k_h!r}"
+    assert not any(p.startswith("sni=") for p in _j_query_of(k_h)), (
+        f"زباله در query ماند ⇒ افراز: {k_h!r}")
+    # I: میزبانِ واقعی همیشه در کلید می‌ماند و دو میزبان را جدا می‌کند.
+    a = _j_vless("security=tls&sni=cdn.example.com&type=ws", host="1.2.3.4")
+    b = _j_vless("security=tls&sni=cdn.example.com&type=ws", host="5.6.7.8")
+    assert "@1.2.3.4|ep=cdn.example.com" in core.dedup_key(a), core.dedup_key(a)
+    assert core.dedup_key(a) != core.dedup_key(b), (
+        "دو میزبانِ متفاوت با fronting مشترک ادغام شدند ⇒ حذفِ خاموش")
 
 
 def _run_all() -> int:

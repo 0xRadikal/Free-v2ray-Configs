@@ -522,6 +522,11 @@ def stable_label(line: str) -> str:
 _IDENTITY_PARAMS = frozenset({
     "security", "sni", "pbk", "sid", "host", "path", "servicename",
     "flow", "type", "headertype", "encryption", "mode",
+    # ★ فاز J / J-7a: `alpn` و `extra` اثباتاً بر «رسیدن» مؤثرند — نقشهٔ
+    # وابستگیِ اندازه‌گیری‌شده نشان داد `alpn` به فیلدِ `alpn` و `extra` به
+    # فیلدِ `extra` امیت می‌شوند. بی این دو، «alpn=h3» و «بی‌alpn» یک کلید
+    # می‌گرفتند و یکی خاموش به `r.duplicates` می‌رفت (= حذفِ خاموش).
+    "alpn", "extra",
     "obfs", "obfs-password", "obfspassword",
     "congestion_control", "congestion",
     "publickey", "presharedkey", "address",
@@ -619,7 +624,35 @@ def _sni_is_endpoint(security: str) -> bool:
     return security == "tls"
 
 
+def _norm_aid(v) -> str:
+    """`alterId` را همان‌گونه نرمال می‌کند که خودِ محصول می‌کند.
+
+    ★ چرا لازم است: `converters.parse_proxy` مقدار را با
+    `_safe_int(obj.get("aid"), 0)` می‌خواند، پس `aid` غایب و `aid=0` و
+    `aid=""` هر سه خروجیِ **مو‌به‌مو یکسان** می‌دهند. اگر کلید
+    رشتهٔ خام را بنویسد، همان کانفیگ دو کلید می‌گیرد و دو بار
+    منتشر می‌شود — زیانِ (ب)، که اینجا به‌راحتی اجتناب‌پذیر است.
+    """
+    try:
+        return str(int(str(v).strip() or "0"))
+    except Exception:
+        return "0"
+
+
+_CASE_SENSITIVE_PARAMS = frozenset({
+    "path", "servicename", "pbk", "publickey", "presharedkey",
+    "obfs-password", "obfspassword",
+})
+
+
 def _norm_identity_value(key: str, val: str) -> str:
+    # ★ فاز J / J-7e: کوچک‌سازیِ فراگیر دو مسیرِ متمایز را خاموش یکی
+    # می‌کرد (در پیکره: `path=TG%40ZDYZ2` و `path=tg%40zdyz2`)، در حالی
+    # که محصول مسیر را عیناً امیت می‌کند و مسیرِ HTTP به بزرگی/کوچکی
+    # حساس است. دربارهٔ `pbk`/`publickey` بدتر است: base64url است و
+    # کوچک‌سازی کلیدِ عمومیِ دیگری می‌سازد.
+    if key in _CASE_SENSITIVE_PARAMS:
+        return (val or "").strip()
     v = (val or "").strip().lower()
     if key in ("sni", "host"):
         for _ in range(2):
@@ -629,7 +662,15 @@ def _norm_identity_value(key: str, val: str) -> str:
             v = nv
         v = v.strip().lower()
     if key == "type":
-        return _norm_type(v)
+        # ★ رفعِ نامتقارنی: `_norm_type` برای ("", "raw", "none", "tcp") مقدارِ
+        # "tcp" برمی‌گرداند و حلقهٔ شاخهٔ عمومی آن را با شرطِ `nv != ""` نگه
+        # می‌دارد — اما `type`ِ **غایب** هرگز وارد `meaningful` نمی‌شود. پس
+        # `?type=tcp` و `?` (بی‌type) دو کلیدِ متفاوت می‌ساختند برای یک سرور.
+        # با بازگرداندنِ "" برای مقدارِ پیش‌فرض، این دو یکی می‌شوند.
+        # `_norm_type` عامداً دست‌نخورده می‌ماند: شاخهٔ vmess مقدارِ `net` را
+        # **موضعی** می‌نویسد و در آنجا "" باید همان "tcp" بماند.
+        nt = _norm_type(v)
+        return "" if nt == "tcp" else nt
     if key == "encryption":
         return "" if v in ("", "none") else v
     if key == "security":
@@ -658,9 +699,20 @@ def dedup_key(line: str) -> str:
             host = _norm_identity_value("host", str(obj.get("host") or ""))
             sni = _norm_identity_value("sni", str(obj.get("sni") or ""))
             tls = (str(obj.get("tls") or "")).strip().lower()
-            tls = "" if tls in ("", "none") else tls
+            # هر مقداری که مبدّلِ خودِ این مخزن آن را «TLS» نمی‌شمارد، با
+            # «بی‌TLS» یکسان است. مرجع: `converters.py:553` که مقدار را به
+            # بولین بدل می‌کند (`in ("tls", "reality")`)، و
+            # `pipeline.py:94` (`FS_TLS_VALUES = {"tls","reality","xtls"}`).
+            # پس `auto`/`none`/`""`/هر زبالهٔ دیگر ⇒ خروجیِ مو‌به‌مو یکسان.
+            # `xtls` عامدانه در فهرست نگه داشته شده تا این قاعده فقط
+            # بتواند بشکافد، نه ادغام کند (جهتِ محافظه‌کارانه).
+            tls = tls if tls in ("tls", "reality", "xtls") else ""
             net = _norm_type(str(obj.get("net") or ""))
-            path = str(obj.get("path") or "").rstrip("/")
+            path = str(obj.get("path") or "")
+            # ★ فاز J / J-7d: تنها هم‌ارزیِ اثبات‌شده («» ≡ «/») نگه داشته
+            # می‌شود؛ `rstrip("/")` پیشین `/abc/` را هم با `/abc` یکی
+            # می‌کرد که دو مسیرِ متفاوتِ HTTP‌اند (RFC 3986 §6.2.2).
+            path = "/" if path == "" else path
             # اعتبارسنجیِ مقدارِ fronting پیش از سپردنِ هویت به آن — چراییِ
             # کامل در `_is_plausible_fronting_host` و `_sni_is_endpoint`.
             if host and not _is_plausible_fronting_host(host):
@@ -668,14 +720,24 @@ def dedup_key(line: str) -> str:
             if sni and not (_is_plausible_fronting_host(sni)
                             and _sni_is_endpoint(tls)):
                 sni = ""
-            fronting = host or sni
+            # ★ فاز J / J-7b: `host or sni` این دو را قاطی می‌کرد، پس
+            # «host=X, sni=∅» و «host=∅, sni=X» یک کلید می‌گرفتند و یکی
+            # خاموش حذف می‌شد — در حالی که محصول آن‌ها را به **دو فیلدِ
+            # متفاوت** امیت می‌کند (`Host` در clash و `servername`/
+            # `server_name` در TLS). پس دو مصنوعِ متمایزند.
+            fronting = f"{host}~{sni}" if sni else host
             # ★ فازِ I: fronting دیگر میزبانِ واقعی را جانشین نمی‌شود.
             add_for_key = add
             return (
                 f"vmess:{add_for_key}|ep={fronting}"
                 f":{str(obj.get('port', '')).strip()}"
                 f":{str(obj.get('id', '')).strip().lower()}"
+                # ★ فاز J / J-7c: `alterId` هم امیت می‌شود (`alterId` در
+                # clash و `alter_id` در sing-box) و mihomo آن را به
+                # `newAlterIDs` می‌دهد. هم‌ارزی **اثبات نشد**، پس بر پایهٔ
+                # قاعدهٔ «در تردید، ادغام نکن» می‌شکافیم.
                 f":{net}:{path}:{tls}"
+                f":{_norm_aid(obj.get('aid'))}"
             )
         except Exception:
             return line.split("#")[0].strip()[:120]
@@ -722,6 +784,21 @@ def dedup_key(line: str) -> str:
                 decoded = decode_base64_text(rest)
                 if decoded is None:
                     raise ValueError("ss legacy body is not base64")
+                # ★ یکی‌سازیِ دو فرمِ Shadowsocks. بدنهٔ رمزگشایی‌شدهٔ فرمِ قدیم
+                # دقیقاً `method:pass@host:port` است — همان چیزی که شاخهٔ
+                # SIP002 از اجزای جدا می‌سازد. پیش از این، یک سرورِ یکسان که
+                # هم به فرمِ قدیم و هم به فرمِ SIP002 آمده بود دو کلید می‌گرفت
+                # و **دو بار** منتشر می‌شد (۴ مورد در پیکره).
+                # ادغامِ کاذبِ تازه ساختاراً ناممکن است: یکی شدن فقط وقتی رخ
+                # می‌دهد که روش، گذرواژه، میزبان و پورت هر چهار یکی باشند.
+                _d = decoded.split("#")[0].split("?")[0]
+                if "@" in _d:
+                    _ui, _hp = _d.rsplit("@", 1)
+                    _hp = _hp.split("/", 1)[0]
+                    _h, _, _pt = _hp.rpartition(":")
+                    if _h and _pt:
+                        _ui = urllib.parse.unquote(_ui).lower()
+                        return f"ss:sip002:{_ui}@{_h.lower()}:{_pt}"
                 return f"ss:legacy:{decoded.lower()}"
         except Exception:
             return line.split("#")[0].strip()[:120]
@@ -975,6 +1052,29 @@ def try_base64_decode(raw: str) -> Optional[str]:
     return None
 
 
+# ── بازسازیِ جداکنندهٔ `&` که به‌صورتِ موجودیتِ HTML خراب شده است ─────────────
+# چرا لازم است: `urllib.parse.parse_qs` روی `&` می‌شکند. اگر منبع، لینک را از
+# دلِ HTML برداشته باشد، `&` به `&amp;` بدل شده و نامِ پارامترها `amp;security`
+# … می‌شوند. نه `dedup_key` و نه `converters.parse_proxy` این را جبران
+# نمی‌کردند؛ سنجشِ زندهٔ خروجی روی هر ۱۰ خطِ آسیب‌دیده نشان داد
+# `tls=False`, `sni=''`, `host=''`, `path=''` و فروریختنِ `network` به `tcp`.
+# یعنی کانفیگ منتشر می‌شد ولی کار نمی‌کرد.
+#
+# قاعده عامدانه **شرطی** است: تنها جایی `&amp;` به `&` بدل می‌شود که پس از آن
+# یک نامِ پارامترِ معتبر و یک `=` بیاید. اندازه‌گیری روی پیکرهٔ ۱۸٬۷۳۵ خطی:
+# از ۵۵ رخدادِ `&amp;`، هر ۵۵ مورد جداکننده بودند و ۰ مورد غیرِ جداکننده. پس
+# این قاعده روی دادهٔ واقعی بی‌استثنا است و در عینِ حال محافظه‌کارانه می‌ماند:
+# اگر روزی `&amp;` در **مقدارِ** یک پارامتر بیاید، دست‌نخورده رد می‌شود.
+_AMP_SEP = re.compile(r"&amp;(?=[A-Za-z_][A-Za-z0-9_.\-]*=)")
+
+
+def _repair_amp_separator(line: str) -> str:
+    """`&amp;` را فقط در نقشِ **جداکننده** به `&` بازمی‌گرداند."""
+    if "&amp;" not in line:
+        return line
+    return _AMP_SEP.sub("&", line)
+
+
 def extract_valid_lines(content: str) -> List[str]:
     """از یک blob (direct یا base64) خطوط کانفیگ معتبر را استخراج می‌کند."""
     if not content:
@@ -992,7 +1092,7 @@ def extract_valid_lines(content: str) -> List[str]:
     # هوشمند: هر scheme:// معتبر پذیرفته می‌شود (حتی پروتکل‌های جدید)
     return [
         line for raw in content.splitlines()
-        if (line := raw.strip()) and is_proxy_config(line)
+        if (line := _repair_amp_separator(raw.strip())) and is_proxy_config(line)
     ]
 
 
