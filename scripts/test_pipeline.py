@@ -6904,5 +6904,381 @@ def _run_all() -> int:
     return 1 if failed else 0
 
 
+# ⚠️⚠️ نقطهٔ ورود (`if __name__ == "__main__"`) عمداً در **انتهای مطلقِ فایل**
+# است، نه اینجا. دلیلش یک دامِ واقعی است که در فاز C11 گرفتار شد: پایتون ماژول
+# را از بالا به پایین اجرا می‌کند، پس اگر `sys.exit(_run_all())` اینجا بماند،
+# هر آزمونی که **پایین‌ترش** اضافه شود هرگز تعریف نمی‌شود و `_run_all` (که با
+# `globals()` کشف می‌کند) آن را نمی‌بیند. نتیجه: آزمون‌ها بی‌صدا کدِ مرده
+# می‌شوند و شمارشِ «۲۴۷/۲۴۷ پاس» سبز می‌ماند در حالی که ۱۷ آزمونِ تازه اصلاً
+# اجرا نشده‌اند. اگر بلوکِ فازِ جدیدی افزودی، آن را **پیش از** بلوکِ انتهایی
+# بگذار یا (بهتر) فقط به انتهای فایل اضافه کن و بلوکِ ورود را پایین‌تر ببر.
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# فاز C11 — ShadowsocksR: انتشارِ **نامتقارن** (Clash آری، sing-box نه)
+# ══════════════════════════════════════════════════════════════════════════════
+# پیش از این فاز، ۲۸ کانفیگِ ssr در `all/configs.txt` بودند و هیچ‌کدام به هیچ
+# خروجی نمی‌رسیدند — نه چون خراب بودند، بلکه چون `parse_proxy` هیچ شاخه‌ای برای
+# scheme «ssr» نداشت و خاموشانه به `return None` می‌رسید. سنجشِ فاز C11 نشان داد
+# ۲۸/۲۸ ساختاراً سالم‌اند و mihomo 1.19.29 صددرصدشان را می‌پذیرد، ولی sing-box
+# از ۱.۶.۰ ssr را حذف کرده و یک outbound از این نوع **کلِ** سند را رد می‌کند.
+#
+# پس تصمیمِ سنجیده این است: ssr فقط به Clash برود. تست‌های زیر همان تصمیم را
+# قفل می‌کنند تا هیچ‌کس در آینده نه آن را خاموشانه بشکند و نه «تعمیر»ش کند.
+
+
+def _c11_b64(s: str, *, pad: bool = False, urlsafe: bool = True) -> str:
+    raw = s.encode("utf-8")
+    e = (base64.urlsafe_b64encode(raw) if urlsafe
+         else base64.b64encode(raw)).decode()
+    return e if pad else e.rstrip("=")
+
+
+def _c11_ssr(host: str = "node.example.com", port=8388, proto: str = "origin",
+             method: str = "aes-256-cfb", obfs: str = "plain",
+             pwd: str = "pw123", obfsparam=None, protoparam=None, remarks=None,
+             main_override=None, body_override=None,
+             urlsafe: bool = False, pad: bool = True, frag=None) -> str:
+    """یک ssr:// ساختگی می‌سازد؛ هر جزء قابلِ خراب‌کردن است."""
+    if body_override is not None:
+        body = body_override
+    else:
+        pwd_b64 = _c11_b64(pwd) if pwd != "" else ""
+        main = (main_override if main_override is not None
+                else f"{host}:{port}:{proto}:{method}:{obfs}:{pwd_b64}")
+        qs = []
+        if obfsparam is not None:
+            qs.append("obfsparam=" + _c11_b64(obfsparam))
+        if protoparam is not None:
+            qs.append("protoparam=" + _c11_b64(protoparam))
+        if remarks is not None:
+            qs.append("remarks=" + _c11_b64(remarks))
+        body = main + ("/?" + "&".join(qs) if qs else "")
+    enc = (base64.urlsafe_b64encode(body.encode("utf-8")) if urlsafe
+           else base64.b64encode(body.encode("utf-8"))).decode()
+    if not pad:
+        enc = enc.rstrip("=")
+    return "ssr://" + enc + (("#" + frag) if frag is not None else "")
+
+
+def _c11_clash(lines):
+    doc = yaml.safe_load(converters.build_clash_yaml(lines))
+    return doc.get("proxies") or [], doc
+
+
+def test_zz_c11_ssr_allowlists_are_exactly_the_mihomo_registry():
+    """
+    allowlistها باید **عیناً** رجیستریِ mihomo v1.19.29 باشند — نه بیشتر، نه کمتر.
+
+    منبع (کلمه‌به‌کلمه از سورس، نه مستندات):
+      transport/shadowsocks/core/cipher.go → streamList (+ مسیرِ none→dummy)
+      transport/ssr/obfs/*.go              → ۶ register() درونِ init()
+      transport/ssr/protocol/*.go          → ۶ register() درونِ init()
+    یک مقدارِ اضافه یعنی کانفیگی منتشر می‌شود که mihomo کلِ فایل را برایش رد
+    می‌کند؛ یک مقدارِ کم یعنی کانفیگِ سالم خاموشانه گم می‌شود.
+    """
+    assert converters.SSR_CIPHERS == frozenset({
+        "rc4-md5",
+        "aes-128-ctr", "aes-192-ctr", "aes-256-ctr",
+        "aes-128-cfb", "aes-192-cfb", "aes-256-cfb",
+        "chacha20", "chacha20-ietf", "xchacha20",
+        "none", "dummy",
+    }), sorted(converters.SSR_CIPHERS)
+    assert converters.SSR_OBFS == frozenset({
+        "plain", "http_simple", "http_post", "random_head",
+        "tls1.2_ticket_auth", "tls1.2_ticket_fastauth",
+    }), sorted(converters.SSR_OBFS)
+    assert converters.SSR_PROTOCOLS == frozenset({
+        "origin", "auth_sha1_v4", "auth_aes128_md5", "auth_aes128_sha1",
+        "auth_chain_a", "auth_chain_b",
+    }), sorted(converters.SSR_PROTOCOLS)
+
+
+def test_zz_c11_ssr_aead_ciphers_are_rejected_even_though_ss_allows_them():
+    """
+    ⚠️ تفاوتِ حیاتی با shadowsocks: `NewShadowSocksR` پس از `PickCipher` یک
+    type-assertion به `*core.StreamCipher` می‌زند
+    (adapter/outbound/shadowsocksr.go:132) و رمزِ AEAD را رد می‌کند. پس
+    بازاستفاده از `SS_CIPHERS` برای ssr یک دامِ خاموش است.
+    """
+    aead = ["aes-128-gcm", "aes-256-gcm", "chacha20-ietf-poly1305",
+            "xchacha20-ietf-poly1305", "2022-blake3-aes-256-gcm"]
+    for m in aead:
+        assert m in converters.SS_CIPHERS, f"پیش‌فرضِ تست غلط شد: {m}"
+        assert m not in converters.SSR_CIPHERS, m
+        assert converters.parse_proxy(_c11_ssr(method=m)) is None, m
+    for m in sorted(converters.SSR_CIPHERS):
+        p = converters.parse_proxy(_c11_ssr(method=m))
+        assert isinstance(p, dict) and p["cipher"] == m, m
+
+
+def test_zz_c11_ssr_parses_with_and_without_query():
+    p = converters.parse_proxy(_c11_ssr(obfsparam="cdn.example.org",
+                                        protoparam="64", remarks="X"))
+    assert p and p["type"] == "shadowsocksr"
+    assert p["server"] == "node.example.com" and p["port"] == 8388
+    assert p["cipher"] == "aes-256-cfb" and p["password"] == "pw123"
+    assert p["obfs"] == "plain" and p["protocol"] == "origin"
+    assert p["obfs_param"] == "cdn.example.org" and p["protocol_param"] == "64"
+    q = converters.parse_proxy(_c11_ssr())
+    assert q and q["obfs_param"] == "" and q["protocol_param"] == ""
+
+
+def test_zz_c11_ssr_rejects_malformed_body():
+    """بدنهٔ ناقص/زباله باید `None` بدهد — نه استثنا، نه کانفیگِ نیم‌بند."""
+    bad = [
+        _c11_ssr(main_override="h.example.com:8388:origin:aes-256-cfb:plain"),
+        _c11_ssr(main_override="h.example.com:8388:origin:aes-256-cfb:plain:"
+                               + _c11_b64("pw") + ":extra"),
+        _c11_ssr(main_override="onlyhost"),
+        "ssr://!!!!not-base64!!!!",
+        "ssr://" + base64.b64encode(b"\xff\xfe\xfd\xfc").decode(),
+        "ssr://",
+        "ssr://=====",
+    ]
+    for ln in bad:
+        assert converters.parse_proxy(ln) is None, ln[:70]
+
+
+def test_zz_c11_ssr_port_and_password_gates():
+    """
+    پورتِ ۰ و غیرعددی در خودِ پارسر می‌افتند؛ بازهٔ پورت عمداً اینجا تکرار
+    نشده و صاحبِ آن قاعده `filters.is_invalid_port` است.
+    """
+    assert converters.parse_proxy(_c11_ssr(port=0)) is None
+    assert converters.parse_proxy(_c11_ssr(port="abc")) is None
+    ln = _c11_ssr(port=70000)
+    assert converters.parse_proxy(ln)["port"] == 70000
+    assert filters.classify(ln)[1] == filters.REASON_INVALID_PORT
+    assert converters.parse_proxy(_c11_ssr(pwd="")) is None
+    assert converters.parse_proxy(_c11_ssr(main_override=(
+        "h.example.com:8388:origin:aes-256-cfb:plain:"))) is None
+
+
+def test_zz_c11_ssr_rejects_values_outside_registry():
+    """مقدارِ بیرونِ رجیستری در mihomo کلِ فایل را می‌سوزاند، پس drop می‌شود."""
+    for o in ("tls1.2_ticket_fastauth2", "obfs_none", "tls1.3_ticket_auth", ""):
+        assert converters.parse_proxy(_c11_ssr(obfs=o)) is None, o
+    for pr in ("auth_chain_c", "auth_chain_f", "auth_aes128_sha256", ""):
+        assert converters.parse_proxy(_c11_ssr(proto=pr)) is None, pr
+    for o in sorted(converters.SSR_OBFS):
+        assert converters.parse_proxy(_c11_ssr(obfs=o)), o
+    for pr in sorted(converters.SSR_PROTOCOLS):
+        assert converters.parse_proxy(_c11_ssr(proto=pr)), pr
+
+
+def test_zz_c11_ssr_case_is_normalised_like_mihomo_needs():
+    """
+    `PickObfs`/`PickProtocol` هیچ نرمال‌سازیِ حروف ندارند و همهٔ نام‌های ثبت‌شده
+    کوچک‌نویس‌اند؛ `option.Cipher == "none"` هم مقایسه‌ای حساس‌به‌حروف است. پس
+    خروجی **باید** کوچک‌نویس باشد وگرنه mihomo خطا می‌دهد.
+    """
+    p = converters.parse_proxy(_c11_ssr(method="AES-256-CFB", obfs="PLAIN",
+                                       proto="ORIGIN"))
+    assert p and p["cipher"] == "aes-256-cfb"
+    assert p["obfs"] == "plain" and p["protocol"] == "origin"
+    n = converters.parse_proxy(_c11_ssr(method="NONE"))
+    assert n and n["cipher"] == "none"
+
+
+def test_zz_c11_ssr_server_gates_are_recorded_not_silent():
+    for host, reason in (("127.0.0.1", "unroutable_server"),
+                         ("0.0.0.0", "unroutable_server"),
+                         ("localbox", "invalid_server")):
+        ln = _c11_ssr(host=host)
+        assert isinstance(converters.parse_proxy(ln), dict), host
+        nodes, _ = _c11_clash([ln])
+        st = converters.drop_stats().get("clash", {})
+        assert not nodes, host
+        assert st["by_reason"].get(reason) == 1, (host, st)
+        assert st["by_protocol"].get("shadowsocksr") == 1, (host, st)
+
+
+def test_zz_c11_ssr_accepts_base64url_and_missing_padding():
+    """
+    لینکِ واقعیِ ssr غالباً base64url و بی‌padding است. «_» از نویسهٔ «?»ِ
+    اجباریِ بخشِ «/?» زاده می‌شود؛ «-» در بدنهٔ ASCII تنها از «>»/«~» ممکن است
+    که در لینکِ مطابقِ مشخصه رخ نمی‌دهد، پس در سطحِ رمزگشا آزموده می‌شود.
+    """
+    line_us = None
+    for L in range(0, 60):
+        cand = _c11_ssr(host="h" + "x" * L + ".example.com", remarks="R",
+                        urlsafe=True, pad=False)
+        if "_" in cand[len("ssr://"):]:
+            line_us = cand
+            break
+    assert line_us, "نتوانستم «_» را در بدنه تراز کنم"
+    body = line_us[len("ssr://"):]
+    assert "=" not in body
+    raw = base64.urlsafe_b64decode(
+        body + "=" * ((4 - len(body) % 4) % 4)).decode()
+    line_std = "ssr://" + base64.b64encode(raw.encode()).decode()
+    assert converters.parse_proxy(line_us) == converters.parse_proxy(line_std)
+    both = base64.urlsafe_b64encode("🇯🇵?~".encode()).decode()
+    assert "-" in both and "_" in both, both
+    assert converters._ub64_text(both) == "🇯🇵?~"
+    assert converters._ub64_text(both.rstrip("=")) == "🇯🇵?~"
+    assert converters._ub64_text("YWJj") == "abc"
+    assert converters._ub64_text("YWJj=") == "abc"
+    assert converters._ub64_text("") is None
+    assert converters._ub64_text("", allow_empty=True) == ""
+
+
+def test_zz_c11_ssr_different_password_never_merges():
+    a = _c11_ssr(host="dup.example.com", port=9001, pwd="AAA")
+    b = _c11_ssr(host="dup.example.com", port=9001, pwd="BBB")
+    assert core.dedup_key(a) != core.dedup_key(b)
+    nodes, _ = _c11_clash([a, b])
+    assert len(nodes) == 2 and nodes[0]["name"] != nodes[1]["name"]
+
+
+def test_zz_c11_ssr_name_comes_from_fragment_then_brand_fallback():
+    tag = "Japan 🇯🇵 | @Raydikalx | ABC123"
+    assert converters.parse_proxy(
+        _c11_ssr(remarks="inner-ignored", frag=tag))["name"] == tag
+    assert converters.parse_proxy(_c11_ssr())["name"] == \
+        converters._branded_fallback("ssr")
+
+
+def test_zz_c11_ssr_clash_node_carries_every_required_mihomo_field():
+    """
+    در `ShadowSocksROption` میدان‌های name/server/port/password/cipher/obfs/
+    protocol بدونِ omitempty هستند، یعنی **الزامی**. نامِ نوع هم دقیقاً «ssr»
+    است (adapter/parser.go:37).
+    """
+    nodes, _ = _c11_clash([_c11_ssr(obfsparam="cdn.example.org",
+                                    protoparam="64", frag="N1")])
+    assert len(nodes) == 1
+    n = nodes[0]
+    assert n["type"] == "ssr"
+    for k in ("name", "server", "port", "password", "cipher", "obfs",
+              "protocol"):
+        assert k in n and n[k] != "", (k, n)
+    assert n["udp"] is True
+    assert n["obfs-param"] == "cdn.example.org"
+    assert n["protocol-param"] == "64"
+
+
+def test_zz_c11_ssr_optional_params_are_omitted_not_emptied():
+    """رشتهٔ تهی در obfs-param رفتارِ mihomo را عوض می‌کند؛ باید **نیاید**."""
+    cases = {
+        "absent": (_c11_ssr(), False, False),
+        "empty": (_c11_ssr(obfsparam="", protoparam=""), False, False),
+        "obfs_only": (_c11_ssr(obfsparam="h.example.net"), True, False),
+        "proto_only": (_c11_ssr(protoparam="32"), False, True),
+        "bad_b64": (_c11_ssr(body_override=(
+            "h.example.com:8388:origin:aes-256-cfb:plain:"
+            + _c11_b64("pw") + "/?obfsparam=!!!!&protoparam=!!!!")),
+            False, False),
+    }
+    for label, (ln, want_o, want_p) in cases.items():
+        nodes, _ = _c11_clash([ln])
+        assert len(nodes) == 1, label
+        n = nodes[0]
+        assert ("obfs-param" in n) is want_o, (label, n)
+        assert ("protocol-param" in n) is want_p, (label, n)
+        assert "" not in [v for v in n.values() if isinstance(v, str)], (
+            label, n)
+
+
+def test_zz_c11_ssr_must_never_appear_in_singbox():
+    """
+    🔒 مهم‌ترین تستِ این فاز. sing-box از ۱.۶.۰ ssr را حذف کرده و
+    `include/registry.go` یک stub ثبت می‌کند که خطای «ShadowsocksR is
+    deprecated and removed in sing-box 1.6.0» می‌دهد و **کلِ سند** را رد
+    می‌کند. اگر روزی کسی این را «تعمیر» کند، هزاران پروکسیِ سالمِ دیگر هم با
+    آن نابود می‌شوند — این تست همان لحظه می‌شکند.
+    """
+    ln = _c11_ssr(frag="N")
+    p = converters.parse_proxy(ln)
+    assert p and p["type"] == "shadowsocksr"
+    assert converters._to_singbox_outbound(p) is None
+    assert converters._to_clash_proxy(p) is not None
+    doc = json.loads(converters.build_singbox_json([ln]))
+    assert doc["outbounds"] == [{"type": "direct", "tag": "direct"}], doc
+    st = converters.drop_stats().get("singbox", {})
+    assert st["by_reason"].get("not_expressible") == 1, st
+    assert st["by_protocol"].get("shadowsocksr") == 1, st
+
+
+def test_zz_c11_ssr_mixed_input_keeps_singbox_intact():
+    """ssr نباید هیچ همسایه‌ای را در singbox بیندازد — دو حلقه مستقل‌اند."""
+    ss = ("ss://" + base64.urlsafe_b64encode(
+        b"aes-256-gcm:pw@ss.example.com:8388").decode().rstrip("=") + "#SS")
+    lines = [ss, _c11_ssr(frag="R1"), ss.replace("ss.example", "ss2.example"),
+             _c11_ssr(host="n2.example.com", frag="R2")]
+    nodes, _ = _c11_clash(lines)
+    doc = json.loads(converters.build_singbox_json(lines))
+    kinds = [o["type"] for o in doc["outbounds"]]
+    assert sorted(n["type"] for n in nodes) == ["ss", "ss", "ssr", "ssr"], nodes
+    assert kinds.count("shadowsocks") == 2, kinds
+    assert "shadowsocksr" not in kinds and "ssr" not in kinds, kinds
+
+
+def test_zz_c11_ssr_group_name_collision_gets_suffix():
+    nodes, doc = _c11_clash([_c11_ssr(frag=converters.GROUP_MAIN)])
+    assert nodes[0]["name"] == f"{converters.GROUP_MAIN} #1", nodes
+    assert converters.GROUP_MAIN in [g["name"] for g in doc["proxy-groups"]]
+
+
+def test_zz_c11_ssr_build_is_deterministic():
+    lines = [_c11_ssr(host=f"n{i}.example.com", port=9000 + i, pwd=f"p{i}",
+                      frag=f"N{i}") for i in range(6)]
+    y = {converters.build_clash_yaml(lines) for _ in range(3)}
+    j = {converters.build_singbox_json(lines) for _ in range(3)}
+    assert len(y) == 1 and len(j) == 1
+
+
+def test_zz_c11_ssr_empty_decoded_password_is_rejected():
+    """گذرواژه‌ای که **رمزگشایی‌اش** تهی می‌شود هم باید بیفتد، نه فقط میدانِ تهی.
+
+    ★ این آزمون از دلِ آزمونِ جهش (C11‑9) بیرون آمد: جهشِ
+    `M09a_password_gate_disabled` (خاموش‌کردنِ `if not password` در
+    `_sanitize_ssr`) **زنده مانده بود**، چون آزمونِ پیشین فقط میدانِ خالیِ
+    `pwd_b64=""` را می‌سنجید و آن را لایهٔ بالاتر (`_ub64_text` → `None`)
+    می‌گرفت. ورودیِ متمایزکننده این است: `pwd_b64` **ناتهی** ولی حاصلِ
+    رمزگشایی تهی — مثلِ رشتهٔ فقط‌padding «====» که `b""` می‌دهد. در آن حالت
+    تنها همین دروازه جلویش را می‌گیرد؛ بی‌آن، یک نودِ ssr با
+    `password: ""` منتشر می‌شد که در mihomo میدانی الزامی است.
+    """
+    for pw_field in ("====", "==", "="):
+        ln = _c11_ssr(main_override=(
+            f"h.example.com:8388:origin:aes-256-cfb:plain:{pw_field}"))
+        assert converters._ub64_text(pw_field) == "", pw_field
+        assert converters.parse_proxy(ln) is None, pw_field
+    # کنترلِ متقابل: گذرواژهٔ واقعیِ یک‌بایتی باید بپذیرد، یعنی دروازه
+    # «هر چیزِ کوتاه» را نمی‌کشد، فقط «تهی» را.
+    ok = converters.parse_proxy(_c11_ssr(pwd="x"))
+    assert ok and ok["password"] == "x"
+
+
+def test_zz_c11_ssr_password_with_invalid_utf8_is_dropped_not_mangled():
+    """بایت‌های نامعتبرِ UTF-8 در گذرواژه ⇒ کانفیگ بیفتد، نه اینکه مثله شود.
+
+    ★ این آزمون هم از آزمونِ جهش بیرون آمد: جهشِ
+    `M12d_utf8_decode_made_lenient` (افزودنِ `errors="ignore"` به
+    `_ub64_text`) **زنده مانده بود**. خطرش دقیقاً همان چیزی است که در سرِ
+    `_ub64_text` مستند شده: با رمزگشاییِ سهل‌گیر، گذرواژهٔ `b"pw\\xff"` به
+    `"pw"` بدل می‌شود و کانفیگی منتشر می‌شود که «معتبر به‌نظر می‌رسد ولی
+    هرگز وصل نمی‌شود» — بدترین حالت برای کاربر، چون نه در health.json دیده
+    می‌شود و نه کاربر می‌فهمد چرا کار نمی‌کند.
+
+    (سنجشِ پیکرهٔ واقعی: ۲۸/۲۸ خطِ ssr با رمزگشاییِ سخت سالم‌اند و همه ASCII،
+    پس این سخت‌گیری امروز هیچ کانفیگی را قربانی نمی‌کند.)
+    """
+    bad_pw = base64.b64encode(b"pw\xff").decode()
+    # پیش‌فرضِ آزمون: با رمزگشاییِ سهل‌گیر این بایت‌ها **بی‌صدا** «pw» می‌شدند.
+    assert base64.b64decode(bad_pw).decode("utf-8", errors="ignore") == "pw"
+    ln = _c11_ssr(main_override=(
+        f"h.example.com:8388:origin:aes-256-cfb:plain:{bad_pw}"))
+    assert converters._ub64_text(bad_pw) is None
+    assert converters.parse_proxy(ln) is None
+    # و در پارامترهای اختیاری هم نباید مثله شود: تهی می‌شود (پس در YAML
+    # نوشته نمی‌شود) ولی خودِ کانفیگ نمی‌افتد.
+    assert converters._ub64_text(bad_pw, allow_empty=True) is None
+    good = converters.parse_proxy(_c11_ssr(obfsparam="cdn.example.org"))
+    assert good and good["obfs_param"] == "cdn.example.org"
+
+
 if __name__ == "__main__":
     sys.exit(_run_all())

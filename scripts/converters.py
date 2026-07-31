@@ -102,6 +102,50 @@ SS2022_KEY_BYTES: Dict[str, int] = {
     "2022-blake3-chacha20-poly1305": 32,
 }
 
+# ── ShadowsocksR ──────────────────────────────────────────────────────────────
+#: ssr تنها پروتکلی است که **فقط** در mihomo بیان‌شدنی است: sing-box آن را در
+#: نسخهٔ ۱.۶.۰ حذف کرده و امروز یک stub ثبت می‌کند که خطای «ShadowsocksR is
+#: deprecated and removed in sing-box 1.6.0» می‌دهد و **کل** سند را رد می‌کند.
+#: پس ssr عمداً و به‌صورتِ مستند فقط به Clash می‌رود (فاز C11، بندِ ۲.۳).
+#:
+#: هر سه مجموعهٔ زیر کلمه‌به‌کلمه از سورسِ mihomo v1.19.29 استخراج شده‌اند —
+#: هیچ مقداری حدسی نیست:
+#:   transport/shadowsocks/core/cipher.go → streamList (خطوط ۶۲–۷۶)
+#:   transport/ssr/obfs/*.go             → ۶ فراخوانیِ register() درونِ init()
+#:   transport/ssr/protocol/*.go         → ۶ فراخوانیِ register() درونِ init()
+#: مقدارِ بیرونِ رجیستری در mihomo خطای «Obfs %s not supported» یا
+#: «protocol %s not supported» می‌دهد و کلِ فایل را می‌سوزاند، پس drop می‌شود.
+
+#: ⚠️ اینجا **هیچ رمزِ AEAD نیست** و این عمدی است: `NewShadowSocksR` پس از
+#: `core.PickCipher` یک type-assertion به `*core.StreamCipher` می‌زند
+#: (adapter/outbound/shadowsocksr.go:132) و رمزِ AEAD را با پیامِ «… is not
+#: none or a supported stream cipher in ssr» رد می‌کند. یعنی `SS_CIPHERS`
+#: برای ssr **بیش از حد باز** است و بازاستفاده از آن یک دامِ خاموش می‌ساخت.
+#: «none» را mihomo درونی به «dummy» بدل می‌کند (همان فایل، خط ۱۱۲) و آن
+#: مقایسه حساس‌به‌حروف است، پس مقدار باید حتماً کوچک‌نویس شود.
+SSR_CIPHERS: frozenset = frozenset({
+    "rc4-md5",
+    "aes-128-ctr", "aes-192-ctr", "aes-256-ctr",
+    "aes-128-cfb", "aes-192-cfb", "aes-256-cfb",
+    "chacha20", "chacha20-ietf", "xchacha20",
+    "none", "dummy",
+})
+
+#: obfsهای ثبت‌شده در mihomo. «tls1.2_ticket_fastauth» هم‌سازندهٔ
+#: «tls1.2_ticket_auth» است ولی با نامِ جدا ثبت شده، پس هر دو مجازند.
+SSR_OBFS: frozenset = frozenset({
+    "plain", "http_simple", "http_post", "random_head",
+    "tls1.2_ticket_auth", "tls1.2_ticket_fastauth",
+})
+
+#: پروتکل‌های ثبت‌شده در mihomo. زنجیره‌های auth_chain_c…f در بالادستِ ssr
+#: وجود دارند ولی mihomo آن‌ها را **ثبت نکرده**، پس اگر روزی در ورودی دیده
+#: شوند باید drop شوند، نه اینکه منتشر گردند و فایلِ کاربر را بشکنند.
+SSR_PROTOCOLS: frozenset = frozenset({
+    "origin", "auth_sha1_v4", "auth_aes128_md5", "auth_aes128_sha1",
+    "auth_chain_a", "auth_chain_b",
+})
+
 #: اثرانگشت‌های uTLS معتبر در sing-box 1.13. مقدار نامعتبر → «unknown uTLS fingerprint».
 UTLS_FINGERPRINTS: frozenset = frozenset({
     "chrome", "firefox", "edge", "safari", "ios", "android",
@@ -188,6 +232,55 @@ def _sanitize_ss(cipher: str, password: str) -> Optional[tuple]:
             if len(raw) != need:
                 return None
     return cipher, password
+
+
+def _ub64_text(s: Optional[str], *, allow_empty: bool = False) -> Optional[str]:
+    """base64 (استاندارد یا url-safe، با یا بدونِ padding) → متنِ UTF-8.
+
+    عمداً **سخت‌گیرانه** است: اگر بایت‌ها UTF-8 معتبر نباشند `None` می‌دهد و
+    برخلافِ جاهای دیگرِ این ماژول با «errors=ignore» بی‌صدا مثله نمی‌کند.
+    دلیل: این تابع گذرواژهٔ ssr را می‌خواند و یک گذرواژهٔ نیمه‌خورده کانفیگی
+    می‌سازد که «معتبر به‌نظر می‌رسد ولی هرگز وصل نمی‌شود» — بدترین حالت برای
+    کاربر. (اندازه‌گیری روی پیکرهٔ واقعی: ۲۸/۲۸ خطِ ssr با رمزگشاییِ سخت سالم‌اند
+    و همه ASCII، پس این سخت‌گیری امروز هیچ کانفیگی را قربانی نمی‌کند.)
+
+    `allow_empty=True` برای پارامترهای اختیاری است که «نبودن» حالتِ مجازشان
+    است؛ آن‌جا رشتهٔ تهی برمی‌گردد نه `None`، تا فراخواننده بتواند «نبود» را از
+    «خرابی» تشخیص دهد.
+    """
+    s = (s or "").strip()
+    if not s:
+        return "" if allow_empty else None
+    s = s.replace("-", "+").replace("_", "/")
+    s += "=" * ((4 - len(s) % 4) % 4)
+    try:
+        return base64.b64decode(s, validate=False).decode("utf-8")
+    except Exception:
+        return None
+
+
+def _sanitize_ssr(cipher: str, password: str,
+                  obfs: str, protocol: str) -> Optional[tuple]:
+    """اعتبارسنجیِ چهارگانهٔ ShadowsocksR بر پایهٔ رجیستریِ واقعیِ mihomo.
+
+    `None` یعنی mihomo این کانفیگ را رد می‌کند و **کلِ** فایل را می‌سوزاند، پس
+    باید drop شود. هر سه مقدار کوچک‌نویس برمی‌گردند چون هر ۲۲ نامِ ثبت‌شده در
+    سورسِ mihomo کوچک‌نویس است و `PickObfs`/`PickProtocol` هیچ نرمال‌سازیِ
+    حروف ندارند (تنها `PickCipher` بزرگ‌نویس می‌کند) — پس کوچک‌نویسی هم لازم
+    است و هم بی‌خطر.
+    """
+    cipher = (cipher or "").strip().lower()
+    if cipher not in SSR_CIPHERS:
+        return None
+    if not password:
+        return None
+    obfs = (obfs or "").strip().lower()
+    if obfs not in SSR_OBFS:
+        return None
+    protocol = (protocol or "").strip().lower()
+    if protocol not in SSR_PROTOCOLS:
+        return None
+    return cipher, password, obfs, protocol
 
 
 def _b64_json(b64: str) -> Optional[dict]:
@@ -660,6 +753,64 @@ def parse_proxy(line: str) -> Optional[Dict[str, Any]]:
                 "password": password,
             }
 
+        if scheme == "ssr":
+            # ssr://base64( host:port:protocol:method:obfs:base64(password)
+            #              /?obfsparam=b64&protoparam=b64&remarks=b64&group=b64 )
+            #
+            # برخلافِ بقیهٔ schemeها اینجا `parsed`/`q` بی‌فایده‌اند: کلِ بدنه
+            # base64 است، پس مثلِ شاخهٔ ss دستی رمزگشایی می‌شود. جداکردن با «#»
+            # بی‌خطر است چون «#» در هیچ‌یک از دو الفبای base64 نیست.
+            body = line[len("ssr://"):].split("#", 1)[0]
+            raw = _ub64_text(body)
+            if raw is None:
+                return None
+            main, _sep, qs = raw.partition("/?")
+            parts = main.split(":")
+            if len(parts) != 6:
+                # شش بخش در مشخصهٔ ssr **الزامی** است. همین دروازه میزبانِ IPv6
+                # را هم رد می‌کند (چون «:» شمارش را می‌شکند) و این درست است:
+                # مشخصهٔ ssr هیچ شکلی برای IPv6 تعریف نکرده، پس چنین خطی در
+                # mihomo هم بی‌معناست.
+                return None
+            host, port_s, sproto, method, sobfs, pwd_b64 = parts
+            port = _safe_int(port_s)
+            password = _ub64_text(pwd_b64)
+            if password is None:
+                return None
+            if not host or not port:
+                return None
+            # بازهٔ پورت عمداً اینجا سنجیده **نمی‌شود**: صاحبِ آن قاعده
+            # `filters.is_invalid_port` است (همان اصلِ «یک قاعده، یک خانه» که
+            # در سرِ `filters.py` مستند شده) و تکرارش دو حقیقتِ واگرا می‌ساخت.
+            ok = _sanitize_ssr(method, password, sobfs, sproto)
+            if not ok:
+                return None
+            method, password, sobfs, sproto = ok
+            sq = {k: v[0] for k, v in urllib.parse.parse_qs(qs).items()}
+            # `remarks` درونیِ base64 عمداً برای نام به کار نمی‌رود: خطِ لوله
+            # پیش از ساختِ خروجی `core.brand_remark` را اعمال می‌کند
+            # (aggregate.py خط ۳۰۴ پیش از خط ۳۶۸)، پس در تولید همیشه «#»
+            # برندشده وجود دارد و `_remark_of` برنده است — خواندنِ remarks
+            # کدِ مرده می‌شد. رفتار با بقیهٔ شاخه‌ها هم یکسان می‌ماند.
+            #
+            # پارامترهای اختیاری: base64ِ خراب نباید کلِ کانفیگ را بیندازد،
+            # ولی نباید خاموشانه به رشتهٔ تهی هم بدل شود که کاربر گمان کند
+            # مخفی‌سازی فعال است — پس «تهی» می‌شود و در YAML اصلاً نوشته نمی‌شود.
+            return {
+                "type": "shadowsocksr",
+                "name": name,
+                "server": host,
+                "port": port,
+                "cipher": method,
+                "password": password,
+                "obfs": sobfs,
+                "protocol": sproto,
+                "obfs_param":
+                    _ub64_text(sq.get("obfsparam"), allow_empty=True) or "",
+                "protocol_param":
+                    _ub64_text(sq.get("protoparam"), allow_empty=True) or "",
+            }
+
         if scheme in ("hysteria2", "hy2"):
             # hysteria2://password@host:port/?sni=..&insecure=1&obfs=salamander
             #            &obfs-password=..&alpn=h3
@@ -888,6 +1039,24 @@ def _to_clash_proxy(p: Dict[str, Any]) -> Optional[Dict[str, Any]]:
             return out
         if t == "shadowsocks":
             return {**base, "type": "ss", "cipher": p["cipher"], "password": p["password"], "udp": True}
+        if t == "shadowsocksr":
+            # نامِ نوع در mihomo دقیقاً «ssr» است (adapter/parser.go:37 →
+            # `case "ssr"`). در `ShadowSocksROption` میدان‌های
+            # name/server/port/password/cipher/obfs/protocol بدونِ omitempty
+            # هستند، یعنی **الزامی**؛ obfs-param/protocol-param/udp اختیاری.
+            out = {**base, "type": "ssr",
+                   "cipher": p["cipher"], "password": p["password"],
+                   "obfs": p["obfs"], "protocol": p["protocol"],
+                   # mihomo برای ssr `ListenPacketContext` را پیاده کرده، پس
+                   # UDP واقعاً کار می‌کند و روشن‌کردنش ادعای دروغ نیست.
+                   "udp": True}
+            # پارامترِ تهی نوشته نمی‌شود: mihomo آن‌ها را با omitempty تعریف
+            # کرده و رشتهٔ تهی در obfsهایی مثلِ http_simple رفتارِ متفاوت دارد.
+            if p.get("obfs_param"):
+                out["obfs-param"] = p["obfs_param"]
+            if p.get("protocol_param"):
+                out["protocol-param"] = p["protocol_param"]
+            return out
         if t == "hysteria2":
             # نام‌گذاریِ کلیدها با mihomo v1.19.29 آزمون شد (rc=0).
             out = {**base, "type": "hysteria2", "password": p["password"]}
@@ -1130,6 +1299,32 @@ def _singbox_transport(p: Dict[str, Any]) -> Optional[Dict[str, Any]]:
 
 def _to_singbox_outbound(p: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     t = p["type"]
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # 🔒 ردِ **عامدانه و مستندِ** ShadowsocksR (فاز C11)
+    # ══════════════════════════════════════════════════════════════════════════
+    # این `return None` نقص نیست؛ تصمیمی سنجیده است و نباید «تعمیر» شود.
+    #
+    # sing-box در ۱.۶.۰ ssr را حذف کرد (صفحهٔ رسمیِ /deprecated/: «has never
+    # been enabled by default … it does not make sense to continue to maintain
+    # it»). در ۱.۱۳.۱۵ تنها `option/shadowsocksr.go` به‌عنوانِ ساختارِ باقی‌مانده
+    # هست و `include/registry.go` (خط ۱۴۸) درونِ
+    # `registerStubForRemovedOutbounds` یک stub ثبت می‌کند که می‌گوید:
+    #     E.New("ShadowsocksR is deprecated and removed in sing-box 1.6.0")
+    # یعنی نوشتنِ یک outboundِ shadowsocksr **کلِ singbox.json** را رد می‌کند و
+    # هزاران پروکسیِ سالمِ دیگر را هم با خودش می‌برد.
+    #
+    # چرا این نامتقارنی بی‌خطر است: `build_clash_yaml` و `build_singbox_json`
+    # دو حلقهٔ کاملاً مستقل روی همان `lines` هستند و هر کدام `parse_proxy` را
+    # جدا صدا می‌زنند، پس این `None` هیچ اثری بر فهرستِ Clash ندارد. همین الگو
+    # از پیش هم برای ۲۸۱ کانفیگ (transportهای غیرقابلِ‌بیان) برقرار بوده است.
+    #
+    # و حذف **ثبت** می‌شود نه خاموش: فراخواننده
+    # `_drops.record("singbox", "not_expressible", line, "shadowsocksr")`
+    # می‌زند، پس در health.json دیده می‌شود.
+    if t == "shadowsocksr":
+        return None
+
     if not p["server"] or not p["port"]:
         return None
     try:
