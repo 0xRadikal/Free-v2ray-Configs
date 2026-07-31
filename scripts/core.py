@@ -401,6 +401,85 @@ def decode_base64_text(candidate: str) -> Optional[str]:
     return raw.decode("utf-8", errors="ignore")
 
 
+def _ssr_b64_text(s: Optional[str], *, allow_empty: bool = False) -> Optional[str]:
+    """
+    base64 (هر دو الفبا، با یا بدونِ padding) → متنِ UTF-8، یا None.
+
+    ⚠️ این تابع **آینهٔ مو‌به‌موی** `converters._ub64_text` است و باید بماند.
+    عمداً `decode_base64_text` بالایی را به کار نمی‌بریم و عمداً هم آن را
+    سهل‌گیر نمی‌کنیم: آن تابع کلیدِ **همهٔ** طرح‌ها را می‌سازد و شل‌کردنش
+    می‌توانست هزاران رکورد را جابه‌جا کند. این یکی دامنه‌اش تنها `ssr://` است.
+
+    دو تفاوتِ عمدی با `decode_base64_text`:
+      • `errors="ignore"` ندارد — بایتِ نامعتبر ⇒ None، نه رمزِ نیمه‌خورده.
+        دلیلش همان است که `converters` نوشته: گذرواژهٔ مثله‌شده کانفیگی
+        می‌سازد که «معتبر به‌نظر می‌رسد ولی هرگز وصل نمی‌شود».
+      • الگوی نحویِ `_B64_BODY_RE` را تحمیل نمی‌کند، چون مبدل هم نمی‌کند و
+        هر اختلافی این‌جا یعنی واگرایی از تجزیه‌کنندهٔ واقعیِ خروجی.
+    """
+    s = (s or "").strip()
+    if not s:
+        return "" if allow_empty else None
+    s = s.replace("-", "+").replace("_", "/")
+    s += "=" * ((4 - len(s) % 4) % 4)
+    try:
+        return base64.b64decode(s, validate=False).decode("utf-8")
+    except Exception:
+        return None
+
+
+def _ssr_parts(line: str) -> Optional[Tuple[str, str, str, str, str, str, str, str]]:
+    """
+    اجزای هویتیِ یک `ssr://`، یا None اگر تجزیه‌شدنی نبود.
+
+    گرامر عیناً از `converters.parse_proxy` شاخهٔ `ssr` برداشته شده:
+
+        ssr://base64( host:port:protocol:method:obfs:base64(password)
+                      /?obfsparam=b64&protoparam=b64&remarks=b64&group=b64 )
+
+    چهار قاعدهٔ ریزِ آن‌جا که این‌جا هم عیناً رعایت می‌شود، وگرنه دو
+    تجزیه‌کنندهٔ واگرا می‌سازیم (درسِ K-L6):
+      ۱. برشِ `#` **پیش از** رمزگشایی — نویسهٔ `#` در هیچ الفبای base64 نیست.
+      ۲. `partition("/?")` برای جدا کردنِ query.
+      ۳. **شش** بخشِ الزامی؛ کم یا زیاد ⇒ رد. این IPv6 را هم رد می‌کند، عیناً
+         مثلِ مبدل (مشخصهٔ ssr هیچ فرمِ IPv6 تعریف نکرده).
+      ۴. میزبانِ ناتهی و پورتِ عددی.
+
+    خروجی: (host, port, protocol, method, obfs, password, obfsparam, protoparam)
+    همه رمزگشایی‌شده و **خام** — یعنی از `_sanitize_ssr` نگذشته. عمدی است:
+    پاک‌سازی چند مقدارِ متفاوت را روی یک مقدار می‌نشاند و کلیدسازی روی آن
+    می‌توانست دو کانفیگِ متمایز را ادغام کند. قاعدهٔ مستندِ مخزن «در تردید،
+    ادغام نکن» است، پس مقادیرِ خام = جهتِ تفکیک‌گرا = ایمن.
+
+    این مجموعه دقیقاً همان چیزی است که مبدل به خروجی امیت می‌کند
+    (`server, port, cipher, password, obfs, protocol, obfs_param,
+    protocol_param`) منهای `name` — که برند بازنویسی‌اش می‌کند و هویت نمی‌سازد.
+    `remarks` و `group` هم هرگز به خروجی نمی‌رسند، پس در کلید وزن نمی‌گیرند.
+    """
+    if not line.startswith("ssr://"):
+        return None
+    body = line[len("ssr://"):].split("#", 1)[0].strip()
+    txt = _ssr_b64_text(body)
+    if not txt:
+        return None
+    main, _sep, qs = txt.partition("/?")
+    parts = main.split(":")
+    if len(parts) != 6:
+        return None
+    host, port_s, proto, method, obfs, pwd_b64 = parts
+    if not host or not port_s.isdigit():
+        return None
+    pwd = _ssr_b64_text(pwd_b64, allow_empty=True)
+    if pwd is None:
+        return None
+    sq = urllib.parse.parse_qs(qs)
+    obfsparam = _ssr_b64_text(
+        (sq.get("obfsparam") or [""])[0], allow_empty=True) or ""
+    protoparam = _ssr_b64_text(
+        (sq.get("protoparam") or [""])[0], allow_empty=True) or ""
+    return (host, port_s, proto, method, obfs, pwd, obfsparam, protoparam)
+
+
 def endpoint_of(line: str) -> str:
     """آدرسِ مقصدِ کانفیگ (host یا IP) بدونِ پورت. برای vmess از JSON خوانده می‌شود."""
     line = (line or "").strip()
@@ -432,6 +511,16 @@ def endpoint_of(line: str) -> str:
                 if host:
                     return host
             # نه JSON بود و نه میزبانی داشت → ادامه با مسیرِ عمومی
+        if line.startswith("ssr://"):
+            # ssr **کلِ** بدنه را base64 می‌کند، پس تجزیهٔ عمومیِ URI پایین
+            # روی متنِ رمزشده کار می‌کرد و یک رشتهٔ base64 را به‌جای میزبان
+            # برمی‌گرداند. پیامدِ اندازه‌گیری‌شده: هر ۱۱۲ خطِ ssr مقصدِ بی‌معنا
+            # داشتند ⇒ GeoIP همیشه شکست ⇒ برچسبِ «Global 🌐» برای همه.
+            # با رمزگشایی، ۹۶ خط از ۱۱۲ برچسبِ کشورِ واقعی می‌گیرند.
+            _p = _ssr_parts(line)
+            if _p:
+                return _p[0].strip().lower()
+            # تجزیه‌نشدنی → مثلِ قبل به مسیرِ عمومی می‌افتد (رفتارِ پیشین حفظ می‌شود)
         # سایر پروتکل‌ها: scheme://[userinfo@]host[:port][?query][#fragment]
         rest = line.split("://", 1)[1] if "://" in line else line
         rest = rest.split("#", 1)[0].split("?", 1)[0]
@@ -875,6 +964,80 @@ def dedup_key(line: str) -> str:
                 return f"ss:legacy:{decoded.lower()}"
         except Exception:
             return line.split("#")[0].strip()[:120]
+
+    # ★ فاز O4 — کلیدِ ساختاریِ ssr به‌جای کلیدِ متنیِ base64.
+    #
+    # چرا لازم بود: شاخهٔ عمومیِ پایین `urlparse` را روی `ssr://<base64>`
+    # اجرا می‌کرد. آن base64 **کلِ** بدنه است (میزبان، پورت، رمز، پارامترها و
+    # حتی `remarks`/`group`)، پس کلید عملاً «رشتهٔ رمزشده» می‌شد. دو پیامدِ
+    # اندازه‌گیری‌شده روی پیکرهٔ ۳۳٬۰۶۶ خطی (۱۱۲ خطِ ssr):
+    #   ۱. یک نودِ یکسان که با padding یا الفبای متفاوت (`+/` در برابر `-_`)
+    #      یا با `remarks`/`group`ِ دیگر آمده بود، **کلیدِ متفاوت** می‌گرفت
+    #      ⇒ افرازِ کاذب. اندازه‌گیری: ۵۲ گروه → ۲۸ گروه (۲۴ ادغام، هیستوگرامِ
+    #      کاملاً یکنواختِ {۴: ۲۸}).
+    #   ۲. `endpoint_of` هم روی همان رشته کار می‌کرد ⇒ GeoIP همیشه شکست ⇒
+    #      همهٔ ۱۱۲ خط برچسبِ «Global 🌐». حالا ۹۶ خط کشورِ واقعی می‌گیرند.
+    #
+    # ایمنیِ اثبات‌شده پیش از تغییر (`o4_probe.py` + `o4_probe2.py`):
+    #   • `data_killing_merges = 0` — هیچ‌یک از ۲۴ ادغام دو مصنوعِ متمایز را
+    #     یکی نکرد؛ هر ۲۴ گروه **یک** مصنوعِ یکتا داشتند.
+    #   • `false_splits = 0` · زیانِ کل ۹۹ → ۹۹ (Δ صفر).
+    #   • sha256ِ کلیدهای ۳۲٬۹۵۴ خطِ غیر-ssr **مو‌به‌مو یکسان** ⇒ هیچ طرحِ
+    #     دیگری تکان نخورد.
+    #   • برخوردِ بین‌طرحی: ۰ (پیشوندِ یکتای `ssr:` مثلِ بقیهٔ شاخه‌ها).
+    #
+    # مجموعهٔ هویتی = عیناً همان چیزی که مبدل امیت می‌کند، منهای `name`.
+    # مقادیر **خام**اند (نه `_sanitize_ssr`-شده): پاک‌سازی چندبه‌یک است و
+    # می‌توانست دو کانفیگِ متمایز را ادغام کند. چراییِ کامل در `_ssr_parts`.
+    if line.startswith("ssr://"):
+        try:
+            p = _ssr_parts(line)
+            if p:
+                host, port_s, proto, method, obfs, pwd, obfsparam, protoparam = p
+                # میزبان/پروتکل/متد/obfs بی‌حساسیت به بزرگ‌وکوچک‌اند (نام
+                # دامنه و شناسه‌های ثابت)، ولی گذرواژه و پارامترها **نه** —
+                # مبدل آن‌ها را حرف‌به‌حرف امیت می‌کند، پس کوچک‌کردنشان
+                # دو خروجیِ متفاوت را ادغام می‌کرد.
+                #
+                # ★ چرا `quote`: سه جزءِ آزادمتنِ آخر (گذرواژه و دو پارامتر)
+                # می‌توانند خودشان «:» و «=» داشته باشند، و آن‌وقت کلید
+                # **یک‌به‌یک نیست**. این حرف نظری نیست؛ جهش‌آزمایی (M4) آن را
+                # لو داد و با دو خطِ واقعی اثبات شد:
+                #
+                #   pwd="x:op=y", op=""      ⟶ …:x:op=y:op=:pp=
+                #   pwd="x",      op="y:op=" ⟶ …:x:op=y:op=:pp=   ← یک کلید!
+                #
+                # هر دو را `parse_proxy` می‌پذیرد و مصنوعشان **متفاوت** است
+                # (گذرواژه و obfs_paramِ متفاوت) ⇒ یکی خاموش حذف می‌شد؛ همان
+                # «ادغامِ داده‌کُش» که کلِ این فاز برای بستنش است.
+                #
+                # `quote(safe="")` هر «:» را به `%3A`، هر «=» را به `%3D` و هر
+                # «%» را به `%25` بدل می‌کند. پس هیچ جزئی نمی‌تواند جداکننده
+                # بسازد و کلید به یک چندگانهٔ ۹جزئیِ بی‌ابهام تبدیل می‌شود.
+                # چهار جزءِ نخست ساختاراً «:»-ندارند (از `split(":")` با شمارِ
+                # الزامیِ شش آمده‌اند)، پس نیازی به گریز ندارند و خوانا می‌مانند.
+                q = urllib.parse.quote
+                return (
+                    f"ssr:{host.strip().lower()}:{port_s}"
+                    f":{proto.strip().lower()}:{method.strip().lower()}"
+                    f":{obfs.strip().lower()}:{q(pwd, safe='')}"
+                    f":op={q(obfsparam, safe='')}:pp={q(protoparam, safe='')}"
+                )
+        except Exception:
+            pass
+        # تجزیه‌نشدنی → **هیچ تغییری**؛ به شاخهٔ عمومیِ پایین می‌افتد، یعنی
+        # عیناً کلیدِ امروز. سه دلیلِ عمدی برای اینکه این‌جا مثلِ شاخه‌های
+        # vmess/ss به `[:120]` برنمی‌گردیم:
+        #   ۱. سنجه‌ها با همین معنا گرفته شدند (`o4_probe.py:200` برای موردِ
+        #      تجزیه‌نشدنی `k_before` را نگه می‌دارد). هر معنای دیگری یعنی
+        #      رفتاری که **اندازه‌گیری نشده** — و ادعای بی‌سنجه ممنوع است.
+        #   ۲. بریدنِ ۱۲۰ نویسه خودش خطرِ ادغام می‌سازد: بدنه‌های ssrِ واقعی
+        #      بلندترند، پس دو کانفیگِ متمایز با پیشوندِ مشترک یک کلید
+        #      می‌گرفتند — همان «ادغامِ الکی» که ممنوع است.
+        #   ۳. بی‌اثر بودنش روی خروجی اثبات‌شده است: هر خطی که این تجزیه‌کننده
+        #      رد کند، `converters.parse_proxy` هم رد می‌کند (گرامرِ آینه‌ای،
+        #      قفل‌شده با تستِ ضدواگرایی)، پس هرگز به خروجی نمی‌رسد و افرازش
+        #      دیده نمی‌شود.
 
     try:
         without_remark = line.split("#")[0].strip()

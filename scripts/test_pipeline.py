@@ -7639,5 +7639,437 @@ def test_zz_c12_shared_adversarial_corpus_stayed_untouched():
         _c11_ssr(remarks="inner-ignored", frag=tag))["name"] == tag
 
 
+# ──────────────────────────────────────────────────────────────────────────────
+# فاز O4 — `ssr://` باید در `core.py` هم شناخته شود
+#
+# چرا این تست‌ها لازم‌اند: `core.endpoint_of` و `core.dedup_key` امروز `ssr://`
+# را به شاخهٔ عمومیِ URI می‌فرستند و آن شاخه روی **بلوبِ base64** کار می‌کند.
+# اندازه‌گیریِ واقعی روی ۳۳٬۰۶۶ خط: هر ۱۱۲ نودِ ssr برچسبِ `Global 🌐` گرفتند
+# (چون مقصد، تکه‌ای از base64 است) و ۲۸ کانفیگِ متمایز به ۵۲ کلید تقسیم شدند،
+# یعنی یکتاسازیِ ساختاری صفر. در خروجیِ منتشرشده هم هر ۲۸ نودِ ssr بی‌استثنا
+# `Global 🌐 | @Raydikalx | ХХХХХХ` نام دارند.
+#
+# قاعدهٔ حاکم بر کلید: میدان هویت‌ساز است **اگر و تنها اگر** به مصنوعِ خروجی
+# برسد. شاخهٔ ssrِ `converters.parse_proxy` این‌ها را امیت می‌کند:
+#   server، port، cipher، password، obfs، protocol، obfs_param، protocol_param
+# پس `remarks`/`group`/`#fragment` هویت **نمی‌سازند** و نامِ نود هم نه (برند
+# بازنویسی‌اش می‌کند).
+#
+# ⚠️ عمداً روی مقادیرِ **خام** کلید ساخته می‌شود، نه پاک‌سازی‌شدهٔ
+# `_sanitize_ssr`: پاک‌سازی چند مقدارِ متفاوت را به یکی می‌نشاند و کلیدسازی
+# روی آن می‌توانست دو کانفیگِ متمایز را **ادغام** کند. قاعدهٔ مستندِ مخزن
+# «در تردید، ادغام نکن» است، پس مقادیرِ خام = جهتِ تفکیک‌گرا = ایمن.
+# ──────────────────────────────────────────────────────────────────────────────
+
+#: امضای ساختاریِ کلیدِ نو. اگر این رشته در کلیدِ خطی باشد، یعنی شاخهٔ نوِ ssr
+#: آن را تجزیه کرده. برای اثباتِ «طرح‌های دیگر لمس نمی‌شوند» لازم است.
+_O4_MARK = ":op="
+
+
+def _o4_valid(**kw) -> str:
+    """یک ssrِ سالم با پیش‌فرض‌های صریح، تا هر تست فقط یک چیز را عوض کند."""
+    kw.setdefault("host", "o4.example.com")
+    kw.setdefault("port", 8388)
+    kw.setdefault("proto", "auth_aes128_md5")
+    kw.setdefault("method", "aes-256-cfb")
+    kw.setdefault("obfs", "tls1.2_ticket_auth")
+    kw.setdefault("pwd", "o4pass")
+    return _c11_ssr(**kw)
+
+
+def test_zz_o4_dedup_key_is_structural_not_the_base64_blob():
+    """
+    کلیدِ ssr باید از **محتوای رمزگشایی‌شده** ساخته شود، نه از بلوبِ base64.
+    امروز کلید چیزی شبیهِ `ssr::@bzquzxhhbxbszs5jb206odm4odph…|ep=:?` است،
+    یعنی میزبان و پورت و رمز همه در یک رشتهٔ بی‌ساختار گم شده‌اند.
+    """
+    ln = _o4_valid(host="Struct.Example.COM", port=4711)
+    k = core.dedup_key(ln)
+    assert k, "کلید تهی شد"
+    assert "struct.example.com" in k, f"میزبانِ واقعی در کلید نیست: {k!r}"
+    assert "4711" in k, f"پورتِ واقعی در کلید نیست: {k!r}"
+    blob = ln[len("ssr://"):].split("#", 1)[0]
+    assert blob.lower() not in k.lower(), f"کلید هنوز بلوبِ base64 است: {k!r}"
+
+
+def test_zz_o4_padding_and_alphabet_variants_share_exactly_one_key():
+    """
+    یک کانفیگ، چهار نگارشِ base64 ⇒ باید **یک** کلید بدهد.
+    این همان ۲۴ ادغامِ اندازه‌گیری‌شده است: منبع‌های مختلف عینِ یک نود را با
+    padding یا الفبای متفاوت می‌نویسند. اگر کلید به نگارش حساس بماند، تکراری
+    از فیلتر رد می‌شود و کاربر یک نود را چند بار می‌بیند.
+
+    ⚠️ تلهٔ سنجش (این‌جا اندازه‌گیری و مشتق شد، حدس نیست): دو الفبای base64
+    فقط وقتی متنِ **متفاوت** می‌دهند که خروجی `+` یا `/` داشته باشد. همهٔ
+    بایت‌های بدنه ASCII‌اند (بیتِ ۷ صفر)، پس شاخصِ ۶۲/۶۳ تنها از **چهارمین**
+    شش‌بیتی درمی‌آید: بایتی در جایگاهِ ≡۲ (پیمانهٔ ۳) که شش بیتِ کم‌ارزشش همه
+    یک باشد — یعنی `?`(0x3F)→`/` یا `>`/`~`(0x3E/0x7E)→`+`. بدنه یک `?` دارد
+    (جداکنندهٔ `/?`)، پس جایگاهش با طولِ میزبان تنظیم می‌شود: طولِ ۱۵ (≡۰
+    پیمانهٔ ۳). و برای اینکه padding هم وجود داشته باشد، طولِ کلِ بدنه نباید
+    ≡۰ پیمانهٔ ۳ باشد ⇒ `obfsparam="cd"` (توجه: `_c11_b64` پیش‌فرضش
+    urlsafe و **بی‌padding** است، پس طولِ مقدارِ درونی هم روی این حساب اثر
+    دارد — همین نکته اولین انتخابِ من را باطل کرد). با این دو شرط، هر چهار
+    نگارش متنِ یکتا دارند و مبدل هر چهار را با **یک** مصنوعِ یکسان می‌پذیرد.
+    """
+    variants = [
+        _o4_valid(host="hhh.example.com", obfsparam="cd"),
+        _o4_valid(host="hhh.example.com", obfsparam="cd", pad=False),
+        _o4_valid(host="hhh.example.com", obfsparam="cd", urlsafe=True),
+        _o4_valid(host="hhh.example.com", obfsparam="cd", urlsafe=True, pad=False),
+    ]
+    assert len(set(variants)) == 4, "خطوطِ آزمون باید متنِ متفاوت داشته باشند"
+    keys = {core.dedup_key(v) for v in variants}
+    assert len(keys) == 1, f"چهار نگارشِ یک نود، {len(keys)} کلید گرفت: {keys}"
+    # یک کلید تنها وقتی **بی‌زیان** است که مصنوعِ خروجیِ هر چهار یکی باشد؛
+    # وگرنه ادغام یعنی حذفِ خاموشِ یک کانفیگِ متمایز.
+    arts = set()
+    for v in variants:
+        p = converters.parse_proxy(v)
+        assert p is not None, f"مبدل نگارشِ سالم را رد کرد: {v[:50]}"
+        arts.add(json.dumps({k: val for k, val in p.items() if k != "name"},
+                            sort_keys=True, ensure_ascii=False))
+    assert len(arts) == 1, f"چهار نگارش، {len(arts)} مصنوعِ متمایز داد ⇒ ادغام پرزیان"
+
+
+def test_zz_o4_fragment_and_inner_remarks_and_group_never_shift_the_key():
+    """
+    نامِ نود هویت نمی‌سازد. سه سطحِ نام‌گذاری باید بی‌اثر باشند: `#fragment`
+    (که برند بازنویسی‌اش می‌کند)، `remarks=`ِ درونی، و `group=`. هیچ‌کدام به
+    مصنوعِ خروجی نمی‌رسند.
+    """
+    same = [
+        _o4_valid(host="name.example.com"),
+        _o4_valid(host="name.example.com", frag="🇩🇪 Berlin"),
+        _o4_valid(host="name.example.com", frag="totally-different"),
+        _o4_valid(host="name.example.com", remarks="inner-name-A"),
+        _o4_valid(host="name.example.com", remarks="inner-name-B"),
+    ]
+    keys = {core.dedup_key(x) for x in same}
+    assert len(keys) == 1, f"نام‌گذاری کلید را جابه‌جا کرد: {keys}"
+    # `group=` هم همان‌طور: در query هست ولی به خروجی نمی‌رسد.
+    stem = ("name.example.com:8388:auth_aes128_md5:aes-256-cfb:"
+            "tls1.2_ticket_auth:" + _c11_b64("o4pass"))
+    g1 = _c11_ssr(body_override=stem + "/?group=" + _c11_b64("G1"))
+    g2 = _c11_ssr(body_override=stem + "/?group=" + _c11_b64("G2"))
+    assert g1 != g2, "دو خطِ آزمون باید متنِ متفاوت داشته باشند"
+    assert core.dedup_key(g1) == core.dedup_key(g2), "group= کلید را عوض کرد"
+
+
+def test_zz_o4_every_identity_bearing_field_splits_the_key():
+    """
+    قرینهٔ تستِ قبلی: هر میدانی که **به خروجی می‌رسد** باید کلید را جدا کند.
+    اگر یکی از قلم بیفتد، دو کانفیگِ متمایز ادغام می‌شوند و یکی خاموش حذف
+    می‌شود — همان «حذفِ خاموش»ی که فاز J مستندش کرد.
+    """
+    base = _o4_valid()
+    k0 = core.dedup_key(base)
+    cases = {
+        "host": _o4_valid(host="other.example.com"),
+        "port": _o4_valid(port=9999),
+        "protocol": _o4_valid(proto="auth_chain_a"),
+        "method": _o4_valid(method="chacha20-ietf"),
+        "obfs": _o4_valid(obfs="http_simple"),
+        "password": _o4_valid(pwd="different-pass"),
+        "obfs_param": _o4_valid(obfsparam="cdn.example.org"),
+        "protocol_param": _o4_valid(protoparam="64"),
+    }
+    seen = {k0: "baseline"}
+    for field, ln in cases.items():
+        k = core.dedup_key(ln)
+        assert k != k0, f"تغییرِ «{field}» کلید را جدا نکرد ⇒ خطرِ ادغامِ داده‌کُش"
+        assert k not in seen, f"«{field}» با «{seen[k]}» تصادم کرد: {k!r}"
+        seen[k] = field
+
+
+def test_zz_o4_obfs_and_protocol_params_are_distinguished_from_each_other():
+    """
+    `obfsparam` و `protoparam` دو میدانِ جدا در خروجی‌اند (`obfs-param` و
+    `protocol-param` در clash). اگر کلید هر دو را در یک کاسه بریزد،
+    جابه‌جاییِ مقدار بینشان دیده نمی‌شود.
+    """
+    a = _o4_valid(obfsparam="X", protoparam="Y")
+    b = _o4_valid(obfsparam="Y", protoparam="X")
+    assert a != b, "دو خطِ آزمون باید متنِ متفاوت داشته باشند"
+    assert core.dedup_key(a) != core.dedup_key(b), \
+        "جابه‌جاییِ obfsparam و protoparam کلیدِ یکسان داد"
+
+
+def test_zz_o4_host_and_method_case_folds_but_password_does_not():
+    """
+    میزبان و نامِ الگوریتم بی‌حساسیت به حروف‌اند (DNS و mihomo هر دو کوچک
+    می‌کنند)، ولی **رمز** حساس است: `PW` و `pw` دو رمزِ متفاوتند و ادغامشان
+    یعنی از دست رفتنِ یک کانفیگِ کارآمد.
+    """
+    up = _o4_valid(host="CASE.Example.COM", method="AES-256-CFB")
+    lo = _o4_valid(host="case.example.com", method="aes-256-cfb")
+    assert core.dedup_key(up) == core.dedup_key(lo), \
+        "حروفِ بزرگ/کوچکِ میزبان یا متد کلید را جدا کرد"
+    assert core.dedup_key(_o4_valid(pwd="Secret")) != \
+        core.dedup_key(_o4_valid(pwd="secret")), \
+        "رمز نباید کوچک شود — دو رمزِ متفاوت یک کلید گرفت"
+
+
+def test_zz_o4_endpoint_of_returns_the_real_host_and_matches_the_converter():
+    """
+    `endpoint_of` ⇒ کشور ⇒ **برچسبِ نامِ نود**. اگر مقصد تکه‌ای از base64
+    باشد، GeoIP شکست می‌خورد و برچسب به `Global 🌐` می‌افتد — که همین حالا
+    برای ۱۰۰٪ نودهای ssrِ منتشرشده رخ داده است.
+    """
+    for host in ("ep.example.com", "EP.Example.COM", "203.0.113.7"):
+        ln = _o4_valid(host=host)
+        ep = core.endpoint_of(ln)
+        assert ep == host.lower(), f"مقصدِ {host!r} → {ep!r}"
+        p = converters.parse_proxy(ln)
+        assert p is not None, "مبدل خطِ سالم را رد کرد"
+        assert ep == str(p["server"]).lower(), \
+            f"مقصدِ core ({ep!r}) با serverِ مبدل ({p['server']!r}) نمی‌خواند"
+
+
+def test_zz_o4_core_and_converters_never_diverge_on_host_and_port():
+    """
+    ★ درسِ K-L6: `core` نمی‌تواند `converters` را import کند (حلقهٔ واردات)،
+    پس دو تجزیه‌کنندهٔ موازی داریم — و واگراییِ `_clean_sni` از همین آرایش
+    زاد. این تست توافقشان را **قفل** می‌کند: هر خطی که مبدل بپذیرد، core باید
+    همان میزبان و همان پورت را ببیند.
+
+    عکسش الزام نیست: خطی که مبدل رد می‌کند (مثلاً رمزِ تهی) هرگز منتشر
+    نمی‌شود، پس کلیدش بی‌اثر است.
+    """
+    matrix = []
+    for host in ("a.example.com", "B.Example.NET", "198.51.100.9"):
+        for port in (80, 8388, 65535):
+            for kw in ({}, {"pad": False}, {"urlsafe": True},
+                       {"obfsparam": "o"}, {"protoparam": "p"},
+                       {"remarks": "r"}, {"frag": "F"}):
+                matrix.append(_o4_valid(host=host, port=port, **kw))
+    checked = 0
+    for ln in matrix:
+        p = converters.parse_proxy(ln)
+        if not p:
+            continue
+        checked += 1
+        assert core.endpoint_of(ln) == str(p["server"]).lower(), \
+            f"واگراییِ میزبان روی {ln[:50]}"
+        k = core.dedup_key(ln)
+        assert str(p["port"]) in k, f"پورتِ مبدل در کلید نیست: {k!r}"
+        assert str(p["server"]).lower() in k, f"میزبانِ مبدل در کلید نیست: {k!r}"
+    assert checked >= 60, f"پیکرهٔ آزمون خیلی کوچک شد: {checked}"
+
+
+def test_zz_o4_malformed_ssr_falls_back_without_raising_or_merging():
+    """
+    ورودیِ خراب نباید نه استثنا بدهد، نه ساختارِ نداشته را ادعا کند، نه با
+    نگارشِ سالم ادغام شود. رفتارِ محافظه‌کارانه = عیناً وضعِ امروز. این تست
+    باید **پیش و پس** از تغییر سبز باشد؛ اگر پیش از تغییر سرخ شود، یعنی
+    فرضِ من از رفتارِ امروز غلط بوده، نه اینکه نقصی کشف شده.
+    """
+    k_good = core.dedup_key(_o4_valid(host="fb.example.com"))
+    bad = {
+        "base64 خراب": "ssr://" + "!!!not-base64!!!",
+        "بدنهٔ تهی": "ssr://",
+        "پنج بخش": _c11_ssr(
+            main_override="fb.example.com:8388:origin:aes-256-cfb:plain"),
+        "هفت بخش": _c11_ssr(main_override=(
+            "fb.example.com:8388:origin:aes-256-cfb:plain:"
+            + _c11_b64("pw") + ":extra")),
+        "IPv6": _c11_ssr(main_override=(
+            "2001:db8::1:8388:origin:aes-256-cfb:plain:" + _c11_b64("pw"))),
+        "پورتِ غیرعددی": _c11_ssr(main_override=(
+            "fb.example.com:http:origin:aes-256-cfb:plain:" + _c11_b64("pw"))),
+        "میزبانِ تهی": _c11_ssr(main_override=(
+            ":8388:origin:aes-256-cfb:plain:" + _c11_b64("pw"))),
+    }
+    for why, ln in bad.items():
+        k = core.dedup_key(ln)              # نباید استثنا بدهد
+        assert isinstance(k, str) and k, f"«{why}» کلیدِ تهی داد"
+        assert k == core.dedup_key(ln), f"«{why}» کلیدِ ناپایدار داد"
+        assert k != k_good, f"«{why}» با خطِ سالم ادغام شد"
+        assert _O4_MARK not in k, \
+            f"«{why}» ساختارِ تجزیه‌نشده را ادعا کرد: {k!r}"
+
+
+def test_zz_o4_other_schemes_are_byte_identically_untouched():
+    """
+    ۳۲٬۹۵۴ خطِ غیر-ssr در پیکرهٔ سنجش، sha256ِ کلیدهایشان پیش و پس از تغییر
+    یکی بود. این تست همان را روی پیکرهٔ اشتراکیِ مخزن قفل می‌کند: هیچ خطی از
+    طرحِ دیگر نباید وارد مسیرِ نو شود.
+    """
+    corpus = _e4_corpus()
+    assert len(corpus) == 56, f"پیکرهٔ اشتراکی عوض شده: {len(corpus)}"
+    for kind, line in corpus:
+        assert not line.startswith("ssr://"), "پیکرهٔ e4 نباید ssr داشته باشد"
+        k = core.dedup_key(line)
+        assert _O4_MARK not in k, f"خطِ {kind} وارد شاخهٔ نوِ ssr شد: {k!r}"
+        assert not k.startswith("ssr:"), f"کلیدِ {kind} پیشوندِ ssr گرفت: {k!r}"
+        assert isinstance(core.endpoint_of(line), str), f"مقصدِ {kind} رشته نیست"
+
+
+def test_zz_o4_stable_label_is_deterministic_and_tracks_identity():
+    """
+    `stable_label = sha256(dedup_key)[:6]` (`core.py:514`)، پس تغییرِ کلید تگِ
+    انتهای نام را عوض می‌کند — اندازه‌گیری‌شده: ۲۸ نودِ تولیدی. این تست الزام
+    می‌کند تگ (الف) بی‌حالت و تکرارپذیر باشد، (ب) با نگارشِ base64 عوض نشود،
+    (ج) با هویتِ واقعی عوض بشود.
+    """
+    ln = _o4_valid(host="tag.example.com")
+    t1 = core.stable_label(ln)
+    assert t1 == core.stable_label(ln), "تگِ ناپایدار بینِ دو فراخوان"
+    assert len(t1) == 6 and t1 == t1.upper(), f"شکلِ تگ عوض شد: {t1!r}"
+    assert core.stable_label(
+        _o4_valid(host="tag.example.com", pad=False, frag="X")) == t1, \
+        "نگارشِ base64 یا نام، تگ را عوض کرد"
+    assert core.stable_label(_o4_valid(host="tag2.example.com")) != t1, \
+        "میزبانِ متفاوت همان تگ را گرفت"
+
+
+def test_zz_o4_the_measured_duplicate_family_collapses_to_one_key():
+    """
+    بازسازیِ عینیِ آنچه در پیکرهٔ واقعی دیدم: ۲۸ کانفیگِ متمایز که هرکدام
+    **چهار** بار با نگارشِ متفاوت آمده بودند و امروز ۵۲ کلید می‌گرفتند
+    (هیستوگرامِ گروه‌های پیشنهادی: `{4: 28}`). این تست همان الگو را
+    کوچک‌شده می‌سازد و الزام می‌کند شمارِ گروه‌ها برابرِ شمارِ کانفیگ‌های
+    واقعاً متمایز شود — نه بیشتر (تکراری) و نه کمتر (حذفِ خاموش).
+    """
+    families, lines = 5, []
+    for i in range(families):
+        h, pw = f"fam{i}.example.com", f"pw{i}"
+        lines += [
+            _o4_valid(host=h, pwd=pw),
+            _o4_valid(host=h, pwd=pw, pad=False),
+            _o4_valid(host=h, pwd=pw, urlsafe=True, frag=f"n{i}"),
+            _o4_valid(host=h, pwd=pw, remarks=f"r{i}"),
+        ]
+    assert len(set(lines)) == families * 4, "خطوطِ آزمون باید متنِ یکتا باشند"
+    keys = {core.dedup_key(x) for x in lines}
+    assert len(keys) == families, \
+        f"{families} کانفیگِ متمایز، {len(keys)} کلید گرفت"
+    # و مصنوعِ خروجیِ هر خانواده هم باید یکی باشد ⇒ ادغام بی‌زیان است.
+    arts = set()
+    for x in lines:
+        p = converters.parse_proxy(x)
+        assert p is not None, "مبدل خطِ سالم را رد کرد"
+        arts.add(json.dumps({k: v for k, v in p.items() if k != "name"},
+                            sort_keys=True, ensure_ascii=False))
+    assert len(arts) == families, \
+        f"ادغام بی‌زیان نبود: {len(arts)} مصنوعِ متمایز برای {families} گروه"
+
+
+def test_zz_o4_key_is_injective_under_delimiter_bearing_values():
+    """
+    کلید باید **یک‌به‌یک** باشد: دو چندگانهٔ هویتیِ متفاوت هرگز یک کلید نگیرند.
+
+    این تست از جهش‌آزمایی زاده شد، نه از خیال. جهشِ M4 (نوشتنِ یک پیشوندِ
+    مشترک برای هر دو پارامتر) جانِ سالم برد، و بررسیِ چراییِ آن نشان داد
+    **خودِ پیادهٔ اولِ من هم** یک‌به‌یک نبود: سه جزءِ آخر (گذرواژه، obfsparam،
+    protoparam) آزادمتن‌اند و می‌توانند «:» و «=» داشته باشند، پس مرزِ اجزا
+    را جابه‌جا می‌کردند. دو خطِ واقعیِ زیر یک کلید می‌گرفتند:
+
+        pwd="x:op=y", obfsparam=""      ⟶ …:x:op=y:op=:pp=
+        pwd="x",      obfsparam="y:op=" ⟶ …:x:op=y:op=:pp=
+
+    و `parse_proxy` هر دو را می‌پذیرد با مصنوعِ **متفاوت** (گذرواژه و
+    obfs_paramِ متفاوت) ⇒ یکی خاموش حذف می‌شد. یعنی همان «ادغامِ داده‌کُش» که
+    کلِ فاز O4 برای بستنش است، از راهِ دیگری برمی‌گشت.
+
+    وصله: `urllib.parse.quote(..., safe="")` روی همان سه جزء.
+    """
+    # ── ۱) همان جفتِ اثبات‌شده نباید ادغام شود ────────────────────────────
+    a = _o4_valid(host="inj.example.com", pwd="x:op=y", obfsparam="")
+    b = _o4_valid(host="inj.example.com", pwd="x", obfsparam="y:op=")
+    ka, kb = core.dedup_key(a), core.dedup_key(b)
+    pa, pb = converters.parse_proxy(a), converters.parse_proxy(b)
+    assert pa is not None and pb is not None, "مبدل باید هر دو را بپذیرد"
+    assert pa["password"] != pb["password"] or \
+        pa["obfs_param"] != pb["obfs_param"], "پیش‌شرطِ تست: مصنوع‌ها باید فرق کنند"
+    assert ka != kb, (
+        "دو کانفیگِ متمایز یک کلید گرفتند ⇒ ادغامِ داده‌کُش\n"
+        f"  کلید = {ka!r}")
+
+    # ── ۲) خانوادهٔ کاملِ مقادیرِ جداکننده‌دار ────────────────────────────
+    #
+    # هر چندگانهٔ متمایز باید کلیدِ متمایز بگیرد، و چندگانهٔ یکسان کلیدِ یکسان.
+    # `%` هم آزموده می‌شود چون `quote` خودش `%` را می‌گریزاند؛ اگر نمی‌گریزاند،
+    # مقدارِ «%3A» و مقدارِ «:» یکی می‌شدند — یعنی گریز، خودش تصادم می‌ساخت.
+    tuples = [
+        ("p", "", ""),
+        ("p", "", "x"),
+        ("x:op=y", "", ""),
+        ("x", "y:op=", ""),
+        ("a:pp=b", "", ""),
+        ("a", "", "b"),
+        (":", "", ""),
+        ("%3A", "", ""),
+        ("=", "=", "="),
+        ("", ":op=:pp=", ""),
+    ]
+    seen: dict = {}
+    for pwd, op, pp in tuples:
+        ln = _o4_valid(host="inj2.example.com", pwd=pwd,
+                       obfsparam=op, protoparam=pp)
+        k = core.dedup_key(ln)
+        assert k not in seen or seen[k] == (pwd, op, pp), (
+            f"دو چندگانهٔ متفاوت یک کلید گرفتند: {seen.get(k)} و "
+            f"{(pwd, op, pp)}\n  کلید = {k!r}")
+        seen[k] = (pwd, op, pp)
+    assert len(seen) == len(tuples), \
+        f"{len(tuples)} چندگانهٔ متمایز، فقط {len(seen)} کلید داد"
+
+    # ── ۳) و یک‌به‌یکی نباید به بهای «حساس‌شدن به نگارش» به‌دست آمده باشد ──
+    # (وگرنه وصله، دستاوردِ اصلیِ فاز را خراب می‌کرد)
+    same = _o4_valid(host="inj3.example.com", pwd="x:op=y")
+    assert core.dedup_key(same) == core.dedup_key(
+        _o4_valid(host="inj3.example.com", pwd="x:op=y", urlsafe=False)), \
+        "گریزِ کلید، هم‌ارزیِ دو الفبای base64 را شکست"
+
+
+def test_zz_o4_decoder_strictness_mirrors_the_converter_in_both_directions():
+    """
+    دیکودرِ `core` باید **به همان اندازهٔ** `converters` سخت‌گیر باشد — نه کمتر.
+
+    این تست هم از جهش‌آزمایی زاده شد: جهشِ M9 (`errors="ignore"`) جانِ سالم
+    برد، یعنی هیچ تستی سخت‌گیریِ دیکودر را نمی‌پایید.
+
+    چرا سهل‌گیری خطرناک است (سنجشِ زنده، نه استدلال): گذرواژه‌ای که بایتِ
+    نامعتبرِ UTF-8 دارد با دیکودرِ سهل‌گیر به گذرواژهٔ **مثله‌شده** بدل می‌شود.
+    آن‌وقت خطِ خرابِ زیر و خطِ سالمِ زیر **یک کلید** می‌گیرند:
+
+        pwd = b"pw\\xff"   ← `parse_proxy` ردش می‌کند (هرگز به خروجی نمی‌رسد)
+        pwd = b"pw"        ← سالم و منتشرشدنی
+
+    و چون یکتاسازی «نخستین دیده‌شده» را نگه می‌دارد، اگر خطِ خراب اول بیاید،
+    **خطِ سالم به‌عنوانِ تکراری حذف می‌شود** و جایش کانفیگی می‌ماند که هیچ
+    کلاینتی نمی‌تواند بسازد. یعنی سهل‌گیریِ دیکودر = از دست رفتنِ کانفیگِ
+    کارآمد. این همان «گزینهٔ الف» است که مالک ردش کرد.
+    """
+    import base64 as _b64
+    bad_pwd_b64 = _b64.b64encode(b"pw\xff").decode()      # UTF-8 نامعتبر
+    good_pwd_b64 = _b64.b64encode(b"pw").decode()
+    host = "utf.example.com"
+    tail = "auth_aes128_md5:aes-256-cfb:tls1.2_ticket_auth"
+    bad = _c11_ssr(main_override=f"{host}:8388:{tail}:{bad_pwd_b64}")
+    good = _c11_ssr(main_override=f"{host}:8388:{tail}:{good_pwd_b64}")
+
+    # جهتِ اول: چیزی که مبدل رد می‌کند، core هم باید رد کند.
+    assert converters.parse_proxy(bad) is None, \
+        "پیش‌شرطِ تست: مبدل باید گذرواژهٔ نامعتبر را رد کند"
+    assert core._ssr_parts(bad) is None, \
+        "core گذرواژهٔ نامعتبر را پذیرفت ⇒ دیکودرش از مبدل سهل‌گیرتر است"
+    assert core._ssr_b64_text(bad_pwd_b64, allow_empty=True) is None, \
+        "دیکودرِ core بایتِ نامعتبر را بی‌صدا خورد"
+
+    # جهتِ دوم: چیزی که مبدل می‌پذیرد، core هم باید بفهمد (ضدِّ واگرایی).
+    assert converters.parse_proxy(good) is not None
+    assert core._ssr_parts(good) is not None
+
+    # و پیامدِ ملموس: این دو هرگز نباید یک کلید بگیرند.
+    kb, kg = core.dedup_key(bad), core.dedup_key(good)
+    assert kb != kg, (
+        "خطِ خرابِ منتشرنشدنی با خطِ سالم ادغام شد ⇒ کانفیگِ کارآمد قربانی "
+        f"می‌شود\n  کلید = {kb!r}")
+    assert _O4_MARK not in kb, \
+        f"core ساختارِ تجزیه‌نشده را ادعا کرد: {kb!r}"
+    assert _O4_MARK in kg, f"خطِ سالم کلیدِ ساختاری نگرفت: {kg!r}"
+
+
 if __name__ == "__main__":
     sys.exit(_run_all())
