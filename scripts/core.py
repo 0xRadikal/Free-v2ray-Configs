@@ -539,11 +539,15 @@ _FRONT_HOST_BAD_CHARS = frozenset(' \t\r\n/:@?#{}"\\,;|<>()[]')
 def _is_plausible_fronting_host(v: str) -> bool:
     """آیا `v` می‌تواند واقعاً یک دامنهٔ fronting باشد؟ — **فقط نحوی، بدونِ DNS**.
 
-    چرا لازم است: `dedup_key` وقتی `sni`/`host` وجود دارد، **میزبانِ واقعی را
-    دور می‌ریزد** (`host_for_key = ""`) و هویتِ سرور را به همان مقدار می‌سپارد.
-    اگر آن مقدار زباله باشد، دو سرورِ کاملاً متفاوت که زبالهٔ مشترک دارند یک
-    هویت می‌شوند و در `aggregate.py` یکی‌شان به `duplicates` می‌رود و
-    **منتشر نمی‌شود**. نمونه‌های واقعیِ سنجیده‌شده در پیکرهٔ زنده:
+    چرا لازم است — ★ این دلیل در فازِ I **به‌روز شد**: پیش از فازِ I، وجودِ
+    `sni`/`host` باعث می‌شد کلید میزبانِ واقعی را دور بریزد (`host_for_key = ""`)
+    و هویت را به همان مقدار بسپارد؛ آن‌وقت یک مقدارِ زباله‌ی مشترک دو سرورِ
+    متفاوت را یکی می‌کرد و یکی‌شان در `aggregate.py` به `duplicates` می‌رفت و
+    **منتشر نمی‌شد**. اکنون میزبانِ واقعی **همیشه** در کلید می‌ماند، پس آن
+    مسیرِ ادغام بسته شده است؛ ولی این اعتبارسنجی همچنان لازم است، برای جهتِ
+    **عکس**: اگر مقدارِ زباله در `ep` بنشیند، دو خطِ یکسان که یکی‌شان آن زباله
+    را دارد و دیگری ندارد به دو کلید می‌شکنند و **دو بار منتشر** می‌شوند
+    (در فازِ H سنجیده شد: ۳۶ افراز). نمونه‌های واقعیِ سنجیده‌شده در پیکرهٔ زنده:
 
         sni=https%3A%2F%2Ft.me%2Foneclickvpnkeys → «https://t.me/oneclickvpnkeys»
         sni=t.me%2Fripaojiedian                  → «t.me/ripaojiedian»
@@ -665,7 +669,8 @@ def dedup_key(line: str) -> str:
                             and _sni_is_endpoint(tls)):
                 sni = ""
             fronting = host or sni
-            add_for_key = "" if fronting else add
+            # ★ فازِ I: fronting دیگر میزبانِ واقعی را جانشین نمی‌شود.
+            add_for_key = add
             return (
                 f"vmess:{add_for_key}|ep={fronting}"
                 f":{str(obj.get('port', '')).strip()}"
@@ -764,14 +769,9 @@ def dedup_key(line: str) -> str:
             meaningful.pop("host", None)                      # (۱)
         # ─────────────────────────────────────────────────────────────────────
         fronting_domain = sni_val or host_val
-        if fronting_domain:
-            endpoint = fronting_domain
-            meaningful.pop("sni", None)
-            meaningful.pop("host", None)
-            host_for_key = ""
-        else:
-            endpoint = ""
-            host_for_key = conn_host
+        # ★ فازِ I: هم میزبانِ واقعی و هم دامنهٔ fronting در کلید می‌مانند.
+        endpoint = fronting_domain
+        host_for_key = conn_host
         sorted_query = "&".join(f"{k2}={meaningful[k2]}" for k2 in sorted(meaningful))
         return (
             f"{parsed.scheme.lower()}:"

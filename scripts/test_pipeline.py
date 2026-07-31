@@ -5759,9 +5759,12 @@ def test_zz_h_tls_valid_sni_key_unchanged():
     line = _h_vless("security=tls&sni=cdn.example.com&type=ws")
     host, ep, _p, params = _h_parts(core.dedup_key(line))
     assert ep == "cdn.example.com", "frontingِ مشروع نباید رد شود"
-    assert host == "", "با frontingِ پذیرفته‌شده میزبانِ واقعی حذف می‌شود"
-    assert "security=tls" in params and not any(p.startswith("sni=") for p in params)
-    # همان چیزی که الگوریتمِ قدیم می‌داد.
+    # ★ قرارداد در فازِ I عوض شد: میزبانِ واقعی **دیگر حذف نمی‌شود** و `sni` هم
+    # در query می‌ماند، چون `ep` جای میزبان را نگرفته است. آنچه این تست از فازِ H
+    # پاس می‌دارد — استخراجِ درستِ مقدارِ fronting — همچنان سنجیده می‌شود.
+    assert host == "1.2.3.4", "فازِ I: میزبانِ واقعی باید در کلید بماند"
+    assert "security=tls" in params
+    assert "sni=cdn.example.com" in params, "فازِ I: sni دیگر دور ریخته نمی‌شود"
     assert ep == _h_old_fronting_generic(line)
 
 
@@ -5769,8 +5772,9 @@ def test_zz_h_host_param_unchanged_by_tls_rule():
     """`host` هرگز به قاعدهٔ TLS مشروط نشد — فقط اعتبارِ نحوی."""
     line = _h_vless("security=none&host=cdn.example.com&type=ws")
     host, ep, _p, _q = _h_parts(core.dedup_key(line))
-    assert ep == "cdn.example.com" and host == "", (
+    assert ep == "cdn.example.com", (
         "host با security=none هم fronting معتبر است (هدرِ HTTP، نه TLS)")
+    assert host == "1.2.3.4", "فازِ I: میزبانِ واقعی حفظ می‌شود"
     assert ep == _h_old_fronting_generic(line)
 
 
@@ -5839,13 +5843,15 @@ def test_zz_h_vmess_reality_sni_keeps_add():
 def test_zz_h_vmess_tls_valid_sni_unchanged():
     add, front = _h_vmess_parts(core.dedup_key(
         _h_vmess(tls="tls", sni="cdn.example.com")))
-    assert add == "" and front == "cdn.example.com", (add, front)
+    assert front == "cdn.example.com", (add, front)
+    assert add == "1.2.3.4", "فازِ I: `add` باید در کلید بماند"
 
 
 def test_zz_h_vmess_host_kept_without_tls():
     """در vmess هم `host` مشروط به TLS نیست."""
     add, front = _h_vmess_parts(core.dedup_key(_h_vmess(host="cdn.example.com")))
-    assert add == "" and front == "cdn.example.com", (add, front)
+    assert front == "cdn.example.com", (add, front)
+    assert add == "1.2.3.4", "فازِ I: `add` باید در کلید بماند"
 
 
 def test_zz_h_vmess_garbage_host_falls_back_to_add():
@@ -5857,20 +5863,27 @@ def test_zz_h_vmess_invalid_host_valid_sni_shifts_to_sni():
     """`host` نامعتبر و `sni` معتبر با tls ⇒ fronting به sni منتقل می‌شود."""
     add, front = _h_vmess_parts(core.dedup_key(
         _h_vmess(host="onelabel", sni="cdn.example.com", tls="tls")))
-    assert add == "" and front == "cdn.example.com", (add, front)
+    assert front == "cdn.example.com", (add, front)
+    assert add == "1.2.3.4", "فازِ I: `add` باید در کلید بماند"
 
 
 # ── ۵) پروتکل‌های دیگر (اثباتِ اینکه وصله فقط ss را دست‌نخورده می‌گذارد) ───────
 
 def test_zz_h_other_schemes_follow_same_rule():
-    for line, want_host in (
-        ("trojan://pw@5.6.7.8:443?security=reality&sni=www.bing.com#t", "5.6.7.8"),
-        ("hysteria2://pw@5.6.7.8:443?sni=t.me%2Fripaojiedian#h", "5.6.7.8"),
-        ("tuic://u:p@5.6.7.8:443?security=none&sni=a.example.com#u", "5.6.7.8"),
-        ("trojan://pw@5.6.7.8:443?security=tls&sni=cdn.example.com#ok", ""),
+    # پس از فازِ I میزبانِ واقعی در **همهٔ** حالت‌ها می‌ماند، پس `ep`ِ انتظاری هم
+    # سنجیده می‌شود تا تست قدرتِ تفکیکش را از دست ندهد.
+    for line, want_host, want_ep in (
+        ("trojan://pw@5.6.7.8:443?security=reality&sni=www.bing.com#t",
+         "5.6.7.8", ""),
+        ("hysteria2://pw@5.6.7.8:443?sni=t.me%2Fripaojiedian#h",
+         "5.6.7.8", ""),
+        ("tuic://u:p@5.6.7.8:443?security=none&sni=a.example.com#u",
+         "5.6.7.8", ""),
+        ("trojan://pw@5.6.7.8:443?security=tls&sni=cdn.example.com#ok",
+         "5.6.7.8", "cdn.example.com"),
     ):
         host, ep, _p, _q = _h_parts(core.dedup_key(line))
-        assert host == want_host, (line, host, ep)
+        assert (host, ep) == (want_host, want_ep), (line, host, ep)
 
 
 def test_zz_h_ss_branch_untouched():
@@ -5986,6 +5999,216 @@ def test_zz_h_control_old_algorithm_gave_different_result():
         _h, ep, _p, _q = _h_parts(core.dedup_key(line))
         assert ep == _h_old_fronting_generic(line), (
             f"وصله بیش از دامنهٔ خود عمل کرد: {line!r}")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# فازِ I — «مقدارِ fronting جانشینِ میزبانِ واقعی نمی‌شود»
+#
+# چه چیزی عوض شد و چرا:
+#   پیش از فازِ I، اگر یک مقدارِ fronting (`sni` یا `host`) اعتبارسنجیِ فازِ H را
+#   رد می‌کرد، کلیدِ یکتاسازی **میزبانِ واقعی را دور می‌ریخت** (`host_for_key=""`
+#   در شاخهٔ عمومی و `add_for_key=""` در شاخهٔ vmess) و همان مقدار را هم از
+#   `meaningful` بیرون می‌انداخت. نتیجه: چند سرورِ **واقعاً متفاوت** که پشتِ یک
+#   دامنهٔ fronting نشسته بودند یک کلید می‌گرفتند و در
+#   `aggregate.py` (خطوطِ ۲۵۹–۲۶۳) بازنده‌ها به `r.duplicates` می‌رفتند که
+#   **هیچ‌وقت منتشر نمی‌شود** ⇒ حذفِ خاموشِ یک سرورِ سالم.
+#
+# چرا IPهای متفاوت پشتِ یک دامنه «تکراری» نیستند — مستندِ رسمیِ Hiddify:
+#   «Due to the severe filtering of the Internet in Iran … To reduce the impact
+#    of these disturbances, you should find clean IPs (IPs that are not
+#    disturbed).»  یعنی IP دقیقاً همان میدانی است که کاربر برای دسترسی‌پذیری
+#   می‌گردد و انتخاب می‌کند؛ و این خط‌لوله **هیچ آزمونِ دسترسی‌پذیریِ
+#   per-config ندارد**، پس انداختنِ یک کانفیگ صرفاً «از دست دادن» است.
+#
+# سنجشِ زنده روی همان عکسِ ثابتِ ۱۸٬۷۳۵ خطی (i_measure.py / i_verify.py،
+# drift = 0): کلیدِ آلوده ۸۳۴ → ۴۱۰، کانفیگِ ادغام‌شده ۱۹۵۱ → ۵۰۵،
+# یکتا ۸۶۶۰ → ۱۰۱۰۷، ادغامِ کاذبِ تازه ۰، افرازِ تازه ۰ (تکراری ۲۷ → ۲۷).
+# ══════════════════════════════════════════════════════════════════════════════
+
+
+def _i_vless(host: str, query: str, uuid: str = _H_UUID) -> str:
+    return f"vless://{uuid}@{host}:443?{query}#tag"
+
+
+def _i_old_key_generic(key: str) -> str:
+    """کلیدِ **پیش از فازِ I** را از کلیدِ امروزیِ شاخهٔ عمومی بازمی‌سازد.
+
+    فقط برای تستِ کنترل. قاعدهٔ قدیم دقیقاً دو کار می‌کرد که فازِ I برداشت:
+      • `host_for_key = ""` (میزبانِ واقعی از کلید حذف می‌شد)،
+      • `meaningful.pop("sni")` و `meaningful.pop("host")`.
+    بقیهٔ ساختِ کلید دست‌نخورده مانده، پس این بازسازیِ *متنی* وفادار است.
+    """
+    host, endpoint, _port, _params = _h_parts(key)
+    if endpoint == "":
+        return key                     # وقتی fronting نیست، قدیم و جدید یکی‌اند
+    head, sep, tail = key.partition("|ep=")
+    assert head.endswith(host), f"ساختارِ کلید عوض شده: {key!r}"
+    head = head[: len(head) - len(host)]                 # حذفِ میزبانِ واقعی
+    body, q_sep, query = tail.rpartition("?")
+    kept = [p for p in query.split("&")
+            if p and p.split("=", 1)[0] not in ("sni", "host")]
+    return head + sep + body + q_sep + "&".join(kept)
+
+
+def _i_old_key_vmess(key: str) -> str:
+    """همان بازسازی برای شاخهٔ vmess: قدیم `add_for_key = ""` می‌گذاشت."""
+    _add, fronting = _h_vmess_parts(key)
+    if fronting == "":
+        return key
+    _head, sep, tail = key.partition("|ep=")
+    return "vmess:" + sep + tail
+
+
+# ── ۱) هستهٔ فازِ I: دو سرورِ متفاوت پشتِ یک دامنه باید دو کلید بگیرند ────────
+
+def test_zz_i_fronting_does_not_replace_real_host():
+    """همان آسیبِ سنجیده‌شده (۷۰۴–۱۴۲۰ سرورِ حذف‌شده) دیگر رخ نمی‌دهد."""
+    q = "security=tls&sni=cdn.example.com&type=ws"
+    k1 = core.dedup_key(_i_vless("1.2.3.4", q))
+    k2 = core.dedup_key(_i_vless("5.6.7.8", q))
+    assert k1 != k2, f"دو میزبانِ متفاوت یک کلید گرفتند ⇒ حذفِ خاموش: {k1!r}"
+    for k, want in ((k1, "1.2.3.4"), (k2, "5.6.7.8")):
+        host, ep, port, params = _h_parts(k)
+        assert host == want, f"میزبانِ واقعی در کلید نیست: {k!r}"
+        assert ep == "cdn.example.com", f"دامنهٔ fronting گم شد: {k!r}"
+        assert port == "443", k
+        assert "sni=cdn.example.com" in params, (
+            f"مقدارِ fronting از query بیرون انداخته شد: {k!r}")
+    # تستِ کنترل — قاعدهٔ قدیم این دو را **یکی** می‌کرد.
+    old1, old2 = _i_old_key_generic(k1), _i_old_key_generic(k2)
+    assert old1 != k1, "بازسازیِ قاعدهٔ قدیم بی‌اثر است ⇒ تست پوچ می‌شود"
+    assert old1 == old2, (
+        "تستِ کنترل بی‌اثر است: قاعدهٔ قدیم هم این دو را جدا می‌کرد")
+
+
+# ── ۲) «IPِ پاک»: تنوعِ کارکردیِ چند IP پشتِ یک دامنه باید حفظ شود ───────────
+
+def test_zz_i_cdn_clean_ip_diversity_preserved():
+    """سه IPِ متفاوتِ لبهٔ CDN با یک `host` ⇒ سه کلیدِ متفاوت."""
+    ips = ("104.16.1.1", "104.17.2.2", "172.67.3.3")
+    q = "security=none&host=cdn.example.com&type=ws"
+    keys = {core.dedup_key(_i_vless(ip, q)) for ip in ips}
+    assert len(keys) == len(ips), f"IPهای پاک ادغام شدند: {sorted(keys)!r}"
+    olds = {_i_old_key_generic(k) for k in keys}
+    assert len(olds) == 1, (
+        f"تستِ کنترل بی‌اثر است — قاعدهٔ قدیم هم جدا می‌کرد: {sorted(olds)!r}")
+
+
+# ── ۳) مقدارِ fronting بازنده هم دیگر از کلید بیرون انداخته نمی‌شود ──────────
+
+def test_zz_i_loser_fronting_value_retained():
+    """`sni` برنده می‌شود ولی `host` هم باید در query بماند (pop برداشته شد)."""
+    base = "security=tls&sni=cdn.example.com&type=ws&host="
+    k1 = core.dedup_key(_i_vless("1.2.3.4", base + "h1.example.com"))
+    k2 = core.dedup_key(_i_vless("1.2.3.4", base + "h2.example.com"))
+    assert k1 != k2, f"دو مقدارِ `host` متفاوت یک کلید گرفتند: {k1!r}"
+    _h1, ep1, _p1, params1 = _h_parts(k1)
+    assert ep1 == "cdn.example.com", k1
+    assert "host=h1.example.com" in params1, f"`host` حذف شد: {k1!r}"
+    old1, old2 = _i_old_key_generic(k1), _i_old_key_generic(k2)
+    assert old1 != k1, "بازسازیِ قاعدهٔ قدیم بی‌اثر است ⇒ تست پوچ می‌شود"
+    assert old1 == old2, "تستِ کنترل بی‌اثر است"
+
+
+# ── ۴) شاخهٔ vmess: `add` دیگر خالی نمی‌شود ───────────────────────────────────
+
+def test_zz_i_vmess_add_retained():
+    """vmess با `host`ِ معتبر باید `add` را در کلید نگه دارد."""
+    k1 = core.dedup_key(_h_vmess(add="1.2.3.4", host="cdn.example.com", tls="tls"))
+    k2 = core.dedup_key(_h_vmess(add="5.6.7.8", host="cdn.example.com", tls="tls"))
+    assert k1 != k2, f"دو `add` متفاوت یک کلید گرفتند ⇒ حذفِ خاموش: {k1!r}"
+    add1, fr1 = _h_vmess_parts(k1)
+    assert add1 == "1.2.3.4", f"`add` از کلید حذف شد: {k1!r}"
+    assert fr1 == "cdn.example.com", f"fronting گم شد: {k1!r}"
+    old1, old2 = _i_old_key_vmess(k1), _i_old_key_vmess(k2)
+    assert old1 != k1, "بازسازیِ قاعدهٔ قدیم بی‌اثر است ⇒ تست پوچ می‌شود"
+    assert old1 == old2, "تستِ کنترل بی‌اثر است"
+
+
+# ── ۵) تستِ کنترلِ چند-طرحی: قاعدهٔ قدیم در همهٔ طرح‌ها ادغام می‌کرد ──────────
+
+def test_zz_i_control_old_rule_merged_them_all_schemes():
+    """برای هر طرحِ شاخهٔ عمومی: کلیدِ جدید جدا، کلیدِ بازسازی‌شدهٔ قدیم یکی."""
+    templates = (
+        "vless://" + _H_UUID + "@{h}:443?security=tls&sni=cdn.example.com&type=ws#t",
+        "trojan://pw@{h}:443?security=tls&sni=cdn.example.com&type=ws#t",
+        "tuic://u:p@{h}:443?security=tls&sni=cdn.example.com#t",
+        "hysteria2://pw@{h}:443?security=tls&sni=cdn.example.com#t",
+    )
+    for tpl in templates:
+        k1 = core.dedup_key(tpl.format(h="1.2.3.4"))
+        k2 = core.dedup_key(tpl.format(h="5.6.7.8"))
+        assert k1 != k2, f"ادغامِ خاموش در {tpl!r}: {k1!r}"
+        old1, old2 = _i_old_key_generic(k1), _i_old_key_generic(k2)
+        assert old1 != k1, f"بازسازیِ قدیم بی‌اثر است: {tpl!r}"
+        assert old1 == old2, f"تستِ کنترل بی‌اثر است: {tpl!r}"
+
+
+# ── ۶) دستاوردهای فازِ H و F باید دست‌نخورده بمانند ──────────────────────────
+
+def test_zz_i_phase_h_and_f_gains_intact():
+    """وصلهٔ فازِ I نباید اعتبارسنجیِ فازِ H یا شاخهٔ ssِ فازِ F را بشکند."""
+    # (الف) مقدارِ زبالهٔ fronting همچنان باید از کلید بیرون انداخته شود.
+    host, ep, _p, params = _h_parts(
+        core.dedup_key(_h_vless("security=none&host=%2F%3Fbia%40mar&type=ws")))
+    assert host == "1.2.3.4", "میزبانِ واقعی گم شد"
+    assert ep == "", f"مقدارِ زباله نقطهٔ پایانی شد: {ep!r}"
+    assert not any(p.startswith("host=") for p in params), (
+        f"مقدارِ زباله در query ماند ⇒ افراز: {sorted(params)!r}")
+    # (ب) REALITY: sni دامنهٔ استتار است، نقطهٔ پایانی نیست.
+    host, ep, _p, params = _h_parts(core.dedup_key(
+        _h_vless("security=reality&sni=www.apple.com&pbk=K&type=tcp")))
+    assert (host, ep) == ("1.2.3.4", ""), f"قاعدهٔ REALITY شکست: {host!r} {ep!r}"
+    assert "sni=www.apple.com" in params, "sniِ ردشده باید در query بماند"
+    # (ج) شاخهٔ ss دست‌نخورده: نه `|ep=` دارد و نه میزبانش را گم می‌کند.
+    k_ss = core.dedup_key(f"ss://{_F_UI_B64}@1.2.3.4:8388#x")
+    assert "|ep=" not in k_ss, f"شاخهٔ ss آلوده شد: {k_ss!r}"
+    _ui, ss_host, ss_port = _f_ss_parts(k_ss)
+    assert (ss_host, ss_port) == ("1.2.3.4", "8388"), k_ss
+    assert core.dedup_key(f"ss://{_F_UI_B64}@5.6.7.8:8388#x") != k_ss
+
+
+# ── ۷) یکتاسازی همچنان کار می‌کند (وصله dedup را خاموش نکرده) ────────────────
+
+def test_zz_i_true_duplicates_still_collapse():
+    """دو خطِ واقعاً یکسان (فقط ترتیبِ پارامتر/برچسب متفاوت) ⇒ یک کلید."""
+    a = _i_vless("1.2.3.4", "security=tls&sni=cdn.example.com&type=ws")
+    b = f"vless://{_H_UUID}@1.2.3.4:443?type=ws&sni=cdn.example.com&security=tls#other"
+    assert core.dedup_key(a) == core.dedup_key(b), (
+        f"یکتاسازیِ درست از کار افتاد:\n  {core.dedup_key(a)!r}\n  {core.dedup_key(b)!r}")
+    v1 = core.dedup_key(_h_vmess(add="1.2.3.4", host="cdn.example.com", tls="tls"))
+    v2 = core.dedup_key(_h_vmess(add="1.2.3.4", host="cdn.example.com", tls="tls",
+                                 ps="یک برچسبِ دیگر"))
+    assert v1 == v2, f"برچسب واردِ کلیدِ vmess شد: {v1!r} / {v2!r}"
+
+
+# ── ۸) دو بُعدی که سنجش نشان داد امروز هیچ آسیبی از آن‌ها نمی‌آید ────────────
+
+def test_zz_i_port_and_credential_still_distinguish():
+    """پورت و اعتبارنامه باید همچنان تمایز بسازند (A_diff_port/B_diff_cred = 0)."""
+    q = "security=tls&sni=cdn.example.com&type=ws"
+    k443 = core.dedup_key(_i_vless("1.2.3.4", q))
+    k8080 = core.dedup_key(
+        f"vless://{_H_UUID}@1.2.3.4:8080?{q}#tag")
+    assert k443 != k8080, f"دو پورتِ متفاوت یک کلید گرفتند: {k443!r}"
+    other_uuid = "22222222-2222-2222-2222-222222222222"
+    assert core.dedup_key(_i_vless("1.2.3.4", q, uuid=other_uuid)) != k443, (
+        "دو اعتبارنامهٔ متفاوت یک کلید گرفتند")
+
+
+# ── ۹) دامنهٔ وصله محدود است: بی‌fronting هیچ چیز عوض نشده ───────────────────
+
+def test_zz_i_patch_scope_no_fronting_unchanged():
+    """خطِ بدونِ sni/host: کلید باید عیناً همان قبل باشد (قدیم == جدید)."""
+    for line in (_i_vless("1.2.3.4", "security=none&type=tcp"),
+                 _i_vless("1.2.3.4", "type=grpc&servicename=svc"),
+                 "trojan://pw@1.2.3.4:443?type=tcp#t"):
+        key = core.dedup_key(line)
+        host, ep, _p, _q = _h_parts(key)
+        assert ep == "", f"fronting از هوا آمد: {key!r}"
+        assert host == "1.2.3.4", f"میزبان گم شد: {key!r}"
+        assert _i_old_key_generic(key) == key, (
+            f"وصله بیرونِ دامنهٔ خود اثر گذاشت: {key!r}")
 
 
 def _run_all() -> int:
