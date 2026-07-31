@@ -7280,5 +7280,364 @@ def test_zz_c11_ssr_password_with_invalid_utf8_is_dropped_not_mangled():
     assert good and good["obfs_param"] == "cdn.example.org"
 
 
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# فاز C12 — ناوردای برندینگ روی **نامِ خروجیِ نهایی**
+#
+# نقصِ سنجیده‌شده: یک نود از ۹٬۷۰۶ نودِ منتشرشده، بی‌برند بیرون می‌آمد و کانالِ
+# رقیب را تبلیغ می‌کرد. زنجیرهٔ علّی (هر چهار حلقه اندازه‌گیری شده):
+#
+#   ۱) بدنهٔ base64ِ vmess یک نویسهٔ بیرونِ الفبا دارد (در دادهٔ واقعی: backtick)
+#   ۲) `core.decode_base64_text` **سخت‌گیر** است ⇒ None
+#   ۳) `converters._b64_json` **سهل‌گیر** است ⇒ موفق
+#   ۴) پس `brand_remark` به شاخهٔ عمومی می‌افتد و فقط `#…` را بازنویسی می‌کند؛
+#      `ps`ِ درونی کهنه می‌ماند و مبدل همان را `name` می‌کرد.
+#
+# نتیجه: ناوردا روی یک سطح (`core.remark_of`) راستی‌آزمایی می‌شد و روی سطحِ
+# دیگری (نامِ خروجی) نقض می‌شد — یعنی دروازهٔ E-6 مثبتِ کاذب می‌داد.
+#
+# دو لایهٔ رفع، و هر لایه تستِ خودش را دارد:
+#   لایهٔ ۱ — اولویتِ fragment در شاخهٔ vmessِ `parse_proxy` (ریشه)
+#   لایهٔ ۲ — `_enforce_brand` روی نامِ نهایی؛ **بازبرندزنی، نه حذفِ نود**
+#
+# سیاستِ مرجع: `core.py` خطوطِ ۳۲–۶۲ — «هر نودی که منتشر می‌شود … باید
+# `BRAND_CHANNEL` را در ریمارک/**نام**/**تگِ** خود داشته باشد».
+# ══════════════════════════════════════════════════════════════════════════════
+
+_C12_HOST = "test-node.example.com"
+_C12_PORT = 443
+_C12_UUID = "eb78e1f0-d921-4ca9-a889-261fcc5a0547"
+
+#: ریمارکِ رقیب — یک موردِ **واقعی**. کامنتِ `core.brand_remark` حادثهٔ
+#: «📯1@oneclickvpnkeys» را ثبت کرده و نودِ واقعیِ C12 هم «@AZARBAYJAB1» بود.
+_C12_FOREIGN = "📯1@oneclickvpnkeys"
+
+
+def _c12_vmess(ps="", *, frag=None, broken=True, drop_ps=False,
+               name_key=None):
+    """
+    یک `vmess://` می‌سازد که بدنه‌اش برای دیکودرِ **سخت‌گیر** خراب است ولی برای
+    دیکودرِ **سهل‌گیر** سالم — یعنی بازتولیدِ دقیقِ کلاسِ نقصِ C12.
+
+    `broken=False` حالتِ سالم را می‌دهد تا رگرسیونِ ۲٬۹۸۰ نودِ دیگر هم پوشش
+    داده شود. عمداً هیچ‌چیز از `converters` یا `core` وارد نمی‌شود تا تست
+    پیاده‌سازیِ زیرِ آزمون را بازگو نکند.
+    """
+    obj = {"v": "2", "ps": ps, "add": _C12_HOST, "port": str(_C12_PORT),
+           "id": _C12_UUID, "aid": "0", "net": "tcp", "type": "none",
+           "tls": "tls"}
+    if drop_ps:
+        obj.pop("ps")
+    if name_key is not None:
+        obj["name"] = name_key
+    body = base64.b64encode(
+        json.dumps(obj, separators=(",", ":")).encode("utf-8")).decode("ascii")
+    if broken:
+        # درجِ یک نویسهٔ بیرونِ الفبای base64 در میانهٔ بدنه. سنجیده شد که این
+        # کار `_B64_BODY_RE` را رد می‌کند (⇒ None) ولی `b64decode(validate=False)`
+        # نویسه را بی‌صدا می‌اندازد و JSON سالم درمی‌آید.
+        body = body[:10] + "`" + body[10:]
+    line = "vmess://" + body
+    if frag is not None:
+        line += "#" + frag
+    return line
+
+
+def _c12_freeze():
+    """کشور را قفل می‌کند تا تست به DNS/GeoIP دست نزند."""
+    core._HOST_COUNTRY_CACHE[f"{_C12_HOST}:{_C12_PORT}".lower()] = ("DE", "🇩🇪")
+    core._HOST_COUNTRY_CACHE[_C12_HOST.lower()] = ("DE", "🇩🇪")
+
+
+def _c12_clash_names(lines):
+    """نام‌های نودِ clash — با تجزیه‌کنندهٔ رسمی، نه regex.
+
+    درسِ مستندِ فاز E: یک regexِ ساده‌انگار `proxy-group` را `proxy` شمرد و دو
+    «بی‌برندِ» کاذب ساخت. پس این‌جا YAML واقعاً تجزیه می‌شود.
+    """
+    doc = yaml.safe_load(converters.build_clash_yaml(lines))
+    return [p["name"] for p in doc["proxies"]]
+
+
+def _c12_singbox_tags(lines):
+    """تگِ نودهای sing-box (بدونِ selector/urltest/direct که نود نیستند)."""
+    sb = json.loads(converters.build_singbox_json(lines))
+    return [o["tag"] for o in sb["outbounds"]
+            if o["type"] not in ("selector", "urltest", "direct")]
+
+
+def test_zz_c12_the_two_decoders_diverge_and_that_is_the_root_cause():
+    """
+    حلقه‌های ۱–۳ زنجیرهٔ علّی را **قفل** می‌کند.
+
+    اگر روزی یکی از دو دیکودر عوض شود (سهل‌گیر شدنِ `core` یا سخت‌گیر شدنِ
+    `converters`)، این تست می‌شکند و همان‌جا معلوم می‌شود که مبنای فاز C12
+    تغییر کرده — نه اینکه بی‌صدا هزاران رکورد جابه‌جا شود.
+    """
+    body = _c12_vmess(ps=_C12_FOREIGN)[8:]
+    assert "`" in body, "پیش‌فرضِ آزمون: بدنه باید نویسهٔ بیرونِ الفبا داشته باشد"
+
+    # حلقهٔ ۲: سخت‌گیر ⇒ None
+    assert core.decode_base64_text(body) is None, \
+        "دیکودرِ سخت‌گیرِ core نباید بدنهٔ نامعتبر را بپذیرد"
+
+    # حلقهٔ ۳: سهل‌گیر ⇒ موفق، با psِ بی‌برند
+    obj = converters._b64_json(body)
+    assert isinstance(obj, dict), "دیکودرِ سهل‌گیرِ converters باید موفق شود"
+    assert obj.get("ps") == _C12_FOREIGN, f"psِ خوانده‌شده: {obj.get('ps')!r}"
+    assert core.BRAND_CHANNEL not in obj["ps"], "psِ درونی باید بی‌برند باشد"
+
+    # حالتِ سالم برای مقایسه: هر دو دیکودر موفق
+    ok_body = _c12_vmess(ps="whatever", broken=False)[8:]
+    assert core.decode_base64_text(ok_body) is not None
+    assert converters._b64_json(ok_body) is not None
+
+
+def test_zz_c12_the_gate_and_the_output_name_disagreed_before_the_fix():
+    """
+    حلقهٔ ۴ — همان «مثبتِ کاذب»ی که ادعای «برندینگ ۱۰۰٪» را بی‌اعتبار کرد.
+
+    این تست *وجودِ* اختلافِ دو سطح را ثبت نمی‌کند تا آن را تثبیت کند؛ ثبت
+    می‌کند که پس از رفع، سطحِ خروجی هم برنددار است در حالی که سطحِ خط از قبل
+    برنددار بود. یعنی هر دو سطح باید موافق باشند.
+    """
+    _c12_freeze()
+    branded = core.brand_remark(_c12_vmess(ps=_C12_FOREIGN))
+
+    # سطحِ ۱ — خط: از قبل درست بود (دروازهٔ E-6 قبولش می‌کرد)
+    assert core.is_branded(branded), "خطِ برندشده باید از دروازهٔ E-6 بگذرد"
+    assert core.BRAND_CHANNEL in core.remark_of(branded)
+
+    # سطحِ ۲ — نامِ خروجی: همین بود که نقض می‌شد
+    p = converters.parse_proxy(branded)
+    assert p is not None, "نودِ mutant باید تجزیه شود (حذف‌شدنی نیست)"
+    assert core.BRAND_CHANNEL in p["name"], (
+        f"نامِ خروجی بی‌برند ماند: {p['name']!r} — همان نقصِ C12")
+    assert _C12_FOREIGN not in p["name"], (
+        f"تبلیغِ کانالِ رقیب در نامِ خروجی: {p['name']!r}")
+
+
+def test_zz_c12_mutant_vmess_is_branded_in_clash_and_singbox():
+    """
+    **اثباتِ تشخیص** (دروازهٔ G-4): این تست پیش از رفع می‌شکند.
+
+    عمداً پیکرهٔ خصمانهٔ مشترک (`_e4_corpus`) گسترش داده **نشد**؛ دو دلیلِ
+    سنجیده‌شده در `PHASE_C12_PLAN.md` §۵:
+      • `test_..._adversarial_corpus` روی `len(corpus) == 56` تأکید دارد
+      • خوانندهٔ مستقلِ آن تست (`_e4_remark_of`) سهل‌گیر است، پس mutant تستِ
+        خروجیِ **متنی** را هم می‌شکست — و آن شکست تنها با تغییرِ
+        `brand_remark` بسته می‌شد که خارج از دامنهٔ تأییدشدهٔ این فاز است.
+    پس یک پیکرهٔ اختصاصی می‌سازیم که همان مسیر را می‌پیماید.
+    """
+    _c12_freeze()
+    corpus = [
+        _c12_vmess(ps=_C12_FOREIGN),                       # قلبِ نقص
+        _c12_vmess(ps="🇮🇳TM (@AZARBAYJAB1)"),              # نودِ واقعیِ C12
+        _c12_vmess(ps=""),                                 # psِ تهی + بدنهٔ خراب
+        _c12_vmess(ps="a | b | c"),
+        _c12_vmess(ps="x" * 300),
+        _c12_vmess(ps="  "),
+        _c12_vmess(ps=_C12_FOREIGN, broken=False),         # سالم، برای رگرسیون
+    ]
+    branded = [core.brand_remark(ln) for ln in corpus]
+
+    # پیش‌شرط: همه باید از دروازهٔ انتشار بگذرند، وگرنه تست چیزِ دیگری می‌سنجد
+    not_gated = [b for b in branded if not core.is_branded(b)]
+    assert not not_gated, f"{len(not_gated)} خط از دروازهٔ E-6 نگذشت"
+
+    names = _c12_clash_names(branded)
+    assert len(names) == len(corpus), (
+        f"نود گم شد: {len(names)} از {len(corpus)} — رفع نباید داده حذف کند")
+    unbranded = [n for n in names if core.BRAND_CHANNEL not in n]
+    assert not unbranded, f"{len(unbranded)} نامِ نودِ clash بی‌برند: {unbranded}"
+    leaked = [n for n in names if "@oneclickvpnkeys" in n or "@AZARBAYJAB1" in n]
+    assert not leaked, f"تبلیغِ کانالِ رقیب در clash: {leaked}"
+
+    tags = _c12_singbox_tags(branded)
+    assert len(tags) == len(corpus), f"outbound گم شد: {len(tags)}"
+    unbranded_t = [t for t in tags if core.BRAND_CHANNEL not in t]
+    assert not unbranded_t, f"{len(unbranded_t)} تگِ sing-box بی‌برند: {unbranded_t}"
+    leaked_t = [t for t in tags
+                if "@oneclickvpnkeys" in t or "@AZARBAYJAB1" in t]
+    assert not leaked_t, f"تبلیغِ کانالِ رقیب در sing-box: {leaked_t}"
+
+
+def test_zz_c12_vmess_name_precedence_is_fragment_then_ps_then_fallback():
+    """
+    لایهٔ ۱ — همان ترتیبی که **شش شاخهٔ دیگرِ** `parse_proxy` (خطِ ۶۶۶) دارند.
+
+    پیش از C12، شاخهٔ vmess یگانه استثنا بود: مستقیم `ps` را می‌خواند. ولی
+    `ps` عمداً حذف نمی‌شود (برخلافِ ssr)، چون ۲٬۹۸۰ نودِ واقعی نامِ برندشده و
+    حاملِ برچسبِ کشورشان را از `ps` می‌گیرند.
+    """
+    tag = "DE 🇩🇪 | @Raydikalx | ABC123"
+
+    # S-1/S-3: fragment برنده است — هم روی بدنهٔ خراب، هم روی بدنهٔ سالم
+    for broken in (True, False):
+        p = converters.parse_proxy(
+            _c12_vmess(ps=_C12_FOREIGN, frag=tag, broken=broken))
+        assert p is not None and p["name"] == tag, (
+            f"broken={broken}: fragment باید برنده شود، نه psِ درونی: "
+            f"{None if not p else p['name']!r}")
+
+    # S-2: بدونِ fragment ⇒ `ps` (رفتارِ ۲٬۹۸۰ نود، نباید رگرسیون کند)
+    ps_branded = "NL 🇳🇱 | @Raydikalx | FEED01"
+    p = converters.parse_proxy(_c12_vmess(ps=ps_branded))
+    assert p is not None and p["name"] == ps_branded, \
+        f"نامِ برگرفته از ps از دست رفت: {None if not p else p['name']!r}"
+
+    # S-4: psِ تهی و بدونِ fragment ⇒ fallbackِ برنددار
+    p = converters.parse_proxy(_c12_vmess(ps=""))
+    assert p is not None and p["name"] == converters._branded_fallback("vmess")
+
+    # S-5: کلیدِ ps کاملاً غایب
+    p = converters.parse_proxy(_c12_vmess(drop_ps=True))
+    assert p is not None and p["name"] == converters._branded_fallback("vmess")
+
+    # S-6: کلیدِ `name` جایگزینِ `ps`
+    alt = "FR 🇫🇷 | @Raydikalx | 0FF1CE"
+    p = converters.parse_proxy(_c12_vmess(drop_ps=True, name_key=alt))
+    assert p is not None and p["name"] == alt, \
+        f"کلیدِ name خوانده نشد: {None if not p else p['name']!r}"
+
+
+def test_zz_c12_vmess_fragment_edge_cases_fall_back_instead_of_emptying():
+    """
+    S-7…S-10 — حالت‌هایی که «اولویتِ fragment» می‌توانست نام را **تهی** کند.
+
+    اگر fragmentِ تهی/فقط‌فاصله برنده می‌شد، نامِ نود خالی می‌ماند و سازندهٔ
+    خروجی مجبور می‌شد fallback بزند — یعنی برچسبِ کشور را بی‌دلیل از دست
+    می‌دادیم. پس شرط، «fragmentِ **ناتهی**» است نه «وجودِ `#`».
+    """
+    ps_branded = "GB 🇬🇧 | @Raydikalx | C0FFEE"
+
+    # S-8: `#` با مقدارِ تهی  /  S-9: فقط فاصله
+    for frag in ("", "   ", "\t"):
+        p = converters.parse_proxy(_c12_vmess(ps=ps_branded, frag=frag))
+        assert p is not None and p["name"] == ps_branded, (
+            f"fragmentِ تهی {frag!r} نباید نام را بدزدد: "
+            f"{None if not p else p['name']!r}")
+
+    # S-7: درصد-کدشده باید unquote شود، وگرنه برند در متنِ خام گم می‌شود
+    p = converters.parse_proxy(
+        _c12_vmess(ps=_C12_FOREIGN, frag="DE%20%F0%9F%87%A9%F0%9F%87%AA%20%7C%20%40Raydikalx"))
+    assert p is not None, "نود نباید حذف شود"
+    assert core.BRAND_CHANNEL in p["name"], \
+        f"fragmentِ درصد-کدشده unquote نشد: {p['name']!r}"
+
+    # S-10: چند `#` — باید مثلِ شش شاخهٔ دیگر با split(maxsplit=1) رفتار کند
+    p = converters.parse_proxy(_c12_vmess(ps=_C12_FOREIGN, frag="a | @Raydikalx#b"))
+    assert p is not None and p["name"] == "a | @Raydikalx#b", \
+        f"رفتارِ چند-# با بقیهٔ شاخه‌ها یکسان نیست: {p['name']!r}"
+
+
+def test_zz_c12_enforce_brand_rebrands_the_final_name_and_never_drops():
+    """
+    لایهٔ ۲ (S-11/S-13) — دروازهٔ نامِ نهایی.
+
+    شبیه‌سازی: مبدلی که نامِ **بی‌برند** تولید می‌کند (هر مسیرِ ناشناختهٔ
+    آینده). ناوردا باید حفظ شود **بدونِ حذفِ نود** — همان ریسکی که مالک در
+    گزینهٔ (ب) رد کرد.
+    """
+    _c12_freeze()
+    lines = [core.brand_remark(_c12_vmess(ps=f"node-{i}", broken=False))
+             for i in range(4)]
+
+    orig_clash = converters._to_clash_proxy
+    orig_sing = converters._to_singbox_outbound
+    try:
+        def _foreign_name(p):
+            cp = orig_clash(p)
+            if cp:
+                cp = dict(cp)
+                cp["name"] = _C12_FOREIGN      # ← نامِ بی‌برندِ رقیب
+            return cp
+
+        def _foreign_tag(p):
+            ob = orig_sing(p)
+            if ob:
+                ob = dict(ob)
+                ob["tag"] = _C12_FOREIGN
+            return ob
+
+        converters._to_clash_proxy = _foreign_name
+        names = _c12_clash_names(lines)
+        assert len(names) == len(lines), (
+            f"دروازه نود حذف کرد: {len(names)} از {len(lines)} — ممنوع")
+        bad = [n for n in names if core.BRAND_CHANNEL not in n]
+        assert not bad, f"دروازه ناوردا را اجرا نکرد: {bad}"
+        assert not [n for n in names if "@oneclickvpnkeys" in n], \
+            f"تبلیغِ رقیب پس از دروازه باقی ماند: {names[:3]}"
+
+        converters._to_singbox_outbound = _foreign_tag
+        tags = _c12_singbox_tags(lines)
+        assert len(tags) == len(lines), f"دروازه outbound حذف کرد: {len(tags)}"
+        bad_t = [t for t in tags if core.BRAND_CHANNEL not in t]
+        assert not bad_t, f"دروازهٔ sing-box ناوردا را اجرا نکرد: {bad_t}"
+
+        # S-12: یکتاسازیِ نام پس از دروازه — پسوند باید *بعدِ* برند بیاید
+        assert len(set(names)) == len(names), f"نام‌ها یکتا نشدند: {names}"
+        assert len(set(tags)) == len(tags), f"تگ‌ها یکتا نشدند: {tags}"
+    finally:
+        converters._to_clash_proxy = orig_clash
+        converters._to_singbox_outbound = orig_sing
+
+
+def test_zz_c12_enforce_brand_is_idempotent_and_byte_preserving():
+    """
+    S-16 + G-12 — دروازه باید نقطهٔ ثابت باشد و نامِ برندشده را **بایت‌به‌بایت**
+    دست‌نخورده بگذارد.
+
+    چرا «بایت‌به‌بایت» مهم است: اگر دروازه `strip()` می‌زد یا نرمال‌سازی
+    می‌کرد، نام‌هایی که امروز فاصلهٔ انتهایی دارند عوض می‌شدند و دلتای تغییر
+    از «۱ نام» بزرگ‌تر می‌شد — یعنی سنجشِ پایه بی‌اعتبار می‌شد.
+    """
+    keep = [
+        "DE 🇩🇪 | @Raydikalx | ABC123",
+        "Global 🌐 | @Raydikalx | CFC895",
+        " @Raydikalx ",                      # فاصلهٔ عمدی در دو سر
+        "@Raydikalx",
+        "x" * 300 + " @Raydikalx",
+    ]
+    for nm in keep:
+        got = converters._enforce_brand(nm, "vmess")
+        assert got == nm, f"نامِ برندشده تغییر کرد: {nm!r} → {got!r}"
+        assert converters._enforce_brand(got, "vmess") == got, "خودتوان نیست"
+
+    for nm in ("", None, "   ", _C12_FOREIGN, "🇮🇳TM (@AZARBAYJAB1)"):
+        got = converters._enforce_brand(nm, "vmess")
+        assert core.BRAND_CHANNEL in got, f"{nm!r} برنددار نشد: {got!r}"
+        assert converters._enforce_brand(got, "vmess") == got, "خودتوان نیست"
+
+    # سازگاریِ عقب‌رو: رفتارِ قدیمِ «نامِ تهی ⇒ fallback» باید عیناً حفظ شود
+    for kind in ("vmess", "vless", "trojan", "ss", "ssr", "hysteria2", "tuic"):
+        assert converters._enforce_brand("", kind) == \
+            converters._branded_fallback(kind), f"رفتارِ تهی برای {kind} عوض شد"
+
+
+def test_zz_c12_shared_adversarial_corpus_stayed_untouched():
+    """
+    S-15 — قفلِ تصمیمِ §۵ پلن.
+
+    اگر کسی بعداً `_e4_corpus` را برای C12 گسترش دهد، دو تستِ بی‌ربط (شمارشِ
+    ۵۶ و خروجیِ متنی) می‌شکنند و علتش روشن نخواهد بود. این تست تصمیم را
+    صریح و اجراشدنی می‌کند.
+    """
+    corpus = _e4_corpus()
+    assert len(corpus) == 56, (
+        f"پیکرهٔ مشترک عوض شد ({len(corpus)}) — C12 عمداً آن را دست نزد؛ "
+        "پیکرهٔ اختصاصیِ `_c12_vmess` را به کار ببر (پلن §۵)")
+    kinds = {k for k, _ln in corpus}
+    assert kinds == {"vmess-json", "vmess-uri", "vless", "trojan",
+                     "ss-sip002", "hysteria2", "tuic"}, \
+        f"خانواده‌های پیکرهٔ مشترک عوض شد: {sorted(kinds)}"
+
+    # و رویهٔ C11 هم باید دست‌نخورده بماند (نامِ ssr از fragment می‌آید)
+    tag = "Japan 🇯🇵 | @Raydikalx | ABC123"
+    assert converters.parse_proxy(
+        _c11_ssr(remarks="inner-ignored", frag=tag))["name"] == tag
+
+
 if __name__ == "__main__":
     sys.exit(_run_all())

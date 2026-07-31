@@ -74,6 +74,42 @@ def _branded_fallback(kind: Optional[str]) -> str:
     return f"{k} | {BRAND}"
 
 
+def _enforce_brand(name: Optional[str], kind: Optional[str]) -> str:
+    """
+    دروازهٔ ناوردا روی **نامِ نهاییِ خروجی** (فاز C12، لایهٔ ۲).
+
+    سیاستِ مالک در `core.py` (خطوطِ ۳۲–۶۲) ناوردا را روی سه سطح می‌بندد:
+    «ریمارک/**نام**/**تگ**». سطحِ خط پیش‌تر با دروازهٔ E-6 در `aggregate.py`
+    تضمین شده بود، ولی سطحِ **نام/تگ** هیچ دروازه‌ای نداشت — و همین شکافْ نقصِ
+    C12 را تا `clash.yaml` و `singbox.json` رساند (۱ نودِ بی‌برند در هر دو).
+    این تابع آخرین حلقه است: چیزی که از این‌جا رد شود، منتشر می‌شود.
+
+    قراردادِ رفتاری — عمداً کمینه، تا دلتای تغییر **دقیقاً** یک نام باشد:
+
+      • نامِ برنددار  → **بایت‌به‌بایت** همان. هیچ `strip()`، هیچ نرمال‌سازی.
+        (اگر `strip` می‌زدیم، نام‌هایی که امروز فاصلهٔ انتهایی دارند هم عوض
+        می‌شدند و سنجشِ پایه — «۱ نام» — بی‌اعتبار می‌شد.)
+      • نامِ تهی      → `_branded_fallback(kind)`؛ یعنی **عیناً** رفتارِ قدیمِ
+        `cp["name"] or _branded_fallback(cp["type"])`. سازگاریِ عقب‌رو کامل.
+      • نامِ ناتهیِ **بی‌برند** → `_branded_fallback(kind)`. این تنها دلتاست.
+
+    چرا جایگزینی و نه الحاقِ برند: الحاق «🇮🇳TM (@AZARBAYJAB1) | @Raydikalx»
+    می‌ساخت که هنوز کانالِ رقیب را تبلیغ می‌کند — و کامنتِ `core.brand_remark`
+    نشان می‌دهد پروژه همین را نقص می‌داند، نه فقط نبودِ برند را.
+
+    چرا **حذف** نمی‌کنیم: مالک صریحاً گزینهٔ سخت‌گیرانه را رد کرد («احتمالِ حذفِ
+    داده»). این دروازه بازبرند می‌زند و هیچ نودی را نمی‌اندازد.
+
+    خودتوان است: `_enforce_brand(_enforce_brand(x, k), k) == _enforce_brand(x, k)`
+    چون خروجی همیشه `BRAND` را دارد و شاخهٔ نخست آن را دست‌نخورده برمی‌گرداند.
+    قطعی است: فقط تابعِ `(name, kind)`.
+    """
+    nm = name or ""
+    if BRAND in nm:
+        return nm
+    return _branded_fallback(kind)
+
+
 # ──────────────────────────────────────────────────────────────────────────────
 # whitelist‌های اعتبارسنجی (همه با تست واقعی کلاینت استخراج شده‌اند)
 # ──────────────────────────────────────────────────────────────────────────────
@@ -635,8 +671,31 @@ def parse_proxy(line: str) -> Optional[Dict[str, Any]]:
             if not obj:
                 return None
             return {
+                # فاز C12 — اولویتِ fragment، همان قاعدهٔ مشترکِ خطِ ۶۶۶.
+                #
+                # چرا: `parse_proxy` هفت شاخه دارد و **شش** شاخهٔ دیگر
+                # (vless/trojan/ss/ssr/hysteria2/tuic) نام را از
+                # `_remark_of(line)` می‌گیرند. vmess یگانه استثنا بود و
+                # مستقیم `ps`ِ درونی را می‌خواند. این استثنا یک نقصِ سنجیده‌شده
+                # تولید می‌کرد: اگر بدنهٔ base64 نویسهٔ بیرونِ الفبا داشته باشد،
+                # `core.decode_base64_text` (سخت‌گیر) شکست می‌خورد، پس
+                # `core.brand_remark` به شاخهٔ عمومی می‌افتد و فقط `#…` را
+                # بازنویسی می‌کند؛ `ps` کهنه می‌ماند و از همین‌جا **بی‌برند**
+                # به clash/sing-box می‌رفت. اندازه‌گیریِ زنده: ۱ نود از ۹٬۷۰۶
+                # با ریمارکِ «🇮🇳TM (@AZARBAYJAB1)» — یعنی تبلیغِ کانالِ رقیب.
+                # (همان کلاسِ حادثه‌ای که کامنتِ `core.brand_remark` ثبت کرده.)
+                #
+                # چرا `ps` را مثلِ ssr کنار نمی‌گذاریم: سنجیده شد که ۲٬۹۸۰ نودِ
+                # واقعی نامِ برندشده و حاملِ برچسبِ کشورشان را از `ps` می‌گیرند
+                # (fragment ندارند). حذفِ `ps` آن‌ها را به «vmess | @Raydikalx»
+                # تنزل می‌داد. پس ترتیب است، نه جایگزینی: fragment ← ps ← name.
+                #
+                # `_remark_of` خودش `unquote().strip()` می‌کند، پس fragmentِ
+                # تهی/فقط‌فاصله به `ps` واگذار می‌شود و نام هرگز تهی نمی‌ماند.
                 "type": "vmess",
-                "name": str(obj.get("ps") or obj.get("name") or _branded_fallback("vmess")),
+                "name": (_remark_of(line)
+                         or str(obj.get("ps") or obj.get("name") or "")
+                         or _branded_fallback("vmess")),
                 "server": str(obj.get("add") or ""),
                 "port": _safe_int(obj.get("port")),
                 "uuid": str(obj.get("id") or ""),
@@ -1190,8 +1249,10 @@ def build_clash_yaml(lines: List[str], limit: int = OUTPUT_PROXY_LIMIT) -> str:
         if not cp:
             _drops.record("clash", "not_expressible", line, p.get("type"))
             continue
-        # نام یکتا
-        nm = cp["name"] or _branded_fallback(cp["type"])
+        # نام یکتا — و پیش از یکتاسازی، دروازهٔ برند (فاز C12، لایهٔ ۲).
+        # ترتیب مهم است: اول برند، بعد پسوندِ یکتاسازی. اگر برعکس بود،
+        # «… #1» می‌توانست پس از برند بیفتد و شکلِ نامِ قانونی را بشکند.
+        nm = _enforce_brand(cp["name"], cp["type"])
         base_nm = nm
         i = 1
         while nm in used_names:
@@ -1418,7 +1479,8 @@ def build_singbox_json(lines: List[str], limit: int = OUTPUT_PROXY_LIMIT) -> str
         if not ob:
             _drops.record("singbox", "not_expressible", line, p.get("type"))
             continue
-        tag = ob["tag"] or _branded_fallback(ob["type"])
+        # دروازهٔ برند روی تگِ نهایی (فاز C12، لایهٔ ۲) — قرینهٔ clash.
+        tag = _enforce_brand(ob["tag"], ob["type"])
         base_tag = tag
         i = 1
         while tag in used_tags:
