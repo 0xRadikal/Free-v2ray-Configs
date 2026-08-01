@@ -109,21 +109,21 @@ These are verifiable claims, not assurances:
 | `xray-knife` 10.1.1 | version **and** SHA-256 of both the release archive and the extracted binary, cross-checked against upstream's own `.dgst` file in MD5/SHA-256/SHA-512 | ✅ yes |
 | `sing-box` 1.13.14 | version only | ❌ **no — see below** |
 | `mihomo` v1.19.29 | version only | ❌ **no — see below** |
-| GitHub Actions | major tags (`actions/checkout@v4`, `actions/setup-python@v5`, `actions/cache@v4`, `actions/upload-artifact@v4`) | ❌ not SHA-pinned |
+| GitHub Actions | commit SHAs, with the version in a trailing comment: `checkout` v4.4.0, `setup-python` v5.6.0, `cache` v4.3.0, `upload-artifact` v4.6.2 | ✅ yes — a SHA is immutable |
 | Dependency updates | [`.github/dependabot.yml`](.github/dependabot.yml) — `pip` + `github-actions`, weekly | — |
 
 ### Known gap, stated rather than hidden
 
 `sing-box` and `mihomo` are downloaded from GitHub Releases with the version
 pinned, but **their checksums are not verified**. The workflow itself names this
-asymmetry, in the comment block at lines 370–373, and explains why
+asymmetry, in the comment block at lines 376–379, and explains why
 version-pinning alone is not integrity. That comment is written in Persian; in
 English it says:
 
-<!-- Paraphrase, not a quotation. The comment at aggregate.yml:370-373 reads
+<!-- Paraphrase, not a quotation. The comment at aggregate.yml:376-379 reads
      "فقط pin کردنِ *نسخه* تضمینی نمی‌دهد، چون یک انتشارِ گیت‌هاب قابلِ جای‌گزینی
      است (asset را می‌توان با همان نام دوباره بارگذاری کرد)." Presenting an English
-     rendering of that in blockquote form would invite a reader to go to line 371
+     rendering of that in blockquote form would invite a reader to go to line 377
      expecting these exact words and find something else — a small gap between
      what is advertised and what is delivered, which is the failure mode this
      whole document is written against. -->
@@ -133,7 +133,13 @@ the same asset name can be re-uploaded with different bytes. Pinning only the
 
 `xray-knife` was hardened this way; the two validator binaries were not. This is
 a real, open hardening item, and it is listed here instead of being left for
-someone else to discover. The same applies to SHA-pinning the GitHub Actions.
+someone else to discover.
+
+The GitHub Actions used to carry the same weakness — they were referenced by
+mutable major tags — and that has since been closed: every `uses:` in the
+workflow now names an immutable commit SHA, with the human version kept in a
+trailing comment so Dependabot can still propose upgrades. That is why the row
+above reads ✅ where it previously read ❌.
 
 **Threat model for that gap:** it requires an attacker who can replace an asset
 on the `SagerNet/sing-box` or `MetaCubeX/mihomo` release pages — i.e. a

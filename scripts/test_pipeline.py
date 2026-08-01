@@ -813,7 +813,7 @@ def test_every_workflow_fetch_is_bounded_and_time_capped():
     چرا این تست وجود دارد — با اندازه‌گیریِ واقعی روی همین مخزنِ ۳.۵۵ گیگابایتی،
     نه حدس:
 
-      کلونِ CI (‏actions/checkout@v4) عمق ۱ دارد. مرحلهٔ انتشار خودش force-push
+      کلونِ CI (‏actions/checkout) عمق ۱ دارد. مرحلهٔ انتشار خودش force-push
       است، پس کامیتی که checkout روی آن نشسته، به‌محضِ انتشارِ یک اجرای دیگر
       **از دسترس خارج** می‌شود. در آن لحظه تنها «have»ِ کلونِ shallow دیگر جزوِ
       تاریخِ نوکِ جدید نیست، سرور مبنایی برای بستهٔ کوچک ندارد و کلِ تاریخ را
@@ -1969,12 +1969,68 @@ def _workflow_text() -> str:
         return f.read()
 
 
+def _workflow_uses() -> list[str]:
+    """هر مقدارِ `uses:`ِ ورک‌فلو — از YAMLِ پارس‌شده، نه regex روی متنِ خام.
+
+    دلیلِ پارس‌کردن: مرجعِ هر اکشن یک کامنتِ دنباله‌دار دارد
+    (`…@<sha> # v4.4.0`). regex روی متنِ خام آن کامنت را جزوِ مرجع می‌شمارد و
+    آزمون را الکی سرخ می‌کند؛ YAML کامنت را طبعاً حذف می‌کند.
+    """
+    doc = yaml.safe_load(_workflow_text())
+    out: list[str] = []
+    for job in (doc.get("jobs") or {}).values():
+        for step in (job.get("steps") or []):
+            u = step.get("uses")
+            if isinstance(u, str):
+                out.append(u.strip())
+    return out
+
+
+def _is_sha_pin(ref: str) -> bool:
+    """آیا `ref` یک SHAِ کاملِ ۴۰ رقمیِ hex است (و نه تگِ متحرکی مثل `v4`)؟"""
+    return len(ref) == 40 and all(c in "0123456789abcdef" for c in ref.lower())
+
+
 def test_workflow_downloads_and_caches_the_geoip_database():
     """بدونِ این مرحله، خط‌لوله در CI بی‌صدا به برچسب‌گذاریِ ضعیف برمی‌گردد."""
     wf = _workflow_text()
     assert "download.db-ip.com" in wf, "the workflow must fetch the DB-IP database"
-    assert "actions/cache@v4" in wf, "the database must be cached, not re-downloaded 96×/day"
+    # ⚠️ این ادعا عمداً به رشتهٔ `actions/cache@v4` گره نمی‌خورد. نسخهٔ قبلی همین
+    #    کار را می‌کرد و درست در لحظه‌ای شکست که ورک‌فلو *امن‌تر* شد: پین‌شدنِ
+    #    اکشن‌ها به SHA، رشتهٔ `@v4` را حذف کرد و این تست سرخ شد در حالی که
+    #    مرحلهٔ cache هنوز سرِ جایش بود. یک آزمون باید به «رفتار» گره بخورد
+    #    (اینکه cache وجود دارد) نه به «نگارشِ نسخه».
+    caches = [u for u in _workflow_uses() if u.split("@", 1)[0] == "actions/cache"]
+    assert caches, "the database must be cached, not re-downloaded 96×/day"
     assert "dbip-country-lite.mmdb" in wf
+
+
+def test_every_workflow_action_is_pinned_to_an_immutable_commit_sha():
+    """تگِ متحرک قابلِ جابه‌جایی است؛ SHA نیست.
+
+    مالکِ یک اکشن می‌تواند تگِ `v4` را به کامیتِ دیگری repoint کند. آن‌وقت کدی
+    که در CI **اجرا** می‌شود عوض می‌شود بدون آن‌که حتی یک بایت از این مخزن
+    تغییر کند — و این ورک‌فلو با `permissions: contents: write` و توکنِ مخزن
+    اجرا می‌شود، پس آن کدِ عوض‌شده اجازهٔ نوشتن روی `main` را دارد. پین‌کردنِ
+    SHA این مسیر را می‌بندد، و این آزمون نمی‌گذارد کسی در یک PRِ گذری آن را
+    باز کند.
+    """
+    # ① گاردِ خودِ ابزار: سنجه‌ای که نتواند سرخ شود، سنجه نیست. اگر `_is_sha_pin`
+    #    روزی همه‌چیز را «پین‌شده» بخواند، ادعای پایین بی‌معنا می‌شود.
+    assert _is_sha_pin("11d5960a326750d5838078e36cf38b85af677262") is True
+    for bogus in ("v4", "v4.4.0", "main", "", "11d5960", "z" * 40,
+                  "11d5960a326750d5838078e36cf38b85af6772620"):
+        assert _is_sha_pin(bogus) is False, f"matcher wrongly accepted {bogus!r}"
+
+    uses = _workflow_uses()
+    # ② گاردِ پارسر: لیستِ خالی هم «هیچ اکشنِ پین‌نشده‌ای نیست» را راست می‌کند.
+    assert len(uses) >= 4, f"parsed only {len(uses)} `uses:` — parser looks broken"
+
+    # اکشن‌های محلی (`./…`) و `docker://` مرجعِ گیت ندارند و پین نمی‌شوند.
+    remote = [u for u in uses if not u.startswith("./") and not u.startswith("docker://")]
+    unpinned = [u for u in remote
+                if "@" not in u or not _is_sha_pin(u.split("@", 1)[1])]
+    assert not unpinned, f"these actions are not pinned to a SHA: {unpinned}"
 
 
 def _workflow_run_text() -> str:

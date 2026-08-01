@@ -112,7 +112,13 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: ⬇️ Checkout
-        uses: actions/checkout@v4
+        # ★ SHA-pinned, not a moving tag ★
+        #   A major tag such as `v4` is mutable: the owner can repoint it, so the
+        #   bytes that execute in CI can change while this file does not. Pinning
+        #   the commit SHA makes the executed code immutable. The trailing comment
+        #   keeps the human-readable version visible and is the form Dependabot
+        #   understands, so version bumps are still proposed as normal PRs.
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       # ── دروازهٔ زمانی: اگر به‌تازگی آپدیت شده، زود خارج شو ──────────────
       - name: ⏱️ Freshness gate
@@ -202,7 +208,7 @@ jobs:
       # ══════════════════════════════════════════════════════════════════════
       - name: 🐍 Setup Python
         if: steps.gate.outputs.should_run == 'true'
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
           python-version: "3.12"
           cache: pip
@@ -239,7 +245,7 @@ jobs:
       - name: 🌍 Restore GeoIP database cache
         if: steps.gate.outputs.should_run == 'true'
         id: geoip_cache
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: .cache/dbip-country-lite.mmdb
           key: dbip-country-lite-${{ steps.geoip_key.outputs.ym }}
@@ -381,7 +387,7 @@ jobs:
       # می‌کند و هیچ گامِ دستی‌ای فراموش نمی‌شود.
       - name: 📦 Restore xray-knife cache
         if: steps.gate.outputs.should_run == 'true'
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: .cache/xray-knife
           # نسخه و checksum هر دو در کلید هستند: اگر یکی عوض شود، cacheِ
@@ -498,7 +504,7 @@ jobs:
 
       - name: 📎 Upload validation report on failure
         if: failure() && steps.gate.outputs.should_run == 'true'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: validation-report
           path: |
