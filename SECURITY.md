@@ -107,33 +107,61 @@ These are verifiable claims, not assurances:
 |---|---|---|
 | Python runtime deps (`requirements.txt`) | exact `==` pins: `requests==2.32.4`, `PyYAML==6.0.3`, `maxminddb==3.1.1` | by pip, against PyPI |
 | `xray-knife` 10.1.1 | version **and** SHA-256 of both the release archive and the extracted binary, cross-checked against upstream's own `.dgst` file in MD5/SHA-256/SHA-512 | ✅ yes |
-| `sing-box` 1.13.14 | version only | ❌ **no — see below** |
-| `mihomo` v1.19.29 | version only | ❌ **no — see below** |
+| `sing-box` 1.13.14 | version **and** SHA-256 of both the release archive (checked before extraction) and the extracted binary (checked before install) | ✅ yes |
+| `mihomo` v1.19.29 | version **and** SHA-256 of both the release archive (checked before extraction) and the extracted binary (checked before install) | ✅ yes |
 | GitHub Actions | commit SHAs, with the version in a trailing comment: `checkout` v4.4.0, `setup-python` v5.6.0, `cache` v4.3.0, `upload-artifact` v4.6.2 | ✅ yes — a SHA is immutable |
 | Dependency updates | [`.github/dependabot.yml`](.github/dependabot.yml) — `pip` + `github-actions`, weekly | — |
+| Vulnerability alerts | Dependabot alerts **and** automated security updates are enabled on the repository | ✅ yes — 0 open alerts at time of writing |
 
-### Known gap, stated rather than hidden
+### The gap that used to be here, and how it was closed
 
-`sing-box` and `mihomo` are downloaded from GitHub Releases with the version
-pinned, but **their checksums are not verified**. The workflow itself names this
-asymmetry, in the comment block at lines 376–379, and explains why
-version-pinning alone is not integrity. That comment is written in Persian; in
-English it says:
+Until recently `sing-box` and `mihomo` were downloaded from GitHub Releases with
+only the *version* pinned, and this section documented that as an open item
+rather than hiding it. It is now closed. Both binaries are verified twice — the
+archive before it is unpacked, and the extracted binary before it is installed —
+using a shared `verify()` helper so the two paths cannot drift apart:
 
-<!-- Paraphrase, not a quotation. The comment at aggregate.yml:376-379 reads
+| Artifact | SHA-256 |
+|---|---|
+| `sing-box-1.13.14-linux-amd64.tar.gz` (23,832,905 B) | `f48703461a15476951ac4967cdad339d986f4b8096b4eb3ff0829a500502d697` |
+| extracted `sing-box` binary | `68aeab83cc4ab2659a5b92232261a20746ccdafc3b3d1e19b2d63247eec3bbf7` |
+| `mihomo-linux-amd64-v1.19.29.gz` (17,858,765 B) | `60de76a35a6cbf7b4fa4a20f5c257c24345d1d635ab1aa3877022a1997ef413c` |
+| extracted `mihomo` binary | `9c397be7489538628fae781bc005e4c5b8cd7b0961b8bb2ca815c8150f193577` |
+
+Each value was established from **two independent sources**: the `digest` field
+GitHub itself reports for the release asset, and a separate local download hashed
+with `sha256sum`. Both binaries were then executed and confirmed to self-report
+the pinned version (`sing-box version 1.13.14`, `Mihomo Meta v1.19.29`).
+
+Ordering is part of the guarantee, not a detail: verifying an archive *after*
+unpacking it would already have handed untrusted input to `tar`/`gunzip`. Four
+tests in `scripts/test_pipeline.py` enforce this — that every step downloading
+from `releases/download/` compares a `sha256sum` and treats a mismatch as fatal,
+that every declared hash is actually *used* (a declared-but-unused hash is the
+classic hollow green), that no two declared hashes are identical (copy-paste
+trap), and that each verification precedes the extraction or install it guards.
+
+The reasoning that motivated the original gap still stands, and is why the
+version pin alone was never enough:
+
+<!-- Paraphrase, not a quotation. The comment sits in the preamble to the
+     workflow's "📦 Install xray-knife (pinned + checksum verified)" step. It is
+     cited by step name rather than by line number on purpose: this reference
+     used to read "aggregate.yml:376-379" and went stale the moment the step
+     above it grew, which is precisely the class of quiet inaccuracy this
+     document is written against. It reads
      "فقط pin کردنِ *نسخه* تضمینی نمی‌دهد، چون یک انتشارِ گیت‌هاب قابلِ جای‌گزینی
      است (asset را می‌توان با همان نام دوباره بارگذاری کرد)." Presenting an English
-     rendering of that in blockquote form would invite a reader to go to line 377
-     expecting these exact words and find something else — a small gap between
-     what is advertised and what is delivered, which is the failure mode this
-     whole document is written against. -->
+     rendering of that in blockquote form would invite a reader to go looking for
+     these exact words and find something else — a small gap between what is
+     advertised and what is delivered. -->
 *(paraphrase — the original is Persian)* A GitHub release asset is replaceable:
 the same asset name can be re-uploaded with different bytes. Pinning only the
 *version* therefore guarantees nothing about the bytes you receive.
 
-`xray-knife` was hardened this way; the two validator binaries were not. This is
-a real, open hardening item, and it is listed here instead of being left for
-someone else to discover.
+`xray-knife` was hardened this way first; the two validator binaries have now
+been brought up to the same standard, so all three downloaded binaries are
+byte-pinned rather than merely version-pinned.
 
 The GitHub Actions used to carry the same weakness — they were referenced by
 mutable major tags — and that has since been closed: every `uses:` in the
@@ -141,12 +169,20 @@ workflow now names an immutable commit SHA, with the human version kept in a
 trailing comment so Dependabot can still propose upgrades. That is why the row
 above reads ✅ where it previously read ❌.
 
-**Threat model for that gap:** it requires an attacker who can replace an asset
-on the `SagerNet/sing-box` or `MetaCubeX/mihomo` release pages — i.e. a
-compromise of those upstream projects. In that scenario the blast radius here is
-limited to the CI runner and to *validation being wrong* (a bad config could be
-declared valid). It does not give the attacker write access to this repository's
-history, because publishing uses the scoped `GITHUB_TOKEN`, not a PAT.
+**What the checksums now buy, stated precisely.** The threat they close is an
+attacker who can replace an asset on the `SagerNet/sing-box` or
+`MetaCubeX/mihomo` release pages — i.e. a compromise of those upstream projects.
+Previously that would have been silent; now the run fails with an explicit
+mismatch and the offending file is deleted. Even before, the blast radius was
+limited to the CI runner and to *validation being wrong* (a bad config declared
+valid); it never granted write access to this repository's history, because
+publishing uses the scoped `GITHUB_TOKEN`, not a PAT.
+
+**Residual risk, stated too.** A checksum pins bytes, not intent: if a release
+were malicious *at the moment these hashes were recorded*, pinning would
+faithfully reproduce that. The hashes therefore guarantee "the same bytes we
+verified", not "bytes proven benign". Raising the pin on a version bump is a
+deliberate act that must repeat the two-source verification above.
 
 ---
 

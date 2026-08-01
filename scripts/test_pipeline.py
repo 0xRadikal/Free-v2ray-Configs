@@ -8127,5 +8127,321 @@ def test_zz_o4_decoder_strictness_mirrors_the_converter_in_both_directions():
     assert _O4_MARK in kg, f"خطِ سالم کلیدِ ساختاری نگرفت: {kg!r}"
 
 
+# ══════════════════════════════════════════════════════════════════════════════
+# فاز P2 — بایتِ کنترلیِ خام در خروجیِ منتشرشده
+# ══════════════════════════════════════════════════════════════════════════════
+# نقصِ سنجیده: در کلِ پیکرهٔ منتشرشده (۵۰ فایل، ۳۷ مگابایت) **یک** کانفیگ حاوی
+# بایتِ کنترلیِ خام بود و همان یک خط، شش بایت را به سه فایلِ متنی و سه نسخهٔ
+# base64شان تزریق می‌کرد. علت: پارامترِ `prefix` در shadowsocks که عامدانه
+# بایتِ خام (سرآیندِ TLS ClientHello) می‌گیرد.
+#
+# چرا این آزمون‌ها لازم‌اند: نقص «سبزِ توخالی» بود — همهٔ ۲۸۹ آزمونِ قبلی پاس
+# می‌شدند و هیچ‌کدام بایتِ کنترلیِ خروجی را نمی‌سنجید. پس تنها راهِ جلوگیری از
+# بازگشتِ نقص، آزمونی است که **مستقیماً همان بایت** را ببیند.
+
+#: خطِ واقعیِ سنجیده‌شده از `all/configs.txt` (بایت‌ها عیناً همان‌اند).
+_P2_REAL_LINE = (
+    "ss://YWVzLTI1Ni1nY206WkdNNVpXWXlNakF6TlRka1pHWTFOV1JtTVRaaFltVTFZalEyWWpCag"
+    "@37.32.27.224:9147?prefix=\x16\x03\x01\x00\xa8\x01\x01"
+    "#IR \U0001F1EE\U0001F1F7 | @Raydikalx | 35E13F"
+)
+
+#: هر بایتِ کنترلی؛ برای تشخیصِ آلودگی در آزمون‌ها (مستقل از regexِ خودِ core،
+#: تا آزمون، پیاده‌سازی را بازگو نکند بلکه بسنجد).
+_P2_CTRL = frozenset(chr(c) for c in list(range(0x00, 0x20)) + [0x7F])
+
+
+def _p2_has_ctrl(text: str) -> bool:
+    return any(ch in _P2_CTRL for ch in text)
+
+
+def test_zzz_p2_the_measured_corpus_line_is_repaired_without_losing_anything():
+    """خطِ واقعیِ آلوده باید ترمیم شود، نه حذف — و هویتش تغییر نکند."""
+    old = _P2_REAL_LINE
+    assert _p2_has_ctrl(old), "پیش‌شرطِ آزمون: خطِ نمونه باید بایتِ کنترلی داشته باشد"
+
+    new = core._repair_control_chars(old)
+    assert new, "خطِ ترمیم‌پذیر دور انداخته شد ⇒ یک نودِ منتشرشده از دست می‌رفت"
+    assert new != old, "ترمیم اتفاق نیفتاد"
+    assert not _p2_has_ctrl(new), f"بایتِ کنترلی باقی ماند: {new!r}"
+
+    # بی‌اتلاف: کلاینت با unquote دقیقاً همان بایتِ اصلی را بازمی‌سازد.
+    assert urllib.parse.unquote(new) == urllib.parse.unquote(old), \
+        "ترمیم بی‌اتلاف نبود ⇒ کانفیگ در کلاینت کار نمی‌کند"
+
+    # idempotent: اجرای دوباره نباید `%` را دوباره encode کند.
+    assert core._repair_control_chars(new) == new, \
+        "ترمیم idempotent نیست ⇒ در هر دور خروجی می‌لرزد"
+
+    # هویت و برچسب نباید عوض شوند ⇒ صفر ریزشِ قابلِ مشاهده برای کاربر.
+    assert core.dedup_key(old) == core.dedup_key(new), \
+        "dedup_key عوض شد ⇒ خطر ادغام/دوباره‌شماریِ ناخواسته"
+    assert core.stable_label(old) == core.stable_label(new), \
+        "stable_label عوض شد ⇒ نامِ نود در همهٔ کلاینت‌ها می‌پرد"
+    assert core.endpoint_of(old) == core.endpoint_of(new)
+    assert core.remark_of(old) == core.remark_of(new)
+
+    # و همچنان یک کانفیگِ معتبرِ shadowsocks است.
+    assert core.is_proxy_config(new)
+    assert core.protocol_of(new) == "shadowsocks"
+
+
+def test_zzz_p2_repair_rejects_control_bytes_before_the_query():
+    """بایتِ کنترلی در scheme/authority یعنی خطِ خراب ⇒ باید دور انداخته شود.
+
+    percent-encoding در این ناحیه خط را «قابلِ قبول» جلوه می‌دهد بی‌آنکه سالم
+    کند؛ و بدتر، می‌توانست خطی را که پیش‌تر رد می‌شد به پذیرش برساند.
+    """
+    cases = {
+        "host":     "ss://abc@ho\x00st:443?x=1#tag",
+        "scheme":   "s\x01s://abc@host:443?x=1#tag",
+        "userinfo": "ss://ab\x16c@host:443#tag",
+        "port":     "ss://abc@host:4\x0343?x=1#tag",
+        "no-query": "ss://abc@ho\x16st:443",
+    }
+    for where, line in cases.items():
+        assert core._repair_control_chars(line) == "", \
+            f"بایتِ کنترلی در {where} laundered شد به‌جای حذف: {line!r}"
+
+
+def test_zzz_p2_repair_encodes_in_query_and_fragment_only():
+    """در `query` و `fragment` ترمیم می‌کند و ساختار را نگه می‌دارد."""
+    q = core._repair_control_chars("ss://abc@host:443?prefix=\x16\x03#tag")
+    assert q == "ss://abc@host:443?prefix=%16%03#tag", q
+
+    f = core._repair_control_chars("ss://abc@host:443#ta\x01g")
+    assert f == "ss://abc@host:443#ta%01g", f
+
+    # خطِ پاک باید **عیناً** همان شیءِ ورودی برگردد (مسیرِ سریع، بی‌هزینه).
+    clean = "vless://uuid@host:443?security=tls#tag"
+    assert core._repair_control_chars(clean) == clean
+
+
+def test_zzz_p2_extract_valid_lines_never_emits_a_control_byte():
+    """گلوگاهِ واحدِ ورودی: هیچ خطی با بایتِ کنترلی بیرون نمی‌آید."""
+    blob = "\n".join([
+        "vless://uuid@1.2.3.4:443?security=tls#clean",
+        _P2_REAL_LINE,                              # ترمیم‌شدنی
+        "ss://abc@ho\x00st:443#unrepairable",        # حذف‌شدنی
+        "ss://def@5.6.7.8:8388#another-clean",
+    ])
+    got = core.extract_valid_lines(blob)
+
+    assert all(not _p2_has_ctrl(g) for g in got), \
+        f"بایتِ کنترلی از گلوگاه گذشت: {[g for g in got if _p2_has_ctrl(g)]!r}"
+    # خطِ ترمیم‌شدنی حفظ می‌شود، خطِ خراب حذف.
+    assert len(got) == 3, f"شمارشِ خروجی غیرمنتظره: {len(got)} — {got!r}"
+    assert any("prefix=%16" in g for g in got), \
+        "خطِ ترمیم‌شده در خروجی نیست ⇒ ترمیم به گلوگاه وصل نشده"
+    assert not any("unrepairable" in g for g in got), \
+        "خطِ خراب منتشر شد"
+
+
+def test_zzz_p2_output_gate_forbids_every_c0_byte_except_newline():
+    """آزمونِ جامع روی هر ۲۵۶ نقطه‌کد — گاردی که همه‌جا یا هیچ‌جا شلیک کند بی‌فایده است."""
+    forbidden = set(range(0x00, 0x0A)) | set(range(0x0B, 0x20)) | {0x7F}
+    assert len(forbidden) == 32, "پیش‌شرطِ آزمون: مجموعهٔ ممنوع باید ۳۲ عضو باشد"
+
+    for cp in range(0x100):
+        content = "prefix" + chr(cp) + "suffix"
+        try:
+            core.assert_no_control_bytes("t.txt", content)
+            raised = False
+        except core.ControlByteInOutput:
+            raised = True
+        assert raised == (cp in forbidden), (
+            f"گارد روی 0x{cp:02X} اشتباه رفتار کرد: raised={raised}، "
+            f"انتظار={cp in forbidden}")
+
+    # LF باید مجاز بماند وگرنه هیچ فایلی نوشته نمی‌شود.
+    core.assert_no_control_bytes("t.txt", "a\nb\n")
+
+
+def test_zzz_p2_output_gate_is_wired_into_both_writers():
+    """گارد باید در **هر دو** نویسنده فعال باشد و فایلِ نیمه‌نوشته نگذارد."""
+    import tempfile as _tf
+    d = _tf.mkdtemp(prefix="p2gate_")
+
+    p1 = os.path.join(d, "sub", "bad.txt")
+    try:
+        aggregate._write_text(p1, "ss://x\x00y\n")
+        raise AssertionError("aggregate._write_text بایتِ کنترلی را نوشت")
+    except core.ControlByteInOutput:
+        pass
+    assert not os.path.exists(p1), "فایلِ نیمه‌نوشته روی دیسک ماند"
+
+    for label, header, lines in (("header", "# h\x01\n", ["ss://ok"]),
+                                 ("body", "# h\n", ["ss://ok", "ss://b\x16d"])):
+        p2 = os.path.join(d, f"pl_{label}.txt")
+        try:
+            pipeline._write_lines(p2, header, lines)
+            raise AssertionError(f"pipeline._write_lines بایتِ کنترلی را در {label} نوشت")
+        except core.ControlByteInOutput:
+            pass
+        assert not os.path.exists(p2), f"فایلِ نیمه‌نوشته ({label}) روی دیسک ماند"
+
+
+def test_zzz_p2_output_gate_does_not_fire_on_legitimate_output():
+    """ضدِّ مثبتِ کاذب: هر شکلِ واقعیِ خروجی باید بی‌مانع رد شود.
+
+    این آزمون عمداً در جهتِ مخالفِ آزمونِ قبلی است. اگر روزی کسی گارد را
+    سخت‌تر کند و LF را هم ممنوع کند، همه‌چیز «امن» ولی مخزن خالی می‌شود.
+    """
+    cases = {
+        "configs.txt": ("# @Raydikalx — ALL — 2 unique configs\n"
+                        "ss://abc@h:1#a\nvless://d@h:2#b\n"),
+        "base64": core.encode_base64_subscription(["ss://abc@h:1#a"] * 3),
+        "singbox.json": json.dumps({"tag": "IR \x16"}, ensure_ascii=False, indent=2),
+        "clash.yaml": yaml.dump({"name": "IR \x16\t"}, allow_unicode=True,
+                                default_flow_style=False),
+        "empty": "",
+        "emoji": "ss://x@h:1#IR \U0001F1EE\U0001F1F7 | @Raydikalx | 35E13F\n",
+    }
+    for name, content in cases.items():
+        core.assert_no_control_bytes(name, content)  # نباید استثنا بیندازد
+
+
+def test_zzz_p2_converters_output_is_identical_before_and_after_the_repair():
+    """چرا ترمیم و نه حذف: مبدل‌ها `prefix` را دور می‌اندازند، پس این نود در
+    clash/singbox حاضر است. حذفِ خط، نودی را کم می‌کرد که امروز منتشر می‌شود."""
+    old = _P2_REAL_LINE
+    new = core._repair_control_chars(old)
+
+    assert converters.parse_proxy(old) == converters.parse_proxy(new), \
+        "ترمیم، تجزیهٔ مبدل را عوض کرد"
+    assert converters.build_clash_yaml([old]) == converters.build_clash_yaml([new]), \
+        "خروجیِ clash عوض شد ⇒ ریزشِ قابلِ مشاهده برای کاربر"
+    assert converters.build_singbox_json([old]) == converters.build_singbox_json([new]), \
+        "خروجیِ sing-box عوض شد ⇒ ریزشِ قابلِ مشاهده برای کاربر"
+
+    # و اثباتِ اینکه این نود واقعاً در خروجیِ مبدل هست (وگرنه آزمونِ بالا
+    # می‌توانست با «هر دو خالی» هم پاس شود — سبزِ توخالی).
+    y = converters.build_clash_yaml([new])
+    assert "37.32.27.224" in y, \
+        "نود در clash نیست ⇒ فرضِ «مبدل prefix را دور می‌اندازد ولی نود را نگه می‌دارد» غلط است"
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# فاز P3 — زنجیرهٔ تأمین: هر باینریِ دانلودشده باید checksum داشته باشد
+# ══════════════════════════════════════════════════════════════════════════════
+# pinِ نسخه تنها می‌گوید «کدام تگ»، نه «کدام بایت»؛ در GitHub می‌توان یک release
+# را حذف و همان تگ را با محتوایِ دیگری منتشر کرد. sing-box و mihomo همان
+# باینری‌هایی‌اند که خروجیِ منتشرشده را **اعتبارسنجی** می‌کنند، پس اگر جای‌شان
+# چیزِ دیگری اجرا شود، همهٔ اعتبارسنجی‌های پایین‌دست بی‌معنا می‌شوند.
+#
+# این آزمون‌ها عمداً «قاعده‌محور»اند نه «فهرست‌محور»: هر دانلودِ **تازه‌ای** که در
+# آینده افزوده شود و checksum نداشته باشد، همین‌جا می‌شکند.
+
+#: بررسیِ sha256 بدونِ regex — ماژولِ `re` در این فایل import نشده است و
+#: افزودنِ import سراسری برای یک بررسیِ ساده، تغییرِ بی‌دلیل است.
+def _p3_is_sha256(value: str) -> bool:
+    value = str(value)
+    return len(value) == 64 and all(c in "0123456789abcdef" for c in value)
+
+
+def _p3_download_steps() -> list:
+    """(نام، بدنهٔ run)ِ هر گامی که از releases دانلود می‌کند — از YAMLِ پارس‌شده."""
+    doc = yaml.safe_load(_workflow_text())
+    found = []
+    for job in doc.get("jobs", {}).values():
+        for step in job.get("steps", []) or []:
+            run = step.get("run") or ""
+            if "releases/download/" in run:
+                found.append((step.get("name") or "<unnamed>", run))
+    return found
+
+
+def test_zzz_p3_sha256_matcher_accepts_and_rejects_correctly():
+    """خود-آزمونِ سنجه: سنجه‌ای که همه‌چیز را بپذیرد، چیزی نمی‌سنجد."""
+    assert _p3_is_sha256("f48703461a15476951ac4967cdad339d986f4b8096b4eb3ff0829a500502d697")
+    assert not _p3_is_sha256("F48703461A15476951AC4967CDAD339D986F4B8096B4EB3FF0829A500502D697"), \
+        "حروفِ بزرگ باید رد شوند (sha256sum خروجیِ کوچک می‌دهد)"
+    assert not _p3_is_sha256("abc123"), "طولِ کوتاه باید رد شود"
+    assert not _p3_is_sha256("g" * 64), "کاراکترِ غیرِ hex باید رد شود"
+    assert not _p3_is_sha256(""), "رشتهٔ خالی باید رد شود"
+
+
+def test_zzz_p3_every_binary_download_in_the_workflow_is_checksum_verified():
+    """هر گامی که باینری دانلود می‌کند باید sha256 را بسنجد و روی عدمِ تطابق بمیرد."""
+    # خود-آزمونِ تشخیص‌دهنده: یک گامِ ساختگیِ بی‌checksum باید «مشکوک» شمرده شود.
+    fake = "curl -fsSL https://x/releases/download/v1/foo.tgz -o /tmp/f\n"
+    assert "releases/download/" in fake, "تشخیص‌دهندهٔ دانلود کار نمی‌کند"
+    assert "sha256sum" not in fake, "پیش‌شرطِ خود-آزمون نقض شد"
+
+    steps = _p3_download_steps()
+    # اگر روزی این صفر شود، آزمون «همیشه سبز» می‌شد — سبزِ توخالی.
+    assert len(steps) >= 2, \
+        f"گامِ دانلودی پیدا نشد ⇒ آزمون بی‌اثر شده است (یافته‌ها: {len(steps)})"
+
+    for name, run in steps:
+        assert "sha256sum" in run, \
+            f"گامِ «{name}» باینری دانلود می‌کند ولی checksum نمی‌سنجد"
+        assert "exit 1" in run, \
+            f"گامِ «{name}» checksum می‌سنجد ولی عدمِ تطابق را کشنده نکرده است"
+
+
+def test_zzz_p3_installer_actually_uses_every_checksum_it_declares():
+    """هر sha256ِ اعلام‌شده باید در بدنهٔ گام **استفاده** شود.
+
+    یک hashِ اعلام‌شده و بی‌استفاده، کلاسیک‌ترین «سبزِ توخالی» است: در فایل
+    دیده می‌شود، در عمل هیچ چیز را تأیید نمی‌کند.
+    """
+    doc = yaml.safe_load(_workflow_text())
+    steps = [s for job in doc.get("jobs", {}).values()
+             for s in (job.get("steps", []) or [])
+             if any(k.endswith("_SHA256") for k in (s.get("env") or {}))]
+    assert steps, "هیچ گامی sha256 اعلام نکرده است"
+
+    for step in steps:
+        run = step.get("run") or ""
+        name = step.get("name") or "<unnamed>"
+        declared = {k: v for k, v in step["env"].items() if k.endswith("_SHA256")}
+        for key, value in declared.items():
+            assert _p3_is_sha256(value), \
+                f"{name}: {key} یک sha256ِ معتبرِ ۶۴رقمیِ کوچک نیست: {value!r}"
+            assert f"${key}" in run or f"${{{key}}}" in run, \
+                f"{name}: {key} اعلام شده ولی هرگز استفاده نمی‌شود"
+
+        # آرشیو و باینری نباید یک hash داشته باشند (دامِ copy-paste).
+        values = list(declared.values())
+        assert len(set(values)) == len(values), \
+            f"{name}: دو sha256ِ یکسان اعلام شده ⇒ احتمالاً copy-paste: {declared}"
+
+
+def test_zzz_p3_singbox_and_mihomo_verify_archive_before_extract_and_binary_before_install():
+    """ترتیب حیاتی است، نه فقط حضورِ checksum."""
+    doc = yaml.safe_load(_workflow_text())
+    step = next((s for job in doc.get("jobs", {}).values()
+                 for s in (job.get("steps", []) or [])
+                 if "sing-box" in (s.get("name") or "")), None)
+    assert step is not None, "گامِ نصبِ sing-box/mihomo پیدا نشد"
+
+    env, run = step.get("env") or {}, step.get("run") or ""
+    for key in ("SING_BOX_TGZ_SHA256", "SING_BOX_BIN_SHA256",
+                "MIHOMO_GZ_SHA256", "MIHOMO_BIN_SHA256"):
+        assert key in env, f"{key} اعلام نشده است"
+
+    # تأییدِ آرشیو باید **پیش از** استخراج بیاید: باز کردنِ آرشیوِ تأییدنشده
+    # یعنی دادنِ ورودیِ نامعتمد به tar/gunzip.
+    for archive_key, extract_cmd in (("SING_BOX_TGZ_SHA256", "tar -xzf"),
+                                     ("MIHOMO_GZ_SHA256", "gunzip")):
+        pos_verify, pos_extract = run.find(archive_key), run.find(extract_cmd)
+        assert pos_verify != -1 and pos_extract != -1, \
+            f"{archive_key} یا «{extract_cmd}» در بدنه نیست"
+        assert pos_verify < pos_extract, (
+            f"تأییدِ آرشیو ({archive_key}) **پس از** استخراج ({extract_cmd}) "
+            "آمده ⇒ ورودیِ نامعتمد به استخراج‌کننده داده می‌شود")
+
+    # و تأییدِ باینری باید پیش از install بیاید.
+    for bin_key, tool in (("SING_BOX_BIN_SHA256", "sing-box"),
+                          ("MIHOMO_BIN_SHA256", "mihomo")):
+        pos_verify = run.find(bin_key)
+        pos_install = run.find(f"$HOME/.local/bin/{tool}")
+        assert pos_verify != -1 and pos_install != -1, \
+            f"{bin_key} یا installِ {tool} در بدنه نیست"
+        assert pos_verify < pos_install, \
+            f"تأییدِ باینریِ {tool} پس از install آمده است"
+
+
 if __name__ == "__main__":
     sys.exit(_run_all())

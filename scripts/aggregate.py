@@ -352,6 +352,10 @@ def process_category(
 # ──────────────────────────────────────────────────────────────────────────────
 
 def _write_text(path: str, content: str) -> None:
+    # گاردِ خروجی **پیش از** باز کردنِ فایل اجرا می‌شود تا در صورتِ شکست، فایلِ
+    # نیمه‌نوشته یا truncate‌شده روی دیسک نماند. توضیحِ کامل: core.py، بخشِ
+    # «گاردِ خروجی».
+    core.assert_no_control_bytes(path, content)
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "w", encoding="utf-8") as f:
         f.write(content)

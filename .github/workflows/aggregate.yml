@@ -334,26 +334,74 @@ jobs:
       # کند، نه فقط همان نود. پس تنها اعتبارسنجیِ قابل‌اعتماد، اجرای همان
       # باینری‌هایی است که کاربر استفاده می‌کند. نسخه‌ها pin شده‌اند تا
       # به‌روزرسانیِ ناگهانیِ upstream، انتشار را نشکند.
-      - name: 🧰 Install sing-box & mihomo
+      # ── چرا checksum و نه فقط pinِ نسخه ──────────────────────────────────
+      # pinِ نسخه تنها می‌گوید «کدام تگ»، نه «کدام بایت». تگ و asset در GitHub
+      # قابلِ جایگزینی‌اند (حذفِ release و انتشارِ مجددِ همان تگ)، پس نسخهٔ pinشده
+      # به‌تنهایی جلوی تغییرِ خاموشِ باینری را نمی‌گیرد. این دو باینری، خروجیِ
+      # منتشرشده را **اعتبارسنجی** می‌کنند؛ اگر جای معتبرسنج، چیزِ دیگری اجرا
+      # شود، همهٔ اعتبارسنجی‌های پایین‌دست بی‌معنا می‌شوند.
+      #
+      # ترتیب عامدانه است و از الگویِ گامِ xray-knife تقلید می‌شود:
+      #   ۱) تأییدِ آرشیو **پیش از** استخراج — باز کردنِ آرشیوِ تأییدنشده یعنی
+      #      دادنِ ورودیِ نامعتمد به tar/gunzip.
+      #   ۲) تأییدِ باینریِ استخراج‌شده **پیش از** install — یک استخراجِ خراب یا
+      #      آرشیوی با محتوایِ عوض‌شده را هم می‌گیرد.
+      # عامدانه cache اضافه نشده: این گام هر بار دانلود می‌کند، پس «تأییدِ
+      # همیشگیِ باینری» به‌طورِ طبیعی برقرار است و پیچیدگیِ کلیدِ cache (که در
+      # گامِ xray-knife لازم بود) اینجا هزینهٔ بی‌دلیل است.
+      #
+      # هر چهار مقدار از **دو منبعِ مستقل** تأیید شده‌اند: فیلدِ `digest`ِ خودِ
+      # GitHub برای asset، و محاسبهٔ محلیِ `sha256sum` پس از دانلودِ جداگانه.
+      # هر دو باینری اجرا شدند و همان نسخهٔ pinشده را گزارش کردند.
+      - name: 🧰 Install sing-box & mihomo (pinned + checksum verified)
         if: steps.gate.outputs.should_run == 'true'
         env:
           SING_BOX_VERSION: "1.13.14"
           MIHOMO_VERSION: "v1.19.29"
+          # sha256ِ آرشیوها (پیش از استخراج)
+          SING_BOX_TGZ_SHA256: "f48703461a15476951ac4967cdad339d986f4b8096b4eb3ff0829a500502d697"
+          MIHOMO_GZ_SHA256: "60de76a35a6cbf7b4fa4a20f5c257c24345d1d635ab1aa3877022a1997ef413c"
+          # sha256ِ خودِ باینری‌های استخراج‌شده (پیش از install)
+          SING_BOX_BIN_SHA256: "68aeab83cc4ab2659a5b92232261a20746ccdafc3b3d1e19b2d63247eec3bbf7"
+          MIHOMO_BIN_SHA256: "9c397be7489538628fae781bc005e4c5b8cd7b0961b8bb2ca815c8150f193577"
         run: |
           set -euo pipefail
           mkdir -p "$HOME/.local/bin"
-          # sing-box
+
+          # verify <file> <expected-sha256> <label>
+          # یک تابعِ مشترک، تا دو مسیرِ تأیید هرگز از هم واگرا نشوند.
+          verify() {
+            local got
+            got="$(sha256sum "$1" | cut -d' ' -f1)"
+            if [ "$got" != "$2" ]; then
+              echo "::error::$3 checksum mismatch (tampered release or corrupt download)"
+              echo "  expected $2"
+              echo "  actual   $got"
+              rm -f "$1"
+              exit 1
+            fi
+            echo "  ✓ $3 sha256 verified"
+          }
+
+          # ── sing-box ────────────────────────────────────────────────────
           curl -fsSL --retry 3 --retry-delay 2 \
             "https://github.com/SagerNet/sing-box/releases/download/v${SING_BOX_VERSION}/sing-box-${SING_BOX_VERSION}-linux-amd64.tar.gz" \
             -o /tmp/sb.tar.gz
+          verify /tmp/sb.tar.gz "$SING_BOX_TGZ_SHA256" "sing-box archive"
           tar -xzf /tmp/sb.tar.gz -C /tmp
+          verify "/tmp/sing-box-${SING_BOX_VERSION}-linux-amd64/sing-box" \
+                 "$SING_BOX_BIN_SHA256" "sing-box binary"
           install -m 755 "/tmp/sing-box-${SING_BOX_VERSION}-linux-amd64/sing-box" "$HOME/.local/bin/sing-box"
-          # mihomo (فایل .gz تک‌فایلی است، نه tar)
+
+          # ── mihomo (فایل .gz تک‌فایلی است، نه tar) ──────────────────────
           curl -fsSL --retry 3 --retry-delay 2 \
             "https://github.com/MetaCubeX/mihomo/releases/download/${MIHOMO_VERSION}/mihomo-linux-amd64-${MIHOMO_VERSION}.gz" \
             -o /tmp/mihomo.gz
+          verify /tmp/mihomo.gz "$MIHOMO_GZ_SHA256" "mihomo archive"
           gunzip -f /tmp/mihomo.gz
+          verify /tmp/mihomo "$MIHOMO_BIN_SHA256" "mihomo binary"
           install -m 755 /tmp/mihomo "$HOME/.local/bin/mihomo"
+
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
           "$HOME/.local/bin/sing-box" version
           "$HOME/.local/bin/mihomo" -v
@@ -374,7 +422,7 @@ jobs:
       # upstream می‌تواند بی‌صدا ستون‌ها یا نامِ وضعیت‌ها را عوض کند و آن‌گاه
       # دستهٔ `verified/` بی‌آنکه خطایی دیده شود، اشتباه پر می‌شود.
       #
-      # چرا checksum، در حالی که مرحلهٔ sing-box/mihomo آن را ندارد:
+      # چرا checksum — همان استانداردی که گامِ sing-box/mihomo هم به آن رسید:
       # فقط pin کردنِ *نسخه* تضمینی نمی‌دهد، چون یک انتشارِ گیت‌هاب قابلِ
       # جای‌گزینی است (asset را می‌توان با همان نام دوباره بارگذاری کرد).
       # مقدارهای زیر دوسویه تأیید شده‌اند: فایلِ `.dgst`ِ رسمیِ upstream در

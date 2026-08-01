@@ -1318,6 +1318,66 @@ def _repair_amp_separator(line: str) -> str:
     return _AMP_SEP.sub("&", line)
 
 
+# ── ترمیمِ بایت‌های کنترلیِ خام در متنِ کانفیگ ─────────────────────────────────
+# سنجشِ کاملِ پیکرهٔ منتشرشده (۵۰ فایل، ۳۷ مگابایت) نشان داد **یک** کانفیگ
+# حاوی بایت‌های کنترلیِ خام است و همان یک خط، شش بایتِ کنترلی را به سه فایلِ
+# متنی (all/configs.txt, heavy/configs.txt, protocols/shadowsocks.txt) و سه
+# نسخهٔ base64شان تزریق می‌کرد:
+#
+#     ss://…@37.32.27.224:9147?prefix=\x16\x03\x01\x00…#IR 🇮🇷 | @Raydikalx | …
+#
+# منشأ: پارامترِ `prefix` در shadowsocks عامدانه بایتِ خام می‌گیرد (اینجا سرآیندِ
+# TLS ClientHello برای obfuscation). یعنی دادهٔ بدخواه نیست؛ اما در یک فایلِ
+# متنیِ منتشرشده بایتِ کنترلیِ خام یک نقصِ یکپارچگی است: NUL می‌تواند رشته را در
+# مصرف‌کنندهٔ C-محور نصف کند و 0x16 در ترمینال/لاگ رفتارِ نامعلوم بسازد.
+#
+# چرا «ترمیم» و نه «حذفِ کانفیگ»؟ اندازه‌گیری نشان داد converterها پارامترِ
+# `prefix` را دور می‌اندازند، پس همین نود در clash.yaml و singbox.json **حاضر و
+# سالم** است. حذفِ خط، نودی را از خروجی کم می‌کرد که امروز منتشر می‌شود.
+#
+# قاعده عامدانه **دو-ناحیه‌ای** است:
+#   • در `query` و `fragment` → percent-encoding (بی‌اتلاف و idempotent؛
+#     RFC 3986 §2.1 همین را برای بایتِ غیرمجاز تجویز می‌کند و کلاینت با
+#     unquote دقیقاً همان بایتِ اصلی را بازمی‌سازد ⇒ کانفیگ کار می‌کند).
+#   • پیش از `?` (scheme/authority) → خط **دور انداخته می‌شود**؛ بایتِ کنترلی
+#     در میزبان/پورت یعنی خطِ خراب است و percent-encoding آن را «قابلِ قبول»
+#     جلوه می‌دهد بی‌آنکه سالم کند.
+#
+# دو سنجشِ مستقل روی پیکرهٔ **واقعیِ** منتشرشده. پیکره هر ۱۵ دقیقه از نو ساخته
+# می‌شود، پس تعدادِ خط عددِ ثابتی نیست و عامداً هر دو اندازه‌گیری با تاریخ ثبت
+# شده تا بازبینی‌پذیر باشد (نسبت‌ها بازتولید می‌شوند، نه عددِ خام):
+#   • ۲۰۲۶-۰۸-۰۱، پیکرهٔ ۱۰٬۰۹۱ خطی → ۱۰٬۰۹۰ بی‌تغییر، ۱ ترمیم، ۰ حذف
+#   • ۲۰۲۶-۰۸-۰۱، بازسنجیِ زنده روی پیکرهٔ ۱۰٬۰۱۹ خطی، این بار با فراخوانیِ
+#     خودِ همین پیاده‌سازی (نه شبیه‌سازی) → ۱۰٬۰۱۸ بی‌تغییر، ۱ ترمیم، ۰ حذف
+# در هر دو سنجش `dedup_key` و `stable_label` پیش و پس از ترمیم یکسان ماندند و
+# خروجیِ clash/sing-box بایت‌به‌بایت تغییر نکرد ⇒ صفر ریزشِ قابلِ مشاهده.
+_CTRL_CHAR_RE = re.compile(r"[\x00-\x1f\x7f]")
+
+
+def _pct_encode_ctrl(text: str) -> str:
+    """هر بایتِ کنترلی را به شکلِ `%XX` (RFC 3986) بازنویسی می‌کند."""
+    return _CTRL_CHAR_RE.sub(lambda m: "%%%02X" % ord(m.group(0)), text)
+
+
+def _repair_control_chars(line: str) -> str:
+    """بایتِ کنترلیِ خام را در `query`/`fragment` percent-encode می‌کند.
+
+    اگر بایتِ کنترلی **پیش از** `?` باشد، رشتهٔ خالی برمی‌گرداند تا فراخوان
+    خط را دور بیندازد (رفتارِ fail-safe؛ در `extract_valid_lines` همین رشتهٔ
+    خالی باعثِ short-circuit و حذفِ خط می‌شود).
+    """
+    if not _CTRL_CHAR_RE.search(line):
+        return line
+    head, frag_sep, frag = line.partition("#")
+    authority, query_sep, query = head.partition("?")
+    if _CTRL_CHAR_RE.search(authority):
+        return ""
+    repaired = authority + query_sep + _pct_encode_ctrl(query)
+    if frag_sep:
+        repaired += frag_sep + _pct_encode_ctrl(frag)
+    return repaired
+
+
 def extract_valid_lines(content: str) -> List[str]:
     """از یک blob (direct یا base64) خطوط کانفیگ معتبر را استخراج می‌کند."""
     if not content:
@@ -1333,9 +1393,13 @@ def extract_valid_lines(content: str) -> List[str]:
         if decoded:
             content = decoded
     # هوشمند: هر scheme:// معتبر پذیرفته می‌شود (حتی پروتکل‌های جدید)
+    # ترتیب عامدانه است: نخست نرمال‌سازیِ `&amp;`، سپس ترمیمِ بایتِ کنترلی. پس از
+    # sanitizer هیچ مرحله‌ای بایتِ کنترلی بازنمی‌گرداند ⇒ هر خطی که از این تابع
+    # بیرون می‌آید، تضمیناً بدونِ بایتِ کنترلیِ خام است.
     return [
         line for raw in content.splitlines()
-        if (line := _repair_amp_separator(raw.strip())) and is_proxy_config(line)
+        if (line := _repair_control_chars(_repair_amp_separator(raw.strip())))
+        and is_proxy_config(line)
     ]
 
 
@@ -1343,3 +1407,63 @@ def encode_base64_subscription(lines: List[str]) -> str:
     """لیست کانفیگ‌ها → بلوک base64 استاندارد اشتراک (v2rayN/v2rayNG)."""
     joined = "\n".join(lines)
     return base64.b64encode(joined.encode("utf-8")).decode("ascii")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# 🛡️ گاردِ خروجی — دفاعِ لایه‌دوم در برابرِ بایتِ کنترلی
+# ══════════════════════════════════════════════════════════════════════════════
+# `_repair_control_chars` نقص را در **ورودی** می‌بندد. این گارد همان تضمین را
+# در **خروجی** تکرار می‌کند تا اگر روزی مسیرِ سومی (سرآیند، برچسب، متنِ تولیدی)
+# بایتِ کنترلی بسازد، به‌جای انتشارِ خاموش، بلند شکست بخورد.
+#
+# چرا fail-closed (استثنا) و نه پاک‌سازیِ خاموش؟ در این مخزن، شکستِ aggregate
+# یعنی مرحلهٔ publish اجرا نمی‌شود و آخرین خروجیِ **سالمِ** قبلی روی main
+# می‌مانَد. پس بدترین پیامدِ این گارد «کهنگیِ داده + یک اجرای سرخِ کاملاً
+# دیدنی» است، نه انتشارِ دادهٔ خراب. اولویتِ درستی بر تازگی، انتخابِ آگاهانه.
+#
+# چرا هر بایتِ C0 جز LF ممنوع است (و صفر مثبتِ کاذب می‌دهد) — سه اندازه‌گیریِ
+# مستقل و هم‌سو:
+#   ۱) سنجشِ کلِ جمعیتِ خروجیِ واقعیِ منتشرشده: TAB=۰، CR=۰، DEL=۰ در همهٔ
+#      فایل‌ها؛ تنها بایتِ کنترلیِ مجاز، LF بود.
+#   ۲) بررسیِ ایستا: تنها `\t`/`\r` در کلِ ماژول‌های نویسنده در
+#      `_FRONT_HOST_BAD_CHARS` است که مجموعهٔ **ردّ** است، نه متنِ نوشتنی؛
+#      سرآیندها هم فقط `#`, متن و LF دارند.
+#   ۳) معناشناسیِ serializerها: `json.dumps` و `yaml.dump` هر بایتِ C0 را
+#      escape می‌کنند (آزمونِ زنده: `\x16`, `\t`, `\r` هر سه به شکلِ متنی
+#      درآمدند) ⇒ clash.yaml و singbox.json ساختاراً نمی‌توانند بایتِ خام
+#      داشته باشند. پس `.json`/`.yaml` نیز بی‌خطر از این گارد می‌گذرند.
+#   و base64 فقط الفبای ASCII تولید می‌کند.
+#
+# نتیجه: در کارکردِ عادی این گارد هرگز شلیک نمی‌کند؛ یک assertion است، نه فیلتر.
+
+
+class ControlByteInOutput(ValueError):
+    """خروجی حاوی بایتِ کنترلیِ خام است — انتشار باید متوقف شود."""
+
+
+#: هر بایتِ C0 جز `\n`، به‌علاوهٔ DEL. عامدانه TAB و CR را هم شامل می‌شود:
+#: نبودشان اندازه‌گیری شده و حضورشان یعنی آلودگیِ CRLF یا سرآیندِ ناخواسته.
+_FORBIDDEN_OUTPUT_CHAR_RE = re.compile(r"[\x00-\x09\x0b-\x1f\x7f]")
+
+
+def assert_no_control_bytes(path: str, content: str) -> None:
+    """اگر `content` بایتِ کنترلیِ ممنوع داشته باشد، استثنا می‌اندازد.
+
+    پیامِ خطا عامدانه «قابلِ اقدام» است: مسیر، بایت، شمارهٔ خط و ستون، و یک
+    نمونهٔ کوتاه که با `repr` نمایش داده می‌شود تا خودِ لاگ آلوده نشود.
+    """
+    m = _FORBIDDEN_OUTPUT_CHAR_RE.search(content)
+    if m is None:
+        return
+    offset = m.start()
+    line_no = content.count("\n", 0, offset) + 1
+    line_start = content.rfind("\n", 0, offset) + 1
+    column = offset - line_start + 1
+    total = len(_FORBIDDEN_OUTPUT_CHAR_RE.findall(content))
+    excerpt = content[max(line_start, offset - 40):offset + 40]
+    raise ControlByteInOutput(
+        f"refusing to write {path!r}: forbidden control byte "
+        f"0x{ord(m.group(0)):02X} at line {line_no}, column {column} "
+        f"(byte offset {offset}); {total} forbidden byte(s) in total; "
+        f"excerpt={excerpt!r}"
+    )

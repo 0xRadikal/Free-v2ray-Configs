@@ -318,6 +318,13 @@ def build_buckets(round_result: Dict[str, Any],
 # ──────────────────────────────────────────────────────────────────────────────
 
 def _write_lines(path: str, header: str, lines: Sequence[str]) -> None:
+    # گاردِ خروجی: سرآیند و هر خط **جداگانه** بازبینی می‌شوند، نه با ساختنِ یک
+    # رشتهٔ غول؛ اینجا فایل‌ها ده‌هزار خطی‌اند و ادغامِ آن‌ها در حافظه هزینهٔ
+    # بی‌دلیل دارد. بازبینی پیش از باز کردنِ فایل انجام می‌شود تا فایلِ
+    # نیمه‌نوشته باقی نماند.
+    core.assert_no_control_bytes(path, header)
+    for line in lines:
+        core.assert_no_control_bytes(path, line)
     parent = os.path.dirname(path)
     if parent:
         os.makedirs(parent, exist_ok=True)

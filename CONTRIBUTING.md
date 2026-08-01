@@ -59,7 +59,7 @@ It prints one line per test and a summary, and exits non-zero if anything failed
 ```
   ✅ test_state_history_growth_is_bounded
   …
-  289/289 passed
+  301/301 passed
 ```
 
 Notes that matter:
@@ -227,7 +227,7 @@ please check that file before claiming a source works.
   step uses it to find the last human commit, and a human commit carrying that
   marker would be skipped as if it were bot output.
 - In the PR description, state **what you measured**, not just what you changed.
-  "Ran the suite: 289/289" or "source returned 412 configs, 38 unique after
+  "Ran the suite: 301/301" or "source returned 412 configs, 38 unique after
   dedup" is the expected style.
 
 ### What gets a PR rejected
