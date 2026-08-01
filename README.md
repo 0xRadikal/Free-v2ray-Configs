@@ -5,7 +5,7 @@
 ![Validated](https://img.shields.io/badge/validated-sing--box%20%2B%20mihomo-success)
 ![License](https://img.shields.io/github/license/0xRadikal/Free-v2ray-Configs)
 
-> 🇮🇷 [نسخهٔ فارسی](README_FA.md)
+> 🇮🇷 [نسخهٔ فارسی](README_FA.md) · 🇨🇳 [中文版](README_ZH.md) · 🇷🇺 [Русская версия](README_RU.md)
 
 Automatically aggregated, **deduplicated**, **branded**, and **client-validated** free
 V2Ray / Xray configs. Collected from **21 sources** (7 light + 14 heavy), cleaned with a
@@ -178,8 +178,10 @@ Human-authored source, with normal git history and blame:
 
 ```
 scripts/    the pipeline (core.py · converters.py · sources.py · aggregate.py · validate.py)
-.github/    the scheduled workflow
-README.md · README_FA.md · LICENSE
+.github/    the scheduled workflow · Dependabot config · issue templates
+docs/       the static status dashboard (reads index.json / health.json at runtime)
+README.md · README_FA.md · README_ZH.md · README_RU.md
+SECURITY.md · CONTRIBUTING.md · LICENSE
 ```
 
 Notes:

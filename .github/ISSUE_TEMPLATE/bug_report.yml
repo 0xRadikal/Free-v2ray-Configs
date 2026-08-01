@@ -1,0 +1,103 @@
+name: 🐞 Bug report (pipeline / output / workflow)
+description: Something in the generated files, the scripts, or the CI is wrong.
+title: "bug: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. Please note what this form is **not** for:
+
+        - ❌ *"a config didn't connect for me"* → use the **Config problem** form
+          instead. Most free configs are dead at any moment; that is
+          [measured and published](https://github.com/0xRadikal/Free-v2ray-Configs#-does-it-actually-work),
+          not a bug.
+        - ❌ *"a source is down"* → check
+          [`health.json`](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/health.json)
+          first; it reports each source's status, HTTP code and last error.
+        - ❌ security issues → see [SECURITY.md](https://github.com/0xRadikal/Free-v2ray-Configs/blob/main/SECURITY.md).
+
+        This form **is** for things like: a generated file that a client refuses
+        to load, a protocol file that is missing when it shouldn't be, wrong
+        counts in `index.json`, a crash in `scripts/**`, or a broken CI run.
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Which part is affected?
+      options:
+        - "Generated subscription file (all/ heavy/ light/)"
+        - "Per-protocol file (protocols/)"
+        - "Verification buckets (verified/ fast/ secure/ top100.txt)"
+        - "Metadata (index.json / health.json)"
+        - "A script in scripts/"
+        - "GitHub Actions workflow / publishing"
+        - "Documentation (README / docs dashboard)"
+        - "Other / not sure"
+    validations:
+      required: true
+
+  - type: input
+    id: file_url
+    attributes:
+      label: Exact file or URL
+      description: The full raw URL, or the repository path.
+      placeholder: https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/all/clash.yaml
+    validations:
+      required: true
+
+  - type: textarea
+    id: what_happened
+    attributes:
+      label: What happened?
+      description: What you did, and what you got.
+      placeholder: |
+        1. Subscribed to .../all/clash.yaml in mihomo v1.19.29
+        2. The client refused the whole file with: ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect instead?
+    validations:
+      required: true
+
+  - type: textarea
+    id: error
+    attributes:
+      label: Exact error output
+      description: |
+        Paste the literal error. If a client rejects a file, the client's own
+        message is the single most useful thing you can provide.
+        **Redact any UUID, password or private key first.**
+      render: text
+
+  - type: input
+    id: client
+    attributes:
+      label: Client and version (if applicable)
+      placeholder: "sing-box 1.13.14 / mihomo v1.19.29 / v2rayNG 1.9.x / Nekobox …"
+
+  - type: input
+    id: commit
+    attributes:
+      label: Commit SHA you observed this on (if known)
+      description: |
+        Only needed for `scripts/**` or workflow issues. Note that output
+        commits are intentionally garbage-collected by the rolling-squash
+        publish, so an old output SHA may no longer exist.
+      placeholder: d9fa0bb
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I checked `health.json` and this is not simply a dead upstream source.
+          required: true
+        - label: This is not "a config didn't work for me" (that belongs in the Config problem form).
+          required: true
+        - label: I removed any credentials, UUIDs or private keys from what I pasted.
+          required: true

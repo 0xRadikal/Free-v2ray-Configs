@@ -4,7 +4,7 @@
 ![Update](https://img.shields.io/badge/%D8%A8%D9%87%E2%80%8C%D8%B1%D9%88%D8%B2%D8%B1%D8%B3%D8%A7%D9%86%DB%8C-%D9%87%D8%B1%20%DB%B1%DB%B5%20%D8%AF%D9%82%DB%8C%D9%82%D9%87-blue)
 ![Validated](https://img.shields.io/badge/%D8%A7%D8%B9%D8%AA%D8%A8%D8%A7%D8%B1%D8%B3%D9%86%D8%AC%DB%8C-sing--box%20%2B%20mihomo-success)
 
-> 🇬🇧 [English version](README.md)
+> 🇬🇧 [English version](README.md) · 🇨🇳 [中文版](README_ZH.md) · 🇷🇺 [Русская версия](README_RU.md)
 
 کانفیگ‌های رایگان V2Ray / Xray که به‌صورت **خودکار** جمع‌آوری، **تکراری‌زدایی**،
 **برندینگ** و **اعتبارسنجی با کلاینتِ واقعی** می‌شوند. از **۲۱ منبع** (۷ سبک + ۱۴ انبوه)

@@ -1,0 +1,95 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Dependabot configuration
+#
+# Only two ecosystems exist in this repository, and both are listed:
+#
+#   1) pip             → requirements.txt at the repo root, three exactly
+#                        pinned runtime dependencies (requests, PyYAML,
+#                        maxminddb). Pinned with `==` on purpose, which is
+#                        precisely why an automated updater is needed: an exact
+#                        pin never picks up a security fix on its own.
+#
+#   2) github-actions  → .github/workflows/aggregate.yml, which uses four
+#                        actions, all pinned to major tags:
+#                          actions/checkout@v4
+#                          actions/setup-python@v5
+#                          actions/cache@v4        (used twice)
+#                          actions/upload-artifact@v4
+#
+# NOT covered here, deliberately:
+#   • sing-box / mihomo / xray-knife are downloaded inside the workflow from
+#     GitHub Releases with the version pinned in `env:`. Dependabot cannot see
+#     those, so they must be bumped by hand. SECURITY.md records this, together
+#     with the fact that sing-box and mihomo are version-pinned but not yet
+#     checksum-verified (xray-knife is).
+#   • The published output (all/, heavy/, light/, protocols/, index.json, …) is
+#     machine-generated and has no dependencies.
+#
+# Weekly rather than daily: this repository publishes ~96 times a day (cron is
+# `*/5` but a 13-minute freshness gate means only ~every 15 min actually
+# fetches), and a dependency bump forces a re-validation cycle. Weekly keeps the
+# signal without burying the maintainer.
+#
+# ⚠️ No `labels:` key here, and that omission is deliberate — it was a real bug.
+#    GitHub's Dependabot reference says of `labels`:
+#      • default behaviour: "All pull requests have a `dependencies` label" and
+#        "Dependabot creates these default labels automatically, as necessary";
+#      • when `labels` IS defined: "The labels specified are used instead of the
+#        default labels" and "If any of these labels is not defined in the
+#        repository, it is ignored."
+#    This repository has only the nine default GitHub labels (checked against the
+#    API: bug, documentation, duplicate, enhancement, good first issue,
+#    help wanted, invalid, question, wontfix). So a custom list such as
+#    [dependencies, python] would be ignored for not existing *and* would
+#    suppress the defaults Dependabot would otherwise have created — net result:
+#    pull requests with no labels at all, which is strictly worse than saying
+#    nothing. Omitting the key gets `dependencies` plus a per-ecosystem label,
+#    created automatically. If the labels are created in the repository later, a
+#    custom list can be reintroduced then.
+# ─────────────────────────────────────────────────────────────────────────────
+version: 2
+
+updates:
+  # ── Python runtime dependencies ────────────────────────────────────────────
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "Etc/UTC"
+    open-pull-requests-limit: 5
+    commit-message:
+      # Matches the Conventional Commits style used by the human history
+      # (273 of the last 286 human commits parse as Conventional Commits).
+      # ⚠️ Must never contain the string "[auto-output]": the publish step
+      #    treats that marker as "this is bot output" when it looks for the
+      #    most recent human commit to anchor on.
+      #
+      # No `prefix-development` either: it applies only to commits updating the
+      # "Development dependency group", and this repository's only pip manifest
+      # is a flat `requirements.txt` with no dev group, so the key could never
+      # fire. It was dead configuration that implied a distinction that does not
+      # exist here.
+      prefix: "chore(deps)"
+      include: "scope"
+    # A major bump of requests/PyYAML/maxminddb can change parsing or I/O
+    # behaviour, so it should be a deliberate, separately reviewed change
+    # rather than an auto-opened PR alongside patch updates.
+    ignore:
+      - dependency-name: "*"
+        update-types:
+          - "version-update:semver-major"
+
+  # ── GitHub Actions used by the workflow ───────────────────────────────────
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "Etc/UTC"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore(ci)"
+      include: "scope"

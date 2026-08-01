@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Free V2Ray Configs — live status</title>
+<meta name="description" content="Live status dashboard for the Free V2Ray Configs aggregator: freshness, per-category counts, protocol breakdown, source health, and the measured verification cascade.">
+<meta name="color-scheme" content="dark">
+<!-- Inline SVG favicon: avoids an unavoidable 404 for /favicon.ico without
+     adding a binary asset to the repository. -->
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d1117'/%3E%3Cpath d='M6 9h6l4 12 4-12h6L18.5 26h-5z' fill='%2358a6ff'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="style.css">
+<!--
+  This page is intentionally dependency-free: no framework, no CDN, no build.
+  It renders nothing of its own — every figure is read at runtime from
+  index.json / health.json in the repository root. See docs/app.js.
+
+  NOTE: this dashboard is only reachable once GitHub Pages is enabled for this
+  repository with source = branch `main`, folder `/docs`. Until then the files
+  are committed but not served.
+-->
+</head>
+<body>
+<div class="wrap">
+
+  <header id="site-header">
+    <h1>🚀 Free V2Ray Configs — live status</h1>
+    <p>
+      Everything on this page is read at runtime from
+      <a href="https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/index.json"><code>index.json</code></a>
+      and
+      <a href="https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/health.json"><code>health.json</code></a>.
+      No number here is written by hand.
+      &nbsp;·&nbsp; <a href="https://github.com/0xRadikal/Free-v2ray-Configs">repository</a>
+    </p>
+    <!-- aria-live: this text is replaced after the fetch resolves, and the
+         freshness verdict is the single most important thing on the page, so a
+         screen reader must be told it changed rather than silently keeping
+         "loading…". role=status keeps the announcement polite. -->
+    <div id="freshness"><span class="dot"></span><span id="freshness-text" role="status" aria-live="polite">loading…</span></div>
+  </header>
+
+  <main>
+
+    <p id="loading-state" class="skeleton" role="status" aria-live="polite">Fetching live metadata…</p>
+
+    <!-- role=alert, not status: failing to load everything is not a routine
+         update, and this region only ever appears when the page has nothing
+         else to show. -->
+    <section id="error-state" role="alert" aria-live="assertive" hidden>
+      <h2>Could not load live data</h2>
+      <p>
+        Both the primary source (<code>raw.githubusercontent.com</code>) and the
+        jsDelivr mirror failed. That usually means a network or CORS problem on
+        your side rather than a broken release — the files themselves are plain
+        static JSON in the repository.
+      </p>
+      <p><code id="error-detail"></code></p>
+    </section>
+
+    <div id="dashboard" hidden>
+
+      <p id="mirror-warning" class="callout" hidden>
+        ⚠️ <strong>Serving from the jsDelivr mirror.</strong> The primary raw
+        source could not be reached, so these figures may be up to
+        <strong>12 hours</strong> old — jsDelivr caches branch references far
+        longer than the update interval.
+      </p>
+
+      <p id="health-warning" class="callout" hidden>
+        ⚠️ <strong><code>health.json</code> could not be loaded.</strong> Source
+        health and the verification cascade are therefore not shown below.
+      </p>
+
+      <!--
+        The two JSON files are written by the same pipeline run, but they are
+        fetched as two independent HTTP requests and the raw CDN caches each one
+        separately. Measured on 2026-08-01: 5 of 6 fetch pairs returned a
+        health.json from an *older* run than index.json. When that happens the
+        numbers on this page come from two different runs, and saying so is the
+        only honest option.
+      -->
+      <p id="run-mismatch-warning" class="callout" hidden>
+        ⚠️ <strong>These figures come from two different pipeline runs.</strong>
+        The counts above are from the run at <code id="mismatch-index-at"></code>,
+        while source health and the cascade below are from
+        <code id="mismatch-health-at"></code>. The two files are cached
+        separately by the CDN, so one can lag the other. Reload in a minute to
+        get a matched pair.
+      </p>
+
+      <!-- ── freshness / run ───────────────────────────────────────────── -->
+      <section id="run-section">
+        <h2>This release</h2>
+        <div class="grid">
+          <article class="card">
+            <div class="label">Unique configs (all)</div>
+            <div class="value" id="total-unique">—</div>
+            <div class="sub" id="total-unique-sub"></div>
+          </article>
+          <article class="card">
+            <div class="label">Last updated</div>
+            <div class="value" id="updated-age">—</div>
+            <!-- Deliberately NOT a static <time> element. Per the HTML Standard,
+                 a time element's datetime value is the datetime attribute if
+                 present and otherwise its child text, and it must match one of
+                 the listed date/time syntaxes — so neither an empty datetime=""
+                 nor a "—" placeholder is conformant. app.js therefore inserts a
+                 <time> here only when index.json carried a parseable timestamp. -->
+            <div class="sub" id="updated-at-wrap"></div>
+          </article>
+          <article class="card">
+            <div class="label">Next update ETA</div>
+            <div class="value" style="font-size:1rem" id="next-eta">—</div>
+            <div class="sub">branch <span id="branch"></span></div>
+          </article>
+          <article class="card">
+            <div class="label">Aggregation took</div>
+            <div class="value" id="run-seconds">—</div>
+            <div class="sub">fetch → clean → dedup → convert → validate</div>
+          </article>
+        </div>
+      </section>
+
+      <!-- ── categories ────────────────────────────────────────────────── -->
+      <section id="category-section">
+        <h2>Categories</h2>
+        <div class="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th scope="col">category</th>
+                <th scope="col" class="num">unique</th>
+                <th scope="col" class="num">duplicates</th>
+                <th scope="col" class="num">broken</th>
+                <th scope="col" class="num">fetched</th>
+                <th scope="col" class="num">active sources</th>
+                <th scope="col" class="num">dedup saving</th>
+              </tr>
+            </thead>
+            <tbody id="category-rows"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ── protocols ─────────────────────────────────────────────────── -->
+      <section id="protocol-section">
+        <h2>Protocol breakdown</h2>
+        <div id="protocol-list"></div>
+        <!-- No class="sub" here: the stylesheet only defines `.card .sub`, so
+             the class was inert outside a card and the inline style was silently
+             doing all of the work. -->
+        <p style="color:var(--fg-dim);font-size:.85rem;margin-top:.9rem" id="protocol-note"></p>
+      </section>
+
+      <!-- ── verification cascade ──────────────────────────────────────── -->
+      <section id="cascade-section" hidden>
+        <h2>Does it actually work? — measured, not estimated</h2>
+
+        <p class="callout">
+          <strong>The large majority of any free config pool is dead at any
+          moment.</strong> That is a property of free configs, not of this
+          repository, so it is measured rather than hidden. A config reaches
+          <code>verified/</code> only if it passed <em>every</em> round of a real
+          HTTP request through the proxy.
+        </p>
+
+        <div class="grid" style="margin-bottom:1rem">
+          <article class="card">
+            <div class="label">verified/ (passed every round)</div>
+            <div class="value" id="verified-count">—</div>
+            <div class="sub" id="verified-sub"></div>
+          </article>
+          <article class="card">
+            <div class="label">fast/</div>
+            <div class="value" id="fast-count">—</div>
+            <div class="sub" id="fast-sub"></div>
+          </article>
+          <article class="card">
+            <div class="label">secure/</div>
+            <div class="value" id="secure-count">—</div>
+            <div class="sub">stricter transport/TLS requirements</div>
+          </article>
+          <article class="card">
+            <div class="label">Tested from</div>
+            <div class="value" id="exit-country">—</div>
+            <div class="sub"><a id="exit-country-source" href="#" rel="noopener noreferrer" hidden>detection source</a></div>
+          </article>
+        </div>
+
+        <div class="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th scope="col">stage</th>
+                <th scope="col" class="num">in</th>
+                <th scope="col" class="num">out</th>
+                <th scope="col" class="num">of pool</th>
+                <th scope="col" class="num">took</th>
+                <th scope="col">note</th>
+              </tr>
+            </thead>
+            <tbody id="cascade-rows"></tbody>
+          </table>
+        </div>
+
+        <div class="grid" style="margin-top:1rem">
+          <article class="card">
+            <div class="label">Per-round successes</div>
+            <div class="value" style="font-size:1.05rem" id="per-round">—</div>
+            <div class="sub" id="per-round-note"></div>
+          </article>
+          <article class="card">
+            <div class="label">Cascade total time</div>
+            <div class="value" id="cascade-seconds">—</div>
+            <div class="sub">L0/L1 + L2 + L3</div>
+          </article>
+        </div>
+
+        <p class="callout" style="margin-top:1rem">
+          ⚠️ <strong>Read this before quoting any percentage above.</strong> These
+          numbers were measured from <em>one</em> host, on <em>one</em> day, on
+          <em>one</em> link — the country is shown as “Tested from”. A config that
+          fails from a datacentre in one country may work perfectly from another,
+          and the reverse is just as true. So <code>verified/</code> means
+          <strong>“this config answered a real request from the machine that ran
+          the test”</strong> — <em>not</em> “this config will work for you”.
+        </p>
+      </section>
+
+      <!-- ── source health ─────────────────────────────────────────────── -->
+      <section id="sources-section">
+        <h2>Source health</h2>
+        <div class="grid" style="margin-bottom:1rem">
+          <article class="card">
+            <div class="label">Sources</div>
+            <div class="value" id="sources-total">—</div>
+            <div class="sub" id="sources-breakdown"></div>
+          </article>
+          <article class="card">
+            <div class="label">Configs yielded</div>
+            <div class="value" id="sources-yield">—</div>
+            <div class="sub">before dedup</div>
+          </article>
+          <article class="card">
+            <div class="label">Health checked at</div>
+            <div class="value" style="font-size:.95rem" id="checked-at">—</div>
+            <div class="sub">regenerated every run</div>
+          </article>
+        </div>
+        <div class="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th scope="col">source</th>
+                <th scope="col">tier</th>
+                <th scope="col">status</th>
+                <th scope="col" class="num">configs</th>
+                <th scope="col">diagnostics</th>
+              </tr>
+            </thead>
+            <tbody id="source-rows"></tbody>
+          </table>
+        </div>
+        <!-- The earlier wording here said only "not contacted in this run",
+             which is true but stops short of the actual cause and so reads like
+             an accident. Traced in the pipeline: aggregate.py builds its fetch
+             list as
+               skipped  = memory.disabled_urls(state) ∩ (LIGHT + HEAVY)
+               all_urls = (LIGHT + HEAVY) - skipped
+             and only `all_urls` is submitted, while the health entry for any URL
+             with no result defaults to {"status": "unknown"}. Verified against
+             the live files: disabled_urls() returned exactly 4 URLs and that set
+             is *equal* to the set of sources reported unknown — both symmetric
+             differences empty. So `unknown` is a deliberate cross-run
+             quarantine, not a missed request. -->
+        <p class="callout info" style="margin-top:1rem">
+          A status of <code>unknown</code> means the source produced no result in
+          the run that wrote <code>health.json</code>, so it is counted
+          separately from <code>ok</code>, <code>empty</code> and
+          <code>fail</code> rather than being folded into any of them.
+          <br>
+          In practice this is usually <strong>not</strong> a missed request: the
+          pipeline keeps cross-run memory in <code>state.json</code> and
+          deliberately <strong>skips sources it has quarantined</strong> for
+          repeatedly returning nothing, so they are never fetched at all and
+          therefore never get a status. A source can also show
+          <code>unknown</code> simply because it was added after the last run.
+        </p>
+      </section>
+
+      <!-- ── subscription links ────────────────────────────────────────── -->
+      <section id="links-section">
+        <h2>Subscription links (primary — raw)</h2>
+        <p style="color:var(--fg-dim);font-size:.9rem;margin-top:-.4rem">
+          Taken from <code>index.json</code>, so this list is exactly what the
+          repository is publishing right now — never a promise it cannot keep.
+        </p>
+        <div class="table-scroll">
+          <table>
+            <thead>
+              <tr><th scope="col">category</th><th scope="col">format</th><th scope="col">URL</th></tr>
+            </thead>
+            <tbody id="link-rows"></tbody>
+          </table>
+        </div>
+      </section>
+
+    </div><!-- /#dashboard -->
+
+  </main>
+
+  <footer id="site-footer">
+    <p>
+      <span id="brand"></span> ·
+      <a href="https://github.com/0xRadikal/Free-v2ray-Configs">source</a> ·
+      <a href="https://github.com/0xRadikal/Free-v2ray-Configs/blob/main/SECURITY.md">security</a> ·
+      <a href="https://t.me/Raydikalx">@Raydikalx</a>
+    </p>
+    <p>
+      For educational &amp; research purposes. No uptime or quality guarantee.
+      This project aggregates publicly-available configs; it does not operate,
+      own, or vet the servers they point at.
+    </p>
+  </footer>
+
+</div>
+<script src="app.js"></script>
+</body>
+</html>

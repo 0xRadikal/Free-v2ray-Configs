@@ -1,0 +1,86 @@
+name: ➕ Suggest an upstream source
+description: Propose a new public config source for the aggregator.
+title: "source: "
+# ⚠️ This label does not exist in the repository yet, and GitHub silently drops
+#    labels that don't exist ("If a label does not already exist in the
+#    repository, it will not be automatically added to the issue"). Create it with:
+#      gh label create source-suggestion -c '#0e8a16' -d 'Proposed upstream source'
+labels: ["source-suggestion"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This repository aggregates **21** public sources (7 light + 14 heavy).
+        Adding one is cheap, but a bad source is not free: it costs fetch time on
+        every run (~96 runs/day) and can inject malformed entries that the
+        cleaning stage then has to reject.
+
+        A source is accepted if it is **public, stable, and actually yields
+        configs that survive dedup**. Please check the list in
+        [`scripts/sources.py`](https://github.com/0xRadikal/Free-v2ray-Configs/blob/main/scripts/sources.py)
+        first so you don't propose one that is already there.
+
+  - type: input
+    id: url
+    attributes:
+      label: Raw URL of the source
+      description: A direct raw link. Base64 and plain text are both auto-detected.
+      placeholder: https://raw.githubusercontent.com/<owner>/<repo>/main/sub/config.txt
+    validations:
+      required: true
+
+  - type: dropdown
+    id: tier
+    attributes:
+      label: Which tier does it belong in?
+      description: |
+        **light** = curated / speed-tested upstream, usually smaller.
+        **heavy** = large and diverse, quality varies.
+      options:
+        - "light (curated / speed-tested)"
+        - "heavy (large / diverse)"
+        - "not sure"
+    validations:
+      required: true
+
+  - type: input
+    id: count
+    attributes:
+      label: Roughly how many configs does it publish?
+      placeholder: "~800"
+
+  - type: input
+    id: freshness
+    attributes:
+      label: How often is it updated?
+      placeholder: "every 30 min / daily / unknown"
+
+  - type: textarea
+    id: why
+    attributes:
+      label: Why is it worth adding?
+      description: |
+        Ideally: what it provides that the existing 21 sources don't — different
+        protocols, different regions, or entries that survive dedup rather than
+        collapsing into ones already collected.
+    validations:
+      required: true
+
+  - type: input
+    id: maintainer
+    attributes:
+      label: Upstream maintainer (for the credits list)
+      description: The READMEs credit every upstream maintainer.
+      placeholder: "@someone"
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Confirmations
+      options:
+        - label: The URL is public and needs no token, login, or API key.
+          required: true
+        - label: It is not already listed in `scripts/sources.py`.
+          required: true
+        - label: The upstream permits redistribution of what it publishes.
+          required: true

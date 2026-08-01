@@ -1,0 +1,161 @@
+name: 🔌 Config problem ("it doesn't connect")
+description: Configs from a subscription link are not working for you.
+title: "config: "
+# ⚠️ Neither of these labels exists in the repository yet. GitHub's issue-form
+#    reference is explicit: "If a label does not already exist in the repository,
+#    it will not be automatically added to the issue." So until they are created
+#    they are silently dropped — the form still works, it just arrives unlabelled.
+#    Create them once with:
+#      gh label create config-problem -c '#d93f0b' -d 'Reported configs not connecting'
+#      gh label create needs-triage   -c '#fbca04' -d 'Not yet triaged'
+labels: ["config-problem", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Please read this first — it will probably answer your question
+
+        **The large majority of any free config pool is dead at any moment.**
+        That is a property of free configs, not of this repository, so instead of
+        hiding it the pipeline measures it and sorts by it.
+
+        On one measured 5-round run: **8,158** configs collected → **3,845** had
+        an open TCP port → **626** worked at least once → **224** worked in *all
+        five* rounds. Those numbers come from one host on one day and are only an
+        example — the numbers for the release **you** downloaded are in the
+        `cascade` block of
+        [`health.json`](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/health.json).
+
+        So *"most entries in configs.txt don't connect"* is **expected
+        behaviour**, not a bug.
+
+        ### Try these first
+
+        1. Use the **`verified/`** files instead of `all/` — those passed a real
+           HTTP request through the proxy in *every* test round.
+        2. Use the **`raw.githubusercontent.com`** links, not the jsDelivr
+           mirror — the CDN can serve a snapshot up to 12 hours old.
+        3. Re-fetch your subscription. Output is regenerated about every 15
+           minutes.
+        4. Remember that `verified/` means *"this answered a request from the
+           machine that ran the test"* — a config that works from a GitHub
+           runner in Virginia may fail from your network, and the reverse is just
+           as true.
+
+        If, after all that, something still looks genuinely wrong — for example
+        **every** entry fails to even load, or an entire protocol file is
+        rejected by your client — please continue.
+
+  - type: dropdown
+    id: scope
+    attributes:
+      label: How widespread is it?
+      options:
+        - "The whole file fails to load / is rejected by my client"
+        - "Every entry in one protocol file fails"
+        - "Most entries fail but some work"
+        - "A few specific entries fail"
+    validations:
+      required: true
+
+  - type: markdown
+    attributes:
+      value: |
+        > ⚠️ If you selected *"Most entries fail but some work"* or *"A few
+        > specific entries fail"*, that is the documented, measured normal state
+        > of a free config pool — please use `verified/` and close this form.
+        > Only the first two options usually indicate a defect here.
+
+  - type: input
+    id: sub_url
+    attributes:
+      label: Which subscription URL are you using?
+      placeholder: https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/verified/configs.txt
+    validations:
+      required: true
+
+  - type: input
+    id: client
+    attributes:
+      label: Client and version
+      placeholder: "v2rayNG 1.9.x / Nekobox / sing-box 1.13.14 / mihomo v1.19.29 / Clash Meta …"
+    validations:
+      required: true
+
+  - type: textarea
+    id: client_error
+    attributes:
+      label: What exactly does your client say?
+      description: |
+        The literal error message. "It doesn't work" cannot be acted on; a
+        parser/schema error can be fixed immediately.
+        **Redact UUIDs, passwords and keys.**
+      render: text
+    validations:
+      required: true
+
+  # ⚠️ `render:` on the field above is deliberate — it guarantees the error text
+  #    is preserved verbatim in a code block instead of being mangled as Markdown.
+  #    But GitHub documents a side effect: "When this key is provided, the text
+  #    area will not expand for file attachments or Markdown editing." With
+  #    `client_error` being the only textarea, this form had *no* field that
+  #    accepted a dragged-in log file.
+  #
+  #    That used to require a workaround (a second, unrendered textarea whose only
+  #    real job was to be a drop target). It no longer does: GitHub shipped a
+  #    first-class `upload` field type for issue forms on 2026-03-05
+  #    <https://github.blog/changelog/2026-03-05-hierarchy-view-improvements-and-file-uploads-in-issue-forms/>
+  #    so the purpose-built field is used instead of the improvised one. It is a
+  #    real upgrade rather than a rename: it takes .log/.txt/.json up to 25 MB and
+  #    images up to 10 MB, offers click-to-browse as well as drag-and-drop, and
+  #    `accept` lets the form refuse file types it has no use for.
+  #
+  #    Schema reference (attributes = label/description; `accept` lives under
+  #    `validations`, which is easy to get wrong):
+  #    https://docs.github.com/en/communities/using-templates-to-encourage-useful-issues-and-pull-requests/syntax-for-githubs-form-schema#upload
+  #
+  #    `.svg` is deliberately NOT in the accept list. It is on GitHub's supported
+  #    list, but an SVG is a script-capable document, and there is no diagnostic
+  #    reason to want one in a proxy-config report.
+  - type: upload
+    id: attachments
+    attributes:
+      label: Attach a client log or screenshot
+      description: |
+        Optional, but it is usually the fastest route to a fix. Drag files in or
+        click to browse. **Redact UUIDs, passwords and keys first** — an
+        attachment on a public issue is public.
+    validations:
+      required: false
+      accept: ".log,.txt,.json,.csv,.png,.jpg,.jpeg,.webp,.zip"
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else we should know?
+      description: |
+        Optional. Anything that did not fit above — what you already tried, when
+        it last worked, whether it fails on every config or just some.
+
+  - type: input
+    id: country
+    attributes:
+      label: Which country are you connecting from?
+      description: |
+        Reachability is heavily location-dependent, so this genuinely matters.
+        A country name is enough — please do **not** post your IP address.
+      placeholder: "Iran"
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I tried the `verified/` files, not just `all/`.
+          required: true
+        - label: I used a `raw.githubusercontent.com` link (not the jsDelivr mirror).
+          required: true
+        - label: I understand that most free configs are dead and that this is measured, not a defect.
+          required: true
+        - label: I did not paste my IP address, or any UUID / password / private key.
+          required: true

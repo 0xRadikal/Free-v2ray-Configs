@@ -1,0 +1,197 @@
+/* ─────────────────────────────────────────────────────────────────────────
+   Free V2Ray Configs — status dashboard
+   No framework, no CDN, no build step. Everything the page shows is fetched
+   at runtime from index.json / health.json, so there is nothing here to keep
+   in sync with the pipeline.
+   ───────────────────────────────────────────────────────────────────────── */
+
+:root {
+  --bg: #0d1117;
+  --bg-soft: #161b22;
+  --bg-soft-2: #1c2128;
+  --border: #30363d;
+  --fg: #e6edf3;
+  --fg-dim: #9198a1;
+  --fg-dimmer: #6e7681;
+  --accent: #58a6ff;
+  --ok: #3fb950;
+  --warn: #d29922;
+  --bad: #f85149;
+  --unknown: #8b949e;
+  --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  padding: 0 1rem 4rem;
+  background: var(--bg);
+  color: var(--fg);
+  font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+        "Helvetica Neue", Arial, "Noto Sans", sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+.wrap { max-width: 1080px; margin: 0 auto; }
+
+/* ── header ─────────────────────────────────────────────────────────────── */
+
+#site-header {
+  padding: 2.5rem 0 1.5rem;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 1.5rem;
+}
+
+#site-header h1 {
+  margin: 0 0 .35rem;
+  font-size: clamp(1.5rem, 4vw, 2.1rem);
+  letter-spacing: -.02em;
+}
+
+#site-header p { margin: 0; color: var(--fg-dim); }
+
+#site-header a, main a { color: var(--accent); }
+
+#freshness {
+  display: inline-flex; align-items: center; gap: .5rem;
+  margin-top: .9rem; padding: .35rem .7rem;
+  background: var(--bg-soft); border: 1px solid var(--border);
+  border-radius: 999px; font-size: .85rem; color: var(--fg-dim);
+}
+
+#freshness .dot {
+  width: .55rem; height: .55rem; border-radius: 50%;
+  background: var(--unknown); flex: none;
+}
+#freshness.fresh  .dot { background: var(--ok);   box-shadow: 0 0 .5rem var(--ok); }
+#freshness.stale  .dot { background: var(--warn); }
+#freshness.broken .dot { background: var(--bad); }
+/* Stated explicitly rather than relying on the default above: when the release
+   timestamp is unparseable the script sets `unknown`, and it must be visibly
+   *not* the green "fresh" state. Grey is the honest colour for "no idea". */
+#freshness.unknown .dot { background: var(--unknown); box-shadow: none; }
+
+/* ── generic section / card ─────────────────────────────────────────────── */
+
+section { margin: 2.25rem 0; }
+
+section > h2 {
+  font-size: 1.05rem; text-transform: uppercase; letter-spacing: .08em;
+  color: var(--fg-dim); margin: 0 0 .9rem; font-weight: 600;
+}
+
+.grid {
+  display: grid; gap: .75rem;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+}
+
+.card {
+  background: var(--bg-soft); border: 1px solid var(--border);
+  border-radius: 10px; padding: .9rem 1rem;
+}
+
+.card .label {
+  font-size: .72rem; text-transform: uppercase; letter-spacing: .07em;
+  color: var(--fg-dimmer);
+}
+
+.card .value {
+  font: 600 1.6rem/1.2 var(--mono);
+  margin-top: .3rem; word-break: break-all;
+}
+
+.card .sub { font-size: .78rem; color: var(--fg-dim); margin-top: .25rem; }
+
+/* ── tables ─────────────────────────────────────────────────────────────── */
+
+.table-scroll { overflow-x: auto; border-radius: 10px; border: 1px solid var(--border); }
+
+table { border-collapse: collapse; width: 100%; font-size: .88rem; }
+
+thead th {
+  background: var(--bg-soft-2); text-align: left; padding: .6rem .8rem;
+  font-size: .72rem; text-transform: uppercase; letter-spacing: .06em;
+  color: var(--fg-dim); font-weight: 600; white-space: nowrap;
+}
+
+tbody td { padding: .55rem .8rem; border-top: 1px solid var(--border); }
+tbody tr:nth-child(even) { background: rgba(255,255,255,.017); }
+
+td.num, th.num { text-align: right; font-family: var(--mono); }
+td.name { font-family: var(--mono); font-size: .82rem; word-break: break-all; }
+
+/* ── status pills ───────────────────────────────────────────────────────── */
+
+.pill {
+  display: inline-block; padding: .1rem .5rem; border-radius: 999px;
+  font-size: .72rem; font-weight: 600; letter-spacing: .02em;
+  border: 1px solid transparent; white-space: nowrap;
+}
+.pill.ok      { color: var(--ok);      background: rgba(63,185,80,.12);  border-color: rgba(63,185,80,.3); }
+.pill.empty   { color: var(--warn);   background: rgba(210,153,34,.12); border-color: rgba(210,153,34,.3); }
+.pill.fail    { color: var(--bad);    background: rgba(248,81,73,.12);  border-color: rgba(248,81,73,.3); }
+.pill.unknown { color: var(--unknown);background: rgba(139,148,158,.12);border-color: rgba(139,148,158,.3); }
+.pill.zero    { color: var(--fg-dimmer); background: transparent; border-color: var(--border); }
+
+/* ── per-source diagnostics cell ─────────────────────────────────────────── */
+
+/* health.json publishes http_code / latency_ms / attempts / error per source and
+   the issue templates tell reporters to read them, so they are shown here. */
+td.diag {
+  font-size: .74rem; color: var(--fg-dim);
+  font-variant-numeric: tabular-nums;
+}
+td.diag .diag-error {
+  color: var(--bad);
+  overflow-wrap: anywhere;
+}
+td.diag .diag-none { color: var(--fg-dimmer); font-style: italic; }
+
+/* ── protocol bars ──────────────────────────────────────────────────────── */
+
+#protocol-list { display: flex; flex-direction: column; gap: .4rem; }
+
+.proto {
+  display: grid; grid-template-columns: 8.5rem 1fr 5rem;
+  align-items: center; gap: .7rem;
+}
+.proto .pname { font-family: var(--mono); font-size: .85rem; }
+.proto .bar { height: .55rem; background: var(--bg-soft-2); border-radius: 999px; overflow: hidden; }
+.proto .bar > i { display: block; height: 100%; background: var(--accent); border-radius: 999px; }
+.proto .pcount { text-align: right; font-family: var(--mono); font-size: .85rem; }
+.proto.is-zero .pname, .proto.is-zero .pcount { color: var(--fg-dimmer); }
+
+/* ── callout ────────────────────────────────────────────────────────────── */
+
+.callout {
+  border-left: 3px solid var(--warn);
+  background: rgba(210,153,34,.07);
+  padding: .9rem 1.1rem; border-radius: 0 8px 8px 0;
+  color: var(--fg-dim); font-size: .9rem;
+}
+.callout strong { color: var(--fg); }
+.callout.info { border-left-color: var(--accent); background: rgba(88,166,255,.07); }
+
+/* ── states ─────────────────────────────────────────────────────────────── */
+
+#error-state {
+  border: 1px solid var(--bad); background: rgba(248,81,73,.07);
+  border-radius: 10px; padding: 1rem 1.2rem; color: var(--fg);
+}
+#error-state code { font-family: var(--mono); font-size: .82rem; color: var(--fg-dim); }
+
+[hidden] { display: none !important; }
+
+.skeleton { color: var(--fg-dimmer); font-family: var(--mono); }
+
+#site-footer {
+  margin-top: 3rem; padding-top: 1.25rem;
+  border-top: 1px solid var(--border);
+  color: var(--fg-dimmer); font-size: .82rem;
+}
+
+@media (max-width: 560px) {
+  .proto { grid-template-columns: 6.5rem 1fr 4rem; }
+  .card .value { font-size: 1.3rem; }
+}
