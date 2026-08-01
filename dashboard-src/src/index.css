@@ -1,0 +1,183 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ─────────────────────────────────────────────────────────────────────────────
+ * Design tokens.
+ *
+ * The skill's binding rule: "avoid excessive centered layouts, purple
+ * gradients, uniform rounded corners, and Inter font."
+ *
+ *   • no purple    — flat graphite surfaces, one blue accent carried over from
+ *                    the existing favicon, and a green/amber/red signal set.
+ *   • no Inter     — system stacks only, which also means no webfont, which
+ *                    means the inlined bundle stays free of any CDN request.
+ *   • no uniform   — 2px on panels, 0 on table cells, full-round only on status
+ *     radii         pills, where roundness carries meaning.
+ *   • not centered — the layout is an asymmetric rail + content column.
+ *
+ * shadcn's own HSL variables are overridden here rather than bypassed, so every
+ * shadcn component adopts this palette instead of the default slate.
+ * ───────────────────────────────────────────────────────────────────────────── */
+
+@layer base {
+  :root {
+    --background: 217 29% 5%;
+    --foreground: 208 35% 93%;
+    --card: 215 27% 9%;
+    --card-foreground: 208 35% 93%;
+    --popover: 215 27% 9%;
+    --popover-foreground: 208 35% 93%;
+    --primary: 212 100% 67%;
+    --primary-foreground: 217 29% 5%;
+    --secondary: 216 26% 11%;
+    --secondary-foreground: 208 35% 93%;
+    --muted: 216 26% 11%;
+    --muted-foreground: 213 15% 65%;
+    --accent: 216 26% 14%;
+    --accent-foreground: 208 35% 93%;
+    --destructive: 3 92% 63%;
+    --destructive-foreground: 208 35% 93%;
+    --border: 213 23% 17%;
+    --input: 213 23% 17%;
+    --ring: 212 100% 67%;
+    --radius: 2px;
+
+    --sig-ok: 133 49% 49%;
+    --sig-warn: 41 73% 51%;
+    --sig-bad: 3 92% 63%;
+    --sig-unknown: 213 9% 58%;
+
+    --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+      "Helvetica Neue", Arial, "Noto Sans", sans-serif;
+    --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
+      "Liberation Mono", monospace;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  html {
+    scroll-behavior: smooth;
+    scroll-padding-top: 1rem;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    font-size: 15px;
+    line-height: 1.6;
+  }
+
+  /* Every figure on this page is monospaced so digits align in columns and a
+     changing value does not reflow the text beside it. */
+  .fig {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.01em;
+  }
+
+  /* Focus must stay visible: a meaningful share of this audience navigates by
+     keyboard, and shadcn's default ring is easy to lose on a dark surface. */
+  :focus-visible {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 2px;
+  }
+}
+
+@layer components {
+  /* Hairline panel. Deliberately square-ish: the 2px radius reads as a machined
+     edge rather than the uniform 12px pill-card look. */
+  .panel {
+    @apply border bg-card;
+    border-radius: var(--radius);
+  }
+
+  /* Section eyebrow — small caps label above each block. */
+  .eyebrow {
+    @apply text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground;
+  }
+
+  /* Status pill. The ONE place roundness is full, because it is semantic. */
+  .pill {
+    @apply inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px]
+           font-medium leading-none;
+    font-family: var(--font-mono);
+  }
+  .pill-ok      { color: hsl(var(--sig-ok));      background: hsl(var(--sig-ok) / .12);      border-color: hsl(var(--sig-ok) / .32); }
+  .pill-empty   { color: hsl(var(--sig-warn));    background: hsl(var(--sig-warn) / .12);    border-color: hsl(var(--sig-warn) / .32); }
+  .pill-fail    { color: hsl(var(--sig-bad));     background: hsl(var(--sig-bad) / .12);     border-color: hsl(var(--sig-bad) / .32); }
+  .pill-unknown { color: hsl(var(--sig-unknown)); background: hsl(var(--sig-unknown) / .12); border-color: hsl(var(--sig-unknown) / .32); }
+
+  /* Data table. Square cells, hairline rules, no zebra — the numbers are the
+     signal, the chrome should not compete with them. */
+  .dtable {
+    @apply w-full border-collapse text-sm;
+  }
+  .dtable thead th {
+    @apply border-b bg-secondary px-3 py-2 text-left align-bottom text-[11px]
+           font-semibold uppercase tracking-wider text-muted-foreground whitespace-nowrap;
+  }
+  .dtable tbody td {
+    @apply border-b px-3 py-2 align-top;
+  }
+  .dtable tbody tr:last-child td { @apply border-b-0; }
+  .dtable tbody tr:hover { background: hsl(var(--secondary) / .55); }
+  .dtable .num {
+    @apply text-right;
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Horizontal scroll container for wide tables on narrow screens. Without this
+     the page body itself overflows on a 375px viewport. */
+  .tscroll {
+    @apply w-full overflow-x-auto border;
+    border-radius: var(--radius);
+  }
+
+  .callout {
+    @apply border-l-2 px-4 py-3 text-sm;
+    border-color: hsl(var(--sig-warn));
+    background: hsl(var(--sig-warn) / .07);
+    border-radius: 0 var(--radius) var(--radius) 0;
+  }
+  .callout-info {
+    border-color: hsl(var(--primary));
+    background: hsl(var(--primary) / .07);
+  }
+  .callout-bad {
+    border-color: hsl(var(--sig-bad));
+    background: hsl(var(--sig-bad) / .08);
+  }
+
+  /* Proportional bar used by the protocol breakdown and the funnel. */
+  .meter {
+    @apply relative h-2 w-full overflow-hidden;
+    background: hsl(var(--secondary));
+    border-radius: 1px;
+  }
+  .meter > i {
+    @apply absolute inset-y-0 left-0 block;
+    background: hsl(var(--primary) / .75);
+    transition: width .5s cubic-bezier(.22,.61,.36,1);
+  }
+  .meter.is-zero > i { background: hsl(var(--sig-unknown) / .4); }
+
+  .skel {
+    @apply animate-pulse bg-secondary;
+    border-radius: var(--radius);
+  }
+}
+
+/* Respect the OS setting. The meters animate their width, which is exactly the
+   kind of motion that triggers discomfort for some readers. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .001ms !important;
+    transition-duration: .001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
