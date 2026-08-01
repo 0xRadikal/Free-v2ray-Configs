@@ -105,13 +105,13 @@ These are verifiable claims, not assurances:
 
 | Component | How it is pinned | Integrity verified? |
 |---|---|---|
-| Python runtime deps (`requirements.txt`) | exact `==` pins: `requests==2.32.4`, `PyYAML==6.0.3`, `maxminddb==3.1.1` | by pip, against PyPI |
+| Python runtime deps (`requirements.txt`) | exact `==` pins: `requests==2.34.2`, `PyYAML==6.0.3`, `maxminddb==3.1.1` | by pip, against PyPI |
 | `xray-knife` 10.1.1 | version **and** SHA-256 of both the release archive and the extracted binary, cross-checked against upstream's own `.dgst` file in MD5/SHA-256/SHA-512 | ✅ yes |
 | `sing-box` 1.13.14 | version **and** SHA-256 of both the release archive (checked before extraction) and the extracted binary (checked before install) | ✅ yes |
 | `mihomo` v1.19.29 | version **and** SHA-256 of both the release archive (checked before extraction) and the extracted binary (checked before install) | ✅ yes |
 | GitHub Actions | commit SHAs, with the version in a trailing comment: `checkout` v4.4.0, `setup-python` v5.6.0, `cache` v4.3.0, `upload-artifact` v4.6.2 | ✅ yes — a SHA is immutable |
 | Dependency updates | [`.github/dependabot.yml`](.github/dependabot.yml) — `pip` + `github-actions`, weekly | — |
-| Vulnerability alerts | Dependabot alerts **and** automated security updates are enabled on the repository | ✅ yes — 0 open alerts at time of writing |
+| Vulnerability alerts | Dependabot alerts **and** automated security updates are enabled on the repository | ✅ yes — the live count is on the Security tab; see below for how the first one was handled |
 
 ### The gap that used to be here, and how it was closed
 
@@ -183,6 +183,36 @@ were malicious *at the moment these hashes were recorded*, pinning would
 faithfully reproduce that. The hashes therefore guarantee "the same bytes we
 verified", not "bytes proven benign". Raising the pin on a version bump is a
 deliberate act that must repeat the two-source verification above.
+
+### The first alert, and what it actually meant
+
+Turning alerts on produced one almost immediately —
+[GHSA-gc5v-m9x4-r6x2](https://github.com/advisories/GHSA-gc5v-m9x4-r6x2)
+(CVE-2026-25645, moderate): insecure temp-file reuse in the
+`extract_zipped_paths()` utility of `requests`, affecting every version
+`< 2.33.0`. It is recorded here rather than quietly patched, because how an
+alert is *assessed* is as much a part of a security posture as how fast it is
+closed.
+
+Measured exposure, before deciding anything:
+
+- this project never calls `extract_zipped_paths()` — its entire `requests`
+  surface is a single `requests.get(url, timeout=…, headers=…)` call;
+- inside the previously pinned 2.32.4, `requests` itself called it once, at import
+  time, on `DEFAULT_CA_BUNDLE_PATH` — a constant path belonging to the
+  installation, not user input — and on an ordinary filesystem install that call
+  returns at the first `os.path.exists()` and never reaches the
+  `tempfile.mkstemp()` branch, which requires the package to be running from
+  inside a zip archive;
+- in 2.33.0 and later the internal call was removed altogether.
+
+So the practical exploitability here was close to nil. The pin was still raised,
+to `2.34.2`, for two reasons: an open alert on the default branch is a fact
+about the repository regardless of reachability, and "not reachable today" is a
+property of the current code, which changes. Before the pin moved, the full
+301-test suite was run against 2.34.2 and a live fetch was made through the
+real `fetch_source()` path (HTTP 200, configs parsed, output guard satisfied) —
+the version was not raised on the assumption that a minor bump is harmless.
 
 ---
 

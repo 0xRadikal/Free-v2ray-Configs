@@ -34,7 +34,7 @@ pip install -r requirements.txt
 Runtime dependencies are deliberately few and exactly pinned:
 
 ```
-requests==2.32.4
+requests==2.34.2
 PyYAML==6.0.3
 maxminddb==3.1.1
 ```
