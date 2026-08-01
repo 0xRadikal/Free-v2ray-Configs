@@ -251,6 +251,118 @@ step; the rest are implemented in the publish step:
 
 ---
 
+## 🔒 Branch and tag protection
+
+Two repository rulesets are active. Neither has any bypass actor, so they apply
+to the repository owner exactly as they apply to anyone else.
+
+| Ruleset | Target | Rules | Scope |
+| --- | --- | --- | --- |
+| `main: no deletion, linear history only` | branch | `deletion`, `required_linear_history` | `~DEFAULT_BRANCH` |
+| `tags: protected (no delete, no rewrite)` | tag | `deletion`, `non_fast_forward`, `update` | `~ALL` |
+
+Every rule above was first measured against a throwaway ref — never against
+`main` or `v1.0` — by attempting the operation it is supposed to refuse and
+confirming HTTP 422, and by attempting the operations it must still allow and
+confirming they succeed. Refusals report
+`Cannot delete this tag`, `Cannot force-push to this tag`, or
+`Cannot update this protected ref.`
+
+The tag rules were then re-measured a second time against the armed `~ALL`
+ruleset itself, using a disposable tag, because "the rule works on a glob I
+chose" and "the rule works at the scope I shipped" are two different claims.
+The branch rules were not re-tested that way on `main`: deliberately attempting
+to delete the default branch of a live repository is not a test worth running.
+They were confirmed instead by reading the effective rules for `main` and by
+watching real publishing runs continue to succeed afterwards.
+
+Tag **creation** is deliberately still permitted (measured: HTTP 201), so
+cutting a new release is unaffected; what is blocked is moving or deleting a tag
+that already exists. `v1.0` was confirmed to point at the same commit before and
+after all of this, cross-checked against the release record.
+
+One measured detail worth stating so it is not mistaken for a hole later: a
+*no-op* ref write — setting a tag to the sha it already has — returns HTTP 200
+even under `update`. Nothing is rewritten in that case, so it is correct
+behaviour rather than a bypass.
+
+### What is *not* protected, and why
+
+**Force-pushing `main` is still possible for an account with write access.**
+That is a real gap and it is stated plainly rather than papered over. The reason
+is structural: publishing itself is a rolling squash. Each run rewrites the tip
+onto the latest human commit, which is by definition a non-fast-forward push.
+Turning on `non_fast_forward` for `main` would therefore block the bot, not just
+a careless human — the repository would stop updating. Four ways around that
+were considered and each was measured or reasoned to a conclusion:
+
+- **Exempt GitHub Actions via `bypass_actors`.** Not possible on a user-owned
+  repository. Measured, verbatim:
+  `Actor GitHub Actions integration must be part of the ruleset source or owner organization`
+  (HTTP 422). Bypass by integration requires an organization.
+- **Exempt by repository role instead.** Available, but useless here: a
+  role-keyed bypass cannot tell the bot apart from the humans it is meant to
+  restrict, because the owner already holds a role above `write`. A rule that
+  exempts everyone it would otherwise stop is not a rule.
+- **Give the bot a deploy key and push over SSH.** This would work, and it would
+  allow `non_fast_forward` to be armed. It was rejected on balance: it replaces
+  an ephemeral, per-run `GITHUB_TOKEN` with a permanent write credential stored
+  in Actions secrets, which forfeits this repository's verifiable property that
+  the workflow reads **no** `secrets.*` at all. Trading a durable secret for a
+  branch rule is a net loss.
+- **Publish fast-forward instead of squashing.** Removes the need for the force
+  push, at the cost of retaining every output commit instead of one. At the
+  effective 15-minute publish cadence that is about 35,000 commits a year, added
+  to a repository whose clone already measures several gigabytes. The size is
+  measured; the commit count is arithmetic from the schedule — but neither is
+  speculative, and the direction is not in doubt.
+
+Related: `enforcement: "evaluate"`, which would allow a dry-run rollout of a
+rule before enforcing it, is unavailable here. Measured, verbatim:
+`Enforcement evaluate option is not supported on this plan. Please upgrade to Enterprise to enable it.`
+
+What *is* in place instead: `required_linear_history` prevents merge commits on
+`main`, `deletion` prevents the branch from being removed, the publish step uses
+`--force-with-lease` rather than a bare `--force`, and the source-regression
+guard described above refuses to publish if anything outside the known output
+set differs from the anchor commit. Those do not stop a determined force push;
+they do stop the accidental ones.
+
+### Operating on protected refs
+
+Because tags carry `deletion` and `update` with no bypass, a tag genuinely
+cannot be moved or removed while the ruleset is active — including by the owner.
+To retire one deliberately, narrow the ruleset rather than disabling it, so
+every other ref stays protected throughout:
+
+```bash
+# 1. exclude only the ref you intend to touch (PUT replaces the whole ruleset,
+#    so every field must be present, not just the one being changed)
+cat > /tmp/ruleset.json <<'JSON'
+{
+  "name": "tags: protected (no delete, no rewrite)",
+  "target": "tag",
+  "enforcement": "active",
+  "conditions": { "ref_name": { "include": ["~ALL"],
+                                "exclude": ["refs/tags/THE_TAG"] } },
+  "rules": [ { "type": "deletion" },
+             { "type": "non_fast_forward" },
+             { "type": "update" } ]
+}
+JSON
+gh api -X PUT /repos/:owner/:repo/rulesets/RULESET_ID --input /tmp/ruleset.json
+
+# 2. perform the deletion or move, now that the ref is out of scope
+# 3. repeat step 1 with "exclude": [] to restore full coverage
+```
+
+To remove a ruleset outright: `gh api -X DELETE /repos/:owner/:repo/rulesets/RULESET_ID`.
+The current ruleset ids are listed on the repository's **Settings → Rules** page;
+they are intentionally not hard-coded here, because ids change if a ruleset is
+recreated and a stale id in a document is worse than no id at all.
+
+---
+
 ## 🎯 Scope
 
 **In scope**
