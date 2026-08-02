@@ -22,6 +22,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
+import os
 import re
 import urllib.parse
 from typing import Dict, List, Optional, Tuple
@@ -64,6 +65,92 @@ from typing import Dict, List, Optional, Tuple
 
 #: برند کانال — تنها جای تعریف
 BRAND_CHANNEL = "@Raydikalx"
+
+# ══════════════════════════════════════════════════════════════════════════════
+# 🪪 سرآیندِ درون‌فایلیِ Hiddify (in-file profile headers)
+# ══════════════════════════════════════════════════════════════════════════════
+# Hiddify علاوه بر هدرهای HTTP، **خودِ بدنهٔ اشتراک** را هم برای متادیتا
+# می‌خواند. این رفتار حدس نیست؛ از سورس خوانده و با یک replicaِ کلمه‌به‌کلمهٔ
+# Go اندازه‌گیری شد (`hcfull/v2/profile/profile_parser.go`):
+#
+#   ۱) `profile_repository.go:281-284` بدنه را به `parseHeadersFromContent`
+#      می‌دهد و نتیجه را با `resp.Header.Set(k, v[0])` روی هدرهای HTTP
+#      **می‌نشاند** — یعنی سرآیندِ درون‌فایلی هدرِ HTTP را هم override می‌کند.
+#   ۲) `parseHeadersFromContent` (خط ۱۵۳-۱۸۱) اول `safeDecodeBase64` می‌زند،
+#      پس این سرآیندها **داخلِ payloadِ base64 هم** کار می‌کنند.
+#   ۳) `strings.SplitN(content, "\n", 30)` و حلقهٔ `i < len(lines)-1` ⇒ تنها
+#      **۲۹ خطِ نخست** پویش می‌شود. اندازه‌گیری شد: با ۳۰ خط padding همهٔ
+#      سرآیندها ناپدید می‌شوند، با ۲۳ خط هنوز خوانده می‌شوند. به همین دلیل
+#      این بلوک **همیشه اولین چیزِ فایل** است.
+#   ۴) خط باید با `#` یا `//` شروع شود (بدون فاصلهٔ ابتدایی) و یک `:` داشته
+#      باشد که کاراکترِ بعدش `/` نباشد (تا URLِ خالی سرآیند حساب نشود).
+#
+# چرا `subscription-userinfo` اجباری است: در `ProfileEntity.Parse` خطوط
+# ۸۰-۸۷، هر دوی `Profile-Web-Page-Url` و `Support-Url` **تنها وقتی**
+# اعمال می‌شوند که `subInfo != nil` باشد. و `parseSubscriptionInfo` هیچ
+# مسیرِ بازگشتِ nil ندارد ⇒ صرفِ *وجودِ* این سرآیند کافی است. بدونِ آن، آن دو
+# لینک بی‌صدا دور ریخته می‌شوند (اندازه‌گیری شد).
+#
+# `total=0` و `expire=0` عمدی‌اند: در همان تابع به `infiniteTrafficThreshold`
+# و `infiniteTimeThreshold` نگاشت می‌شوند ⇒ Hiddify «نامحدود» نشان می‌دهد،
+# که برای یک اشتراکِ عمومیِ رایگان صادق‌ترین حالت است.
+#
+# ⚠️ این بلوک به `singbox.json` **اضافه نمی‌شود**: گرچه خودِ Hiddify با
+#    `SJ.NewCommentFilter` کامنت را تحمل می‌کند، مصرف‌کنندگانِ استانداردِ JSON
+#    (از جمله `jq` و `validate.py::check_singbox` که `json.load` می‌زند)
+#    می‌شکنند — اندازه‌گیری شد: `json.loads(header + singbox)` ⇒ JSONDecodeError.
+#    به `archive/*` هم اضافه نمی‌شود، چون آن‌ها آرتیفکتِ عیب‌یابی‌اند نه اشتراک.
+
+#: بازهٔ به‌روزرسانی که به کلاینت پیشنهاد می‌شود — **بر حسبِ ساعت**.
+#: `Parse` مقدار را با `time.ParseDuration(v + "h")` می‌خواند، پس باید عددِ
+#: برهنه باشد. عمداً «۱» (عددِ صحیح) است نه کسری: هم Go آن را می‌پذیرد و هم
+#: کلاینت‌هایی که ساده‌لوحانه int-parse می‌کنند. عددِ کسری مثل `0.25` هم معتبر
+#: است (اندازه‌گیری شد: 900000ms) ولی هر کلاینت را هر ۱۵ دقیقه به raw
+#: می‌فرستد که برای یک اشتراکِ عمومی بار زیادی است.
+HIDDIFY_UPDATE_INTERVAL_HOURS = os.environ.get("AGG_HIDDIFY_UPDATE_HOURS", "1")
+
+#: لینکِ پشتیبانی — **از روی برند ساخته می‌شود**، پس نمی‌تواند از آن واگرا شود.
+SUPPORT_URL = os.environ.get(
+    "AGG_SUPPORT_URL", "https://t.me/" + BRAND_CHANNEL.lstrip("@").lower())
+
+#: صفحهٔ پروژه. تستِ `test_zzz_hdr_project_and_support_urls_cannot_drift` این
+#: را به `aggregate.GH_USER`/`GH_REPO` قفل می‌کند تا واگرایی بی‌صدا رخ ندهد.
+#: (عمداً از `aggregate` import نمی‌شود: `aggregate` خودش `core` را import
+#:  می‌کند و وارونه‌کردنش حلقهٔ import می‌سازد.)
+PROJECT_URL = os.environ.get(
+    "AGG_PROJECT_URL", "https://github.com/0xRadikal/Free-v2ray-Configs")
+
+#: `total=0`/`expire=0` ⇒ «نامحدود» (به آستانه‌های بی‌نهایت نگاشت می‌شوند).
+HIDDIFY_SUBSCRIPTION_USERINFO = "upload=0; download=0; total=0; expire=0"
+
+#: کلیدهایی که این بلوک تولید می‌کند — تست‌ها از همین می‌خوانند.
+HIDDIFY_HEADER_KEYS = (
+    "profile-title",
+    "profile-update-interval",
+    "subscription-userinfo",
+    "support-url",
+    "profile-web-page-url",
+)
+
+
+def hiddify_profile_header(label: str) -> str:
+    """بلوکِ ۵ خطیِ سرآیندِ Hiddify برای یک فایلِ اشتراک.
+
+    خروجی همیشه با `\\n` تمام می‌شود تا فراخوان بتواند مستقیم به ابتدای
+    هر فرمتِ متنی (txt / payloadِ base64 / yaml) بچسباندش.
+
+    `label` نامِ خوانا برای کاربر است (مثلاً `ALL` یا `TOP 100`). عنوانِ
+    نهایی `@Raydikalx — LABEL` می‌شود؛ حرفِ غیر-ASCII (em-dash) اندازه‌گیری
+    شد و بی‌مشکل از `Parse` رد می‌شود.
+    """
+    title = f"{BRAND_CHANNEL} — {label}".strip()
+    return (
+        f"#profile-title: {title}\n"
+        f"#profile-update-interval: {HIDDIFY_UPDATE_INTERVAL_HOURS}\n"
+        f"#subscription-userinfo: {HIDDIFY_SUBSCRIPTION_USERINFO}\n"
+        f"#support-url: {SUPPORT_URL}\n"
+        f"#profile-web-page-url: {PROJECT_URL}\n"
+    )
 
 # ──────────────────────────────────────────────────────────────────────────────
 # 🧠 تشخیصِ هوشمندِ پروتکل (Dynamic / Future-proof)
@@ -1678,15 +1765,22 @@ def shield_unsupported_runs(lines: List[str]) -> List[str]:
     return out
 
 
-def encode_base64_subscription(lines: List[str]) -> str:
+def encode_base64_subscription(lines: List[str], header: str = "") -> str:
     """لیست کانفیگ‌ها → بلوک base64 استاندارد اشتراک (v2rayN/v2rayNG).
 
     سپرِ `#` **داخلِ** همین تابع اعمال می‌شود تا نسخهٔ base64 هرگز نتواند از
     نسخهٔ متنی واگرا شود؛ چون idempotent است، فراخوان می‌تواند بی‌خطر خودش هم
     `shield_unsupported_runs` را صدا زده باشد.
+
+    `header` (اختیاری) **پیش از** رمزگذاری به متن چسبانده می‌شود، نه بعد از آن.
+    دلیلش سنجیده است: Hiddify در `parseHeadersFromContent` نخست
+    `safeDecodeBase64` را صدا می‌زند، پس سرآیند باید **درونِ** payload باشد تا
+    دیده شود؛ سرآیندِ بیرونِ base64 هم دیده نمی‌شود و هم خودِ payload را برای
+    کلاینت‌هایی که کلِ بدنه را یک‌جا decode می‌کنند خراب می‌کند.
+    پیش‌فرضِ `""` سازگاریِ عقب‌رو را حفظ می‌کند.
     """
     joined = "\n".join(shield_unsupported_runs(lines))
-    return base64.b64encode(joined.encode("utf-8")).decode("ascii")
+    return base64.b64encode((header + joined).encode("utf-8")).decode("ascii")
 
 
 # ══════════════════════════════════════════════════════════════════════════════

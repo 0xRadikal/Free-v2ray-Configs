@@ -345,14 +345,24 @@ def write_buckets(out_dir: str, buckets: Dict[str, Any]) -> Dict[str, str]:
     rounds = st["rounds"]
     written: Dict[str, str] = {}
 
+    # سرآیندِ درون‌فایلیِ Hiddify — **پیش از** سرآیندِ توضیحیِ موجود می‌آید تا
+    # قطعاً داخلِ پنجرهٔ ۲۹ خطیِ پویشگرِ Hiddify بماند. طولانی‌ترین سرآیندِ
+    # توضیحیِ فعلی (secure) ۸ خط است ⇒ ۵+۸=۱۳ خط، با حاشیهٔ امن.
+    # اندازه‌گیری شد که کلیدهای استخراج‌شده از سرآیندهای فعلی
+    # (`criterion`/`note`/`measured`/…) با هیچ‌کدام از ۲۳ کلیدِ
+    # `overridable:"true"`ِ Hiddify تلاقی ندارند ⇒ کاملاً بی‌اثرند.
+    hh = {cat: core.hiddify_profile_header(cat.upper()) for cat in CATEGORIES}
+
     heads = {
         "verified": (
+            hh["verified"] +
             f"# @Raydikalx — VERIFIED — {st['verified']} configs\n"
             f"# criterion: a real proxied request to {realtest.TEST_URL} succeeded\n"
             f"# in ALL {rounds} independent runs of this round.\n"
             f"# measured: {st['flaky_pct']}% of everything that ever worked is "
             f"flaky, so a single run is not enough.\n"),
         "fast": (
+            hh["fast"] +
             f"# @Raydikalx — FAST — {st['fast']} configs\n"
             f"# criterion: verified AND median delay across {rounds} runs "
             f"< {st['fast_threshold_ms']}ms.\n"
@@ -361,6 +371,7 @@ def write_buckets(out_dir: str, buckets: Dict[str, Any]) -> Dict[str, str]:
             f"# that share depends on the network the test ran on, so treat it "
             f"as the reason for using a median, not as a constant.\n"),
         "secure": (
+            hh["secure"] +
             f"# @Raydikalx — SECURE — {st['secure']} configs\n"
             f"# criterion: verified AND forward secrecy — the session key comes\n"
             f"# from an (EC)DHE handshake (TLS/REALITY, or QUIC which mandates\n"
@@ -385,10 +396,20 @@ def write_buckets(out_dir: str, buckets: Dict[str, Any]) -> Dict[str, str]:
         # `configs.txt` نتیجه اندازه‌گیری شد: ok=False، missing=2 ⇒ دروازهٔ
         # انتشار با `--strict` کدِ ۱ می‌داد و کلِ انتشار می‌شکست. پس یا باید
         # هر چهار فایل نوشته شود، یا دسته اصلاً ساخته نشود.
+        # ⚠️ `singbox.json` عمداً سرآیندِ Hiddify نمی‌گیرد: JSONِ استاندارد با
+        #    کامنت می‌شکند (اندازه‌گیری شد: `json.loads` ⇒ JSONDecodeError) و
+        #    `validate.py::check_singbox` دقیقاً `json.load` می‌زند.
+        #    `head=hh[cat]` با default-argument بسته می‌شود. صادقانه: **امروز
+        #    لازم نیست** — این lambdaها در همین تکرارِ حلقه صدا زده می‌شوند، پس
+        #    late-binding نمی‌تواند بروز کند (با mutation test سنجیده شد: نسخهٔ
+        #    بدونِ default-argument هر ۳۳۵ آزمون را پاس می‌کند). نگه‌داشته
+        #    می‌شود چون اگر روزی این lambdaها جمع و بعداً اجرا شوند، بی‌صدا
+        #    سرآیندِ آخرین دسته به هر سه فایل می‌رود.
         for name, build in (
             ("configs_base64.txt",
-             lambda L: core.encode_base64_subscription(L)),
-            ("clash.yaml", lambda L: converters.build_clash_yaml(L)),
+             lambda L, head=hh[cat]: core.encode_base64_subscription(L, header=head)),
+            ("clash.yaml",
+             lambda L, head=hh[cat]: head + converters.build_clash_yaml(L)),
             ("singbox.json", lambda L: converters.build_singbox_json(L)),
         ):
             try:
@@ -405,6 +426,7 @@ def write_buckets(out_dir: str, buckets: Dict[str, Any]) -> Dict[str, str]:
     top_path = os.path.join(out_dir, "top100.txt")
     short = st["top_short_by"]
     top_head = (
+        core.hiddify_profile_header(f"TOP {len(buckets['top'])}") +
         f"# @Raydikalx — TOP {len(buckets['top'])} — sorted by median delay\n"
         f"# every entry passed a real proxied request in all {rounds} runs.\n")
     if short:
@@ -488,6 +510,128 @@ def merge_health(out_dir: str, cascade: Dict[str, Any]) -> Optional[str]:
         json.dump(doc, fh, ensure_ascii=False, indent=2)
         fh.write("\n")
     os.replace(tmp, path)  # اتمیک: یک health.jsonِ نیم‌نوشته بدتر از هیچ است
+    return path
+
+
+#: معیارِ کوتاهِ هر دستهٔ آبشاری — همان چیزی که در سرآیندِ فایل هم آمده، ولی
+#: یک‌خطی و ماشین‌خوان. مصرف‌کنندهٔ index.json نباید مجبور شود فایلِ متنی را
+#: دانلود و سرآیندش را parse کند تا بفهمد «سریع» یعنی چه.
+CASCADE_CRITERIA = {
+    "verified": ("a real proxied request succeeded in ALL rounds "
+                 "of this run"),
+    "fast": "verified AND median delay across all rounds is under the threshold",
+    "secure": ("verified AND forward secrecy ((EC)DHE via TLS/REALITY/QUIC) "
+               "AND certificate validation not disabled"),
+}
+
+
+def merge_index(out_dir: str, buckets: Dict[str, Any]) -> Optional[str]:
+    """دسته‌های آبشاری و `top100` را به `index.json`ِ موجود **می‌افزاید**.
+
+    چرا افزودن و نه ساختن — دقیقاً به همان دلیلِ `merge_health`: `index.json`
+    را `aggregate.py` می‌سازد و در ورک‌فلو **پیش از** آبشار اجرا می‌شود، پس
+    وقتی `build_index` صدا زده می‌شود هنوز `verified/`، `fast/`، `secure/` و
+    `top100.txt` وجود ندارند. نتیجه‌اش این بود که index.json این چهار خروجی را
+    اصلاً تبلیغ نمی‌کرد.
+
+    ⚠️ کلیدِ `categories` **دست‌نخورده** می‌ماند و دسته‌های آبشاری زیرِ کلیدِ
+    جداگانهٔ `cascade_categories` می‌روند. این تزئین نیست، اجبار است:
+      • `docs/index.html` روی `Object.entries(categories)` حلقه می‌زند و از
+        هر بلوکِ `files` فهرستِ لینک می‌سازد؛
+      • گامِ آبشار در ورک‌فلو `continue-on-error: true` است، پس ممکن است یک
+        دور اصلاً اجرا نشود.
+      ⇒ اگر این‌ها را داخلِ `categories` می‌گذاشتیم، صفحهٔ داکس لینک‌هایی را
+        تبلیغ می‌کرد که می‌توانند ۴۰۴ بدهند. خلاصهٔ کارِ ورک‌فلو و تست‌ها هم
+        روی همان سه‌تاییِ ثابتِ (all, heavy, light) حلقه می‌زنند و شکل‌شان
+        نباید عوض شود.
+
+    ریشهٔ URLها از **خودِ همین سند** خوانده می‌شود (`primary_base` /
+    `mirror_base` که `aggregate.build_index` نوشته)، نه از ثابتی که اینجا
+    دوباره تعریف شود — پس واگرایی از ریشه ممکن نیست.
+
+    فقط فایل‌هایی تبلیغ می‌شوند که **واقعاً روی دیسک هستند** — همان قراردادی
+    که `test_index_only_advertises_urls_whose_files_exist` برای
+    `aggregate.build_index` برقرار کرده است. برای همین تابع، تستِ
+    `test_zzz_idx_never_advertises_a_file_that_does_not_exist` آن را قفل می‌کند.
+
+    مثلِ `merge_health`: اگر فایل نباشد یا خراب باشد هشدار می‌دهد و `None`
+    برمی‌گرداند — استثنا پرتاب نمی‌کند، چون این فیلد **تبلیغ** است نه محصول و
+    نباید کلِ آبشار را بشکند.
+    """
+    path = os.path.join(out_dir, "index.json")
+    if not os.path.exists(path):
+        print(f"⚠️ {path} نیست؛ دسته‌های آبشاری تبلیغ نشدند", file=sys.stderr)
+        return None
+    try:
+        with open(path, "r", encoding="utf-8") as fh:
+            doc = json.load(fh)
+    except Exception as exc:  # noqa: BLE001
+        print(f"⚠️ {path} خوانده نشد ({exc}); دسته‌های آبشاری تبلیغ نشدند",
+              file=sys.stderr)
+        return None
+    if not isinstance(doc, dict):
+        print(f"⚠️ {path} یک شیء JSON نیست؛ ادغام نشد", file=sys.stderr)
+        return None
+
+    primary = doc.get("primary_base")
+    mirror = doc.get("mirror_base")
+    if not isinstance(primary, str) or not primary:
+        print(f"⚠️ {path} کلیدِ primary_base ندارد؛ ادغام نشد", file=sys.stderr)
+        return None
+    if not isinstance(mirror, str) or not mirror:
+        # آینه اختیاری است؛ نبودش نباید کلِ ادغام را لغو کند.
+        mirror = ""
+
+    def _rel(*parts: str) -> str:
+        return "/".join(parts)
+
+    #: نگاشتِ نامِ فایل روی کلیدِ index — عمداً **همان کلیدهای**
+    #: `aggregate.build_index.cat_block` تا مصرف‌کننده دو شکلِ متفاوت نبیند.
+    file_keys = (
+        ("configs.txt", "configs_txt"),
+        ("configs_base64.txt", "configs_base64"),
+        ("clash.yaml", "clash_yaml"),
+        ("singbox.json", "singbox_json"),
+    )
+
+    cascade: Dict[str, Any] = {}
+    for cat in CATEGORIES:
+        cat_dir = os.path.join(out_dir, cat)
+        files: Dict[str, str] = {}
+        for fname, key in file_keys:
+            if not os.path.exists(os.path.join(cat_dir, fname)):
+                continue
+            files[key] = f"{primary}/{_rel(cat, fname)}"
+            if mirror:
+                files[f"{key}_mirror"] = f"{mirror}/{_rel(cat, fname)}"
+        if not files:
+            # دسته اصلاً نوشته نشد (مثلاً استخر تهی بود) ⇒ تبلیغش نکن.
+            continue
+        cascade[cat] = {
+            "unique": len(buckets.get(cat, [])),
+            "criterion": CASCADE_CRITERIA.get(cat, ""),
+            "files": files,
+        }
+    if cascade:
+        doc["cascade_categories"] = cascade
+
+    top_name = "top100.txt"
+    if os.path.exists(os.path.join(out_dir, top_name)):
+        top_block: Dict[str, Any] = {
+            "count": len(buckets.get("top", [])),
+            "criterion": ("verified configs sorted by median delay "
+                          "(fastest first); never padded with untested ones"),
+            "url": f"{primary}/{top_name}",
+        }
+        if mirror:
+            top_block["url_mirror"] = f"{mirror}/{top_name}"
+        doc["top100"] = top_block
+
+    tmp = path + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as fh:
+        json.dump(doc, fh, ensure_ascii=False, indent=2)
+        fh.write("\n")
+    os.replace(tmp, path)  # اتمیک: index.jsonِ نیم‌نوشته بدتر از هیچ است
     return path
 
 
@@ -595,6 +739,12 @@ def run_pipeline(lines: Iterable[str], out_dir: str,
     health = merge_health(out_dir, cascade)
     if health:
         buckets["paths"]["health.json"] = health
+    # همان الگو برای index.json: تا اینجا `write_buckets` اجرا شده، پس
+    # فایل‌های آبشاری روی دیسک‌اند و `merge_index` می‌تواند وجودشان را
+    # راستی‌آزمایی کند و فقط همان‌ها را تبلیغ کند.
+    index = merge_index(out_dir, buckets)
+    if index:
+        buckets["paths"]["index.json"] = index
     return buckets
 
 

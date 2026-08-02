@@ -364,15 +364,22 @@ def _write_text(path: str, content: str) -> None:
 def write_category(out_dir: str, cat: str, r: CategoryResult) -> None:
     """فایل‌های یک دسته (configs.txt / base64 / clash / singbox)."""
     base = os.path.join(out_dir, cat)
-    header = f"# @Raydikalx — {cat.upper()} — {len(r.unique)} unique configs\n"
+    # سرآیندِ درون‌فایلیِ Hiddify **همیشه اولین چیزِ فایل** است: پویشگرِ Hiddify
+    # فقط ۲۹ خطِ نخست را می‌بیند (توضیح و مدرک در core.py، بخشِ «سرآیندِ
+    # درون‌فایلیِ Hiddify»).
+    hh = core.hiddify_profile_header(cat.upper())
+    header = hh + f"# @Raydikalx — {cat.upper()} — {len(r.unique)} unique configs\n"
     # سپرِ `#`: توضیحِ کامل در core.py، بخشِ «سپرِ `#`». شمارشِ سرآیند عمداً از
     # `r.unique` گرفته می‌شود، نه از لیستِ سپرخورده — سپر «کانفیگ» نیست.
     _write_text(os.path.join(base, "configs.txt"),
                 header + "\n".join(core.shield_unsupported_runs(r.unique)) + "\n")
     _write_text(os.path.join(base, "configs_base64.txt"),
-                core.encode_base64_subscription(r.unique))
+                core.encode_base64_subscription(r.unique, header=hh))
     try:
-        _write_text(os.path.join(base, "clash.yaml"), converters.build_clash_yaml(r.unique))
+        # yaml: سرآیند به‌شکلِ کامنتِ YAML می‌آید. اندازه‌گیری شد که
+        # `yaml.safe_load` قبل و بعد **دقیقاً برابر** است (۱۰۵۸۶ پروکسی).
+        _write_text(os.path.join(base, "clash.yaml"),
+                    hh + converters.build_clash_yaml(r.unique))
     except Exception as e:
         log(f"  ⚠️ clash {cat}: {e}")
     try:
@@ -485,9 +492,10 @@ def write_protocols(out_dir: str, all_unique: List[str]) -> Dict[str, int]:
         txt = os.path.join(base, f"{proto}.txt")
         b64 = os.path.join(base, f"{proto}_base64.txt")
         if lines:
-            h = f"# @Raydikalx — {proto} — {len(lines)} configs\n"
+            hh = core.hiddify_profile_header(proto.upper())
+            h = hh + f"# @Raydikalx — {proto} — {len(lines)} configs\n"
             _write_text(txt, h + "\n".join(core.shield_unsupported_runs(lines)) + "\n")
-            _write_text(b64, core.encode_base64_subscription(lines))
+            _write_text(b64, core.encode_base64_subscription(lines, header=hh))
             written += 1
         else:
             # فایلِ توخالی منتشر نمی‌شود و نسخهٔ قبلی پاک می‌شود.

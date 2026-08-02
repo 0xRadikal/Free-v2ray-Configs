@@ -8859,5 +8859,477 @@ def test_zzz_hd_clash_yaml_never_contains_ssr_and_neighbours_survive():
     assert core.protocol_of(ssr) == "shadowsocksr"
 
 
+# ══════════════════════════════════════════════════════════════════════════════
+# فازِ HDR — سرآیندِ درون‌فایلیِ Hiddify  +  تکمیلِ index.json
+# ══════════════════════════════════════════════════════════════════════════════
+# دو خواستهٔ مالک:
+#   ۱) Hiddify باید عنوان/بازهٔ به‌روزرسانی/لینکِ پشتیبانی را از خودِ فایل بخواند.
+#   ۲) index.json باید `verified`/`fast`/`secure`/`top100` را هم تبلیغ کند.
+#
+# هر ادعای زیر **اندازه‌گیری شده**، نه استدلال‌شده:
+#   • یک replicaِ کلمه‌به‌کلمهٔ Go از `parseHeadersFromContent` + `Parse` ساخته
+#     و اجرا شد ⇒ هر ۵ کلید خوانده می‌شوند؛ عنوان `@Raydikalx — ALL`؛
+#     UpdateInterval = 3٬600٬000ms؛ SupportUrl و WebPageUrl هر دو پر.
+#   • هستهٔ رسمیِ Hiddify روی ۷ جفت فایل (متن/base64/yaml، پیش و پس از سرآیند)
+#     اجرا شد ⇒ شمارشِ برون‌مسیرها **دقیقاً برابر**: 10613/10613، 1045/1045،
+#     628/628، 702/702، 100/100، 10613/10613، 10591/10591.
+#   • `yaml.safe_load` پیش و پس از سرآیند برابر بود (۱۰٬۵۸۶ پروکسی).
+#   • `json.loads(header + singbox.json)` می‌شکند ⇒ به همین دلیل singbox.json
+#     سرآیند نمی‌گیرد.
+#
+# تابعِ زیر پورتِ **کلمه‌به‌کلمهٔ** الگوریتمِ Hiddify است. عمداً از اسکریپت‌های
+# پروژه استفاده نمی‌کند تا اگر کسی فردا `hiddify_profile_header` را عوض کرد،
+# این آزمون‌ها از دیدِ **خودِ Hiddify** شکست بخورند، نه از دیدِ خودمان.
+
+#: ۲۳ کلیدِ `overridable:"true"` از `hcfull/v2/config/hiddify_option.go`.
+#: هر کلیدی که سرآیندهای ما تولید می‌کنند باید **بیرونِ** این مجموعه باشد،
+#: وگرنه ناخواسته تنظیماتِ کاربر را بازنویسی می‌کنیم.
+_HD_OVERRIDABLE = frozenset("""
+balancer-strategy block-ads connection-test-url connection-test-urls
+direct-dns-address direct-dns-domain-strategy enable enable-fragment
+enable-full-config enable-padding fragment-size fragment-sleep max-streams
+mixed-sni-case mux padding padding-size protocol remote-dns-address
+remote-dns-domain-strategy rules url-test-interval use-xray-core-when-possible
+""".split())
+
+
+def _hd_headers(content: str):
+    """پورتِ کلمه‌به‌کلمهٔ `parseHeadersFromContent` (profile_parser.go:153-181).
+
+    گام‌ها دقیقاً همان‌اند: `safeDecodeBase64` → `SplitN(.., "\\n", 30)` →
+    حلقهٔ `i < len(lines)-1` (یعنی **آخرین** پاره نادیده گرفته می‌شود) →
+    شرطِ `#`/`//` → `Index(":")` → ردِ `//` بعد از کولن → TrimPrefix/ToLower.
+    """
+    try:
+        # ⚠️ دامِ سنجیده‌شده: `base64.StdEncoding.DecodeString`ِ Go کاراکترهای
+        #    `\n` و `\r` را **نادیده می‌گیرد**، ولی `b64decode(validate=True)`ِ
+        #    پایتون آن‌ها را خطا می‌داند. اگر این تفاوت جبران نشود، این پورت
+        #    روی فایل‌های base64ِ دارای newlineِ انتهایی (که `_write_lines`
+        #    می‌سازد) اشتباهاً می‌گوید «سرآیند ندارد».
+        #    با یک هارنسِ Go اندازه‌گیری شد: هر چهار حالتِ بدون‌newline /
+        #    `\n`ِ انتهایی / `\r\n`ِ انتهایی / `\n`ِ ابتدایی ⇒ decoded=true.
+        cleaned = content.replace("\r", "").replace("\n", "")
+        decoded = base64.b64decode(cleaned.encode("utf-8"),
+                                   validate=True).decode("utf-8")
+    except Exception:  # noqa: BLE001 — دقیقاً مثلِ Go: خطا ⇒ همان ورودی
+        decoded = content
+    out = {}
+    parts = decoded.split("\n", 29)          # SplitN(n=30) ⇒ حداکثر ۳۰ پاره
+    for line in parts[:-1]:                  # i < len(lines)-1
+        if not (line.startswith("#") or line.startswith("//")):
+            continue
+        index = line.find(":")
+        if index == -1:
+            continue
+        if len(line) <= index + 1 or line[index + 1] == "/":
+            continue
+        key = _hd_trim_prefix(line[:index], "#").lower().strip()
+        key = _hd_trim_prefix(key, "//").strip()
+        value = line[index + 1:].strip()
+        if value != "":
+            out[key] = value             # مثلِ Go: کلیدِ تکراری بازنویسی می‌شود
+    return out
+
+
+def _hd_trim_prefix(s: str, prefix: str) -> str:
+    """معادلِ `strings.TrimPrefix` — فقط **یک** بار و فقط از ابتدا."""
+    return s[len(prefix):] if s.startswith(prefix) else s
+
+
+def test_zzz_hdr_block_has_exactly_the_five_documented_keys():
+    """بلوک باید همان ۵ کلیدِ مستندشده را بدهد — نه کمتر، نه بیشتر."""
+    blk = core.hiddify_profile_header("ALL")
+    assert blk.endswith("\n"), "بلوک باید با newline تمام شود تا قابلِ چسباندن باشد"
+    lines = blk.rstrip("\n").split("\n")
+    assert len(lines) == 5, lines
+    got = _hd_headers(blk + "vless://x@h:443#n\n")
+    assert set(got) == set(core.HIDDIFY_HEADER_KEYS), (set(got), core.HIDDIFY_HEADER_KEYS)
+    # ترتیبِ اعلام‌شده هم باید همان ترتیبِ واقعیِ خطوط باشد
+    assert [l.split(":", 1)[0].lstrip("#") for l in lines] == list(core.HIDDIFY_HEADER_KEYS)
+
+
+def test_zzz_hdr_values_are_what_hiddify_will_actually_show():
+    """مقادیر از دیدِ خودِ Hiddify سنجیده می‌شوند، نه از دیدِ ما."""
+    got = _hd_headers(core.hiddify_profile_header("TOP 100") + "x\n")
+    assert got["profile-title"] == f"{core.BRAND_CHANNEL} — TOP 100", got
+    # `Parse` مقدار را با ParseDuration(v+"h") می‌خواند ⇒ باید عددِ برهنه باشد
+    iv = got["profile-update-interval"]
+    assert float(iv) > 0, iv
+    assert not iv.endswith(("h", "m", "s")), f"واحد نباید نوشته شود: {iv!r}"
+    # `subscription-userinfo` دروازهٔ آن دو URL است (Parse خطوط ۸۰-۸۷)
+    assert "subscription-userinfo" in got, got
+    assert got["support-url"] == core.SUPPORT_URL
+    assert got["profile-web-page-url"] == core.PROJECT_URL
+    for u in (got["support-url"], got["profile-web-page-url"]):
+        p = urllib.parse.urlparse(u)
+        assert p.scheme in ("http", "https") and p.netloc, u
+
+
+def test_zzz_hdr_total_and_expire_are_zero_meaning_unlimited():
+    """`total=0`/`expire=0` در Hiddify به «نامحدود» نگاشت می‌شوند.
+
+    اگر کسی عددِ واقعی بگذارد، کاربر سهمیه/انقضای دروغین می‌بیند — و این
+    اشتراک نه سهمیه دارد نه انقضا.
+    """
+    info = _hd_headers(core.hiddify_profile_header("ALL") + "x\n")["subscription-userinfo"]
+    kv = dict(p.strip().split("=", 1) for p in info.split(";") if "=" in p)
+    assert kv["total"] == "0" and kv["expire"] == "0", kv
+    assert set(kv) == {"upload", "download", "total", "expire"}, kv
+
+
+def test_zzz_hdr_keys_never_collide_with_hiddify_overridable_options():
+    """هیچ کلیدی نباید تنظیماتِ `overridable` کاربر را بازنویسی کند.
+
+    `GetOverridableHiddifyOptions` تنها کلیدهای دارای تگِ `overridable:"true"`
+    را می‌خواند؛ بقیه کاملاً بی‌اثرند. این آزمون تلاقی را ممنوع می‌کند.
+    """
+    assert not (set(core.HIDDIFY_HEADER_KEYS) & _HD_OVERRIDABLE)
+
+
+def test_zzz_hdr_existing_comment_heads_are_inert_for_hiddify():
+    """سرآیندهای توضیحیِ موجود (`# criterion:` و…) نباید معنی‌دار شوند.
+
+    اندازه‌گیریِ زنده روی فایل‌های منتشرشده کلیدهای
+    `criterion`/`measured`/`note`/`line between runs` را داد — هیچ‌کدام در
+    فهرستِ overridable نیستند و هیچ‌کدام یکی از ۵ کلیدِ ما نیستند.
+    """
+    head = ("# @Raydikalx — SECURE — 3 configs\n"
+            "# criterion: verified AND forward secrecy — the session key comes\n"
+            "# note: this repo is PUBLIC. A pre-shared-key protocol such as\n"
+            "# the median is used because configs cross this line between runs: 34.4%\n")
+    got = _hd_headers(head + "vless://x@h:443#n\n")
+    assert not (set(got) & _HD_OVERRIDABLE), got
+    assert not (set(got) & set(core.HIDDIFY_HEADER_KEYS)), got
+
+
+def test_zzz_hdr_survives_the_29_line_scan_window_in_every_output():
+    """Hiddify فقط ۲۹ خطِ نخست را می‌بیند؛ بلوک باید همیشه داخلش بماند.
+
+    اندازه‌گیری شد: با ۳۰ خط padding همهٔ سرآیندها ناپدید می‌شوند و با ۲۳ خط
+    هنوز خوانده می‌شوند. پس این یک مرزِ واقعی است، نه احتیاطِ تزئینی.
+    """
+    blk = core.hiddify_profile_header("ALL")
+    # مرزِ منفی: اگر بلوک را عقب بیندازیم واقعاً گم می‌شود
+    assert _hd_headers("\n".join(["# pad"] * 30) + "\n" + blk + "x\n") == {}
+    # و در جایگاهِ درست (خطِ اول) خوانده می‌شود
+    assert set(_hd_headers(blk + "x\n")) == set(core.HIDDIFY_HEADER_KEYS)
+
+
+def _hdr_sample_lines():
+    return [
+        "vless://11111111-1111-1111-1111-111111111111@h1.example.com:443?type=tcp#A | @Raydikalx | AAAAAA",
+        "trojan://pw@h2.example.com:443?sni=h2.example.com#B | @Raydikalx | BBBBBB",
+        "ss://" + base64.urlsafe_b64encode(b"aes-256-gcm:pw@h3.example.com:8388").decode().rstrip("=") + "#C | @Raydikalx | CCCCCC",
+    ]
+
+
+def test_zzz_hdr_aggregate_writes_headers_into_txt_b64_yaml_but_not_json():
+    """مسیرِ aggregate: هر سه فرمتِ اشتراک سرآیند می‌گیرند، JSON نه."""
+    import tempfile
+    lines = _hdr_sample_lines()
+    r = aggregate.CategoryResult()
+    r.unique = list(lines)
+    with tempfile.TemporaryDirectory() as d:
+        aggregate.write_category(d, "all", r)
+
+        txt = open(os.path.join(d, "all", "configs.txt"), encoding="utf-8").read()
+        assert set(_hd_headers(txt)) >= set(core.HIDDIFY_HEADER_KEYS), _hd_headers(txt)
+        assert txt.startswith("#profile-title:"), txt[:80]
+        # سرآیندِ توضیحیِ قدیمی نباید حذف شده باشد (رگرسیون)
+        assert "# @Raydikalx — ALL — 3 unique configs" in txt
+
+        raw_b64 = open(os.path.join(d, "all", "configs_base64.txt"), encoding="utf-8").read()
+        assert "#" not in raw_b64, "سرآیند باید *درونِ* payload باشد، نه بیرونش"
+        assert set(_hd_headers(raw_b64)) >= set(core.HIDDIFY_HEADER_KEYS)
+        decoded = base64.b64decode(raw_b64).decode("utf-8")
+        assert decoded.startswith("#profile-title:"), decoded[:80]
+        # base64 و متن نباید در کانفیگ‌ها واگرا شوند
+        assert [l for l in decoded.split("\n") if l.startswith(("vless://", "trojan://", "ss://"))] == lines
+
+        y = open(os.path.join(d, "all", "clash.yaml"), encoding="utf-8").read()
+        assert set(_hd_headers(y)) >= set(core.HIDDIFY_HEADER_KEYS)
+        # و مهم‌تر: معنیِ YAML عوض نشده باشد
+        assert yaml.safe_load(y) == yaml.safe_load(converters.build_clash_yaml(lines))
+
+        sb_path = os.path.join(d, "all", "singbox.json")
+        sb = open(sb_path, encoding="utf-8").read()
+        assert not sb.lstrip().startswith("#"), "singbox.json نباید کامنت بگیرد"
+        json.loads(sb)                      # باید JSONِ معتبر بماند
+        assert _hd_headers(sb) == {}, _hd_headers(sb)
+
+
+def test_zzz_hdr_protocol_files_get_headers_labelled_by_protocol():
+    """فایل‌های `protocols/*` هم اشتراک‌اند و باید سرآیند بگیرند."""
+    import tempfile
+    lines = _hdr_sample_lines()
+    with tempfile.TemporaryDirectory() as d:
+        aggregate.write_protocols(d, lines)
+        p = os.path.join(d, "protocols", "vless.txt")
+        assert os.path.exists(p)
+        got = _hd_headers(open(p, encoding="utf-8").read())
+        assert set(got) >= set(core.HIDDIFY_HEADER_KEYS), got
+        assert got["profile-title"].endswith("VLESS"), got["profile-title"]
+        b = open(os.path.join(d, "protocols", "vless_base64.txt"), encoding="utf-8").read()
+        assert "#" not in b
+        assert set(_hd_headers(b)) >= set(core.HIDDIFY_HEADER_KEYS)
+
+
+def test_zzz_hdr_archive_files_never_get_a_profile_header():
+    """`archive/*` آرتیفکتِ عیب‌یابی است، نه اشتراک — نباید تبلیغ شود."""
+    import tempfile
+    with tempfile.TemporaryDirectory() as d:
+        r = aggregate.CategoryResult()
+        r.broken = ["vmess://@@broken@@", "not-a-uri"]
+        aggregate.write_archive(d, "all", r)
+        for rel in ("archive/all_broken.txt", "archive/all_broken_base64.txt"):
+            p = os.path.join(d, rel)
+            if not os.path.exists(p):
+                continue
+            body = open(p, encoding="utf-8").read()
+            assert not (set(_hd_headers(body)) & set(core.HIDDIFY_HEADER_KEYS)), rel
+
+
+def _hdr_buckets(lines):
+    b = {c: list(lines) for c in pipeline.CATEGORIES}
+    b["top"] = list(lines)
+    b["stats"] = {"rounds": 1, "verified": len(lines), "fast": len(lines),
+                  "secure": len(lines), "flaky_pct": 0.0,
+                  "fast_threshold_ms": 500, "top_short_by": 0}
+    return b
+
+
+def test_zzz_hdr_pipeline_buckets_and_top100_get_correct_labels():
+    """هر سطلِ آبشاری برچسبِ **خودش** را بگیرد، نه برچسبِ سطلِ دیگر.
+
+    ⚠️ ادعای دقیق: این آزمون **برچسبِ درست** را قفل می‌کند، ولی دامِ
+    late-bindingِ lambda را نمی‌گیرد — چون آن lambdaها در همان تکرارِ حلقه
+    اجرا می‌شوند و late-binding اصلاً بروز نمی‌کند. با mutation test سنجیده
+    شد: حذفِ `head=hh[cat]` هیچ آزمونی را نمی‌شکند. آن default-argument
+    دفاعِ آینده‌نگر است، نه رفعِ باگِ امروز.
+    """
+    import tempfile
+    lines = _hdr_sample_lines()
+    with tempfile.TemporaryDirectory() as d:
+        pipeline.write_buckets(d, _hdr_buckets(lines))
+        for cat in pipeline.CATEGORIES:
+            txt = open(os.path.join(d, cat, "configs.txt"), encoding="utf-8").read()
+            got = _hd_headers(txt)
+            assert set(got) >= set(core.HIDDIFY_HEADER_KEYS), (cat, got)
+            assert got["profile-title"].endswith(cat.upper()), (cat, got["profile-title"])
+            assert txt.startswith("#profile-title:"), (cat, txt[:60])
+
+            b = open(os.path.join(d, cat, "configs_base64.txt"), encoding="utf-8").read()
+            assert "#" not in b, cat
+            assert _hd_headers(b)["profile-title"].endswith(cat.upper()), cat
+
+            y = open(os.path.join(d, cat, "clash.yaml"), encoding="utf-8").read()
+            assert _hd_headers(y)["profile-title"].endswith(cat.upper()), cat
+            assert yaml.safe_load(y) == yaml.safe_load(converters.build_clash_yaml(lines))
+
+            sb = open(os.path.join(d, cat, "singbox.json"), encoding="utf-8").read()
+            json.loads(sb)
+            assert _hd_headers(sb) == {}, cat
+
+        top = open(os.path.join(d, "top100.txt"), encoding="utf-8").read()
+        assert _hd_headers(top)["profile-title"].endswith(f"TOP {len(lines)}"), top[:80]
+
+
+def test_zzz_hdr_header_does_not_change_the_config_payload():
+    """سرآیند نباید حتی یک کانفیگ را جابه‌جا/حذف کند (ناوردای بی‌اثری)."""
+    import tempfile
+    lines = _hdr_sample_lines()
+    with tempfile.TemporaryDirectory() as d:
+        pipeline.write_buckets(d, _hdr_buckets(lines))
+        body = open(os.path.join(d, "verified", "configs.txt"), encoding="utf-8").read()
+        payload = [l for l in body.split("\n") if l and not l.startswith("#")]
+        assert payload == lines, payload
+
+
+def test_zzz_hdr_project_and_support_urls_cannot_drift():
+    """قفلِ واگرایی: URLها باید با ثابت‌های واقعیِ مخزن یکی بمانند.
+
+    `core` نمی‌تواند `aggregate` را import کند (حلقهٔ import)، پس به‌جای
+    اتصالِ کد، اینجا قفل می‌شود.
+    """
+    assert core.PROJECT_URL == f"https://github.com/{aggregate.GH_USER}/{aggregate.GH_REPO}", (
+        core.PROJECT_URL, aggregate.GH_USER, aggregate.GH_REPO)
+    assert core.SUPPORT_URL == "https://t.me/" + core.BRAND_CHANNEL.lstrip("@").lower(), (
+        core.SUPPORT_URL, core.BRAND_CHANNEL)
+
+
+# ── index.json: تبلیغِ دسته‌های آبشاری ────────────────────────────────────────
+
+def _idx_seed(out_dir, *, primary="https://raw.example.com/u/r/main",
+              mirror="https://cdn.example.com/gh/u/r@main"):
+    """یک index.jsonِ کمینه، دقیقاً با کلیدهایی که `build_index` می‌نویسد."""
+    doc = {
+        "generated_at": "2026-01-01T00:00:00Z",
+        "primary_base": primary,
+        "mirror_base": mirror,
+        "categories": {
+            c: {"unique": 1, "broken": 0, "duplicates": 0,
+                "files": {"configs_txt": f"{primary}/{c}/configs.txt"}}
+            for c in ("all", "heavy", "light")
+        },
+    }
+    with open(os.path.join(out_dir, "index.json"), "w", encoding="utf-8") as fh:
+        json.dump(doc, fh)
+    return doc
+
+
+def test_zzz_idx_merge_advertises_cascade_categories_and_top100():
+    import tempfile
+    lines = _hdr_sample_lines()
+    with tempfile.TemporaryDirectory() as d:
+        before = _idx_seed(d)
+        buckets = _hdr_buckets(lines)
+        pipeline.write_buckets(d, buckets)
+        got = pipeline.merge_index(d, buckets)
+        assert got == os.path.join(d, "index.json")
+        idx = json.load(open(got, encoding="utf-8"))
+
+        assert set(idx["cascade_categories"]) == set(pipeline.CATEGORIES), idx["cascade_categories"]
+        for cat in pipeline.CATEGORIES:
+            blk = idx["cascade_categories"][cat]
+            assert blk["unique"] == len(lines), blk
+            assert blk["criterion"], f"{cat} باید معیارِ خوانا داشته باشد"
+            f = blk["files"]
+            # هر ۴ فایل + ۴ آینه
+            for key in ("configs_txt", "configs_base64", "clash_yaml", "singbox_json"):
+                assert f[key] == f"{before['primary_base']}/{cat}/" + {
+                    "configs_txt": "configs.txt", "configs_base64": "configs_base64.txt",
+                    "clash_yaml": "clash.yaml", "singbox_json": "singbox.json"}[key], f
+                assert f[key + "_mirror"].startswith(before["mirror_base"]), f
+
+        assert idx["top100"]["count"] == len(lines)
+        assert idx["top100"]["url"] == f"{before['primary_base']}/top100.txt"
+        assert idx["top100"]["url_mirror"].startswith(before["mirror_base"])
+
+
+def test_zzz_idx_categories_block_is_left_byte_identical():
+    """`categories` نباید حتی یک بایت عوض شود.
+
+    دلیل تزئینی نیست: `docs/index.html` روی `Object.entries(categories)` حلقه
+    می‌زند و از هر بلوکِ `files` فهرستِ لینک می‌سازد؛ و گامِ آبشار در ورک‌فلو
+    `continue-on-error: true` است. اگر دسته‌های آبشاری داخلِ `categories`
+    می‌رفتند، صفحهٔ داکس می‌توانست لینکِ ۴۰۴ تبلیغ کند. خلاصهٔ ورک‌فلو هم روی
+    همان سه‌تاییِ ثابت حلقه می‌زند.
+    """
+    import tempfile
+    with tempfile.TemporaryDirectory() as d:
+        before = _idx_seed(d)
+        buckets = _hdr_buckets(_hdr_sample_lines())
+        pipeline.write_buckets(d, buckets)
+        pipeline.merge_index(d, buckets)
+        idx = json.load(open(os.path.join(d, "index.json"), encoding="utf-8"))
+        assert idx["categories"] == before["categories"]
+        assert set(idx["categories"]) == {"all", "heavy", "light"}
+        # و دسته‌های آبشاری جای دیگری‌اند
+        assert set(idx["categories"]) & set(idx["cascade_categories"]) == set()
+
+
+def test_zzz_idx_never_advertises_a_file_that_does_not_exist():
+    """قراردادِ همیشگیِ مخزن: هر URLِ تبلیغ‌شده باید فایلِ واقعی داشته باشد."""
+    import tempfile
+    with tempfile.TemporaryDirectory() as d:
+        _idx_seed(d)
+        buckets = _hdr_buckets(_hdr_sample_lines())
+        pipeline.write_buckets(d, buckets)
+        # یکی از فایل‌ها را عمداً حذف می‌کنیم
+        os.remove(os.path.join(d, "secure", "clash.yaml"))
+        os.remove(os.path.join(d, "top100.txt"))
+        pipeline.merge_index(d, buckets)
+        idx = json.load(open(os.path.join(d, "index.json"), encoding="utf-8"))
+        assert "clash_yaml" not in idx["cascade_categories"]["secure"]["files"]
+        assert "clash_yaml_mirror" not in idx["cascade_categories"]["secure"]["files"]
+        assert "singbox_json" in idx["cascade_categories"]["secure"]["files"]
+        assert "top100" not in idx, "top100.txt نبود ولی تبلیغ شد"
+
+        # و هر چیزی که *هست* باید واقعاً روی دیسک باشد
+        base = idx["primary_base"]
+        for cat, blk in idx["cascade_categories"].items():
+            for key, url in blk["files"].items():
+                if key.endswith("_mirror"):
+                    continue
+                rel = url[len(base) + 1:]
+                assert os.path.exists(os.path.join(d, rel)), url
+
+
+def test_zzz_idx_urls_are_built_from_the_document_not_a_second_constant():
+    """ریشهٔ URL از خودِ سند خوانده می‌شود ⇒ واگرایی از ریشه ناممکن است."""
+    import tempfile
+    with tempfile.TemporaryDirectory() as d:
+        _idx_seed(d, primary="https://primary.test/base",
+                  mirror="https://mirror.test/base")
+        buckets = _hdr_buckets(_hdr_sample_lines())
+        pipeline.write_buckets(d, buckets)
+        pipeline.merge_index(d, buckets)
+        idx = json.load(open(os.path.join(d, "index.json"), encoding="utf-8"))
+        assert idx["top100"]["url"] == "https://primary.test/base/top100.txt"
+        assert idx["cascade_categories"]["fast"]["files"]["configs_txt"] == \
+            "https://primary.test/base/fast/configs.txt"
+        assert idx["cascade_categories"]["fast"]["files"]["configs_txt_mirror"] == \
+            "https://mirror.test/base/fast/configs.txt"
+
+
+def test_zzz_idx_primary_links_are_raw_and_outnumber_mirrors_in_real_shape():
+    """لینکِ اصلی باید raw باشد (jsDelivr فقط آینه است) — روی ریشهٔ واقعی."""
+    import tempfile
+    with tempfile.TemporaryDirectory() as d:
+        _idx_seed(d, primary=aggregate.PRIMARY_BASE, mirror=aggregate.MIRROR_BASE)
+        buckets = _hdr_buckets(_hdr_sample_lines())
+        pipeline.write_buckets(d, buckets)
+        pipeline.merge_index(d, buckets)
+        idx = json.load(open(os.path.join(d, "index.json"), encoding="utf-8"))
+        for cat, blk in idx["cascade_categories"].items():
+            for key, url in blk["files"].items():
+                if key.endswith("_mirror"):
+                    assert "cdn.jsdelivr.net" in url, (cat, key, url)
+                else:
+                    assert "raw.githubusercontent.com" in url, (cat, key, url)
+        assert "raw.githubusercontent.com" in idx["top100"]["url"]
+
+
+def test_zzz_idx_merge_is_failsafe_and_never_raises():
+    """مثلِ `merge_health`: نبود/خرابیِ فایل نباید کلِ آبشار را بشکند."""
+    import contextlib, io, tempfile
+    def _warned(fn):
+        buf = io.StringIO()
+        with contextlib.redirect_stderr(buf):
+            value = fn()
+        return value, buf.getvalue()
+
+    buckets = _hdr_buckets(_hdr_sample_lines())
+    with tempfile.TemporaryDirectory() as d:
+        # ۱) فایل نیست
+        got, warn = _warned(lambda: pipeline.merge_index(d, buckets))
+        assert got is None and warn.strip(), "باید هشدار بدهد، نه استثنا"
+        # ۲) JSONِ خراب
+        with open(os.path.join(d, "index.json"), "w", encoding="utf-8") as fh:
+            fh.write("{ not json")
+        got, warn = _warned(lambda: pipeline.merge_index(d, buckets))
+        assert got is None and warn.strip()
+        # ۳) JSONِ معتبر ولی نه شیء
+        with open(os.path.join(d, "index.json"), "w", encoding="utf-8") as fh:
+            fh.write("[1, 2, 3]")
+        got, warn = _warned(lambda: pipeline.merge_index(d, buckets))
+        assert got is None and warn.strip()
+        # ۴) شیء هست ولی primary_base ندارد
+        with open(os.path.join(d, "index.json"), "w", encoding="utf-8") as fh:
+            json.dump({"categories": {}}, fh)
+        got, warn = _warned(lambda: pipeline.merge_index(d, buckets))
+        assert got is None and warn.strip()
+
+
+def test_zzz_idx_write_is_atomic_and_leaves_no_tmp_behind():
+    import tempfile
+    with tempfile.TemporaryDirectory() as d:
+        _idx_seed(d)
+        buckets = _hdr_buckets(_hdr_sample_lines())
+        pipeline.write_buckets(d, buckets)
+        pipeline.merge_index(d, buckets)
+        assert not os.path.exists(os.path.join(d, "index.json.tmp"))
+        json.load(open(os.path.join(d, "index.json"), encoding="utf-8"))
+
 if __name__ == "__main__":
     sys.exit(_run_all())

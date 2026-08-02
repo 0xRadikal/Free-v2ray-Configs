@@ -484,6 +484,14 @@ Per-category counts (unique / duplicates / broken / active sources), the protoco
 breakdown, the last-update timestamp, the next-update ETA, **every file URL** (raw
 primary + CDN mirror), and a `link_policy` block stating which one to prefer and why.
 
+The three always-present categories (`all` / `heavy` / `light`) live under `categories`.
+The verification cascade is published separately under **`cascade_categories`**
+(`verified` / `fast` / `secure`) plus a top-level **`top100`** block, each carrying a
+one-line machine-readable `criterion` next to its file URLs. They are a separate key on
+purpose: the cascade runs after the main build and is allowed to be skipped, so anything
+that iterates `categories` keeps working unchanged and never renders a link for a run
+that produced no cascade.
+
 If you are building anything on top of this repository, read `index.json` instead of
 hardcoding paths — it is the contract, and it can never advertise a file that does not
 exist.
