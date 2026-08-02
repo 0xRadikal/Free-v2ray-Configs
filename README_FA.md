@@ -1,301 +1,699 @@
-# 🚀 کانفیگ‌های رایگان V2Ray — توسط [@Raydikalx](https://t.me/Raydikalx)
+<div align="center">
 
-[![Aggregate](https://github.com/0xRadikal/Free-v2ray-Configs/actions/workflows/aggregate.yml/badge.svg)](https://github.com/0xRadikal/Free-v2ray-Configs/actions/workflows/aggregate.yml)
-![Update](https://img.shields.io/badge/%D8%A8%D9%87%E2%80%8C%D8%B1%D9%88%D8%B2%D8%B1%D8%B3%D8%A7%D9%86%DB%8C-%D9%87%D8%B1%20%DB%B1%DB%B5%20%D8%AF%D9%82%DB%8C%D9%82%D9%87-blue)
-![Validated](https://img.shields.io/badge/%D8%A7%D8%B9%D8%AA%D8%A8%D8%A7%D8%B1%D8%B3%D9%86%D8%AC%DB%8C-sing--box%20%2B%20mihomo-success)
+<a href="https://github.com/0xRadikal/Free-v2ray-Configs">
+<img alt="کانفیگ‌های رایگان V2Ray — تجمیعِ خودکار، تکراری‌زداییِ CDN-aware، اعتبارسنجی با کلاینتِ واقعی، تستِ در دسترس بودن" src="https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/assets/hero.svg">
+</a>
 
-> 🇬🇧 [English version](README.md) · 🇨🇳 [中文版](README_ZH.md) · 🇷🇺 [Русская версия](README_RU.md)
+<p>
+<a href="https://github.com/0xRadikal/Free-v2ray-Configs/actions/workflows/aggregate.yml"><img alt="خط‌لوله" src="https://img.shields.io/github/actions/workflow/status/0xRadikal/Free-v2ray-Configs/aggregate.yml?style=for-the-badge&label=pipeline&logo=githubactions&logoColor=white"></a>
+<img alt="به‌روزرسانیِ خودکار" src="https://img.shields.io/badge/auto--update-every%2015%20min-0ea5e9?style=for-the-badge">
+<a href="https://t.me/Raydikalx"><img alt="مشترکینِ تلگرام" src="https://img.shields.io/endpoint?url=https%3A%2F%2Ftg.sumanjay.workers.dev%2FRaydikalx&label=telegram&color=229ED9&style=for-the-badge&logo=telegram&logoColor=white"></a>
+<a href="https://github.com/0xRadikal/Free-v2ray-Configs/stargazers"><img alt="ستاره‌ها" src="https://img.shields.io/github/stars/0xRadikal/Free-v2ray-Configs?style=for-the-badge&color=FBBF24&logo=github"></a>
+<a href="https://0xradikal.github.io/Free-v2ray-Configs/"><img alt="داشبورد" src="https://img.shields.io/badge/live-dashboard-ec4899?style=for-the-badge&logo=githubpages&logoColor=white"></a>
+</p>
 
-کانفیگ‌های رایگان V2Ray / Xray که به‌صورت **خودکار** جمع‌آوری، **تکراری‌زدایی**،
-**برندینگ** و **اعتبارسنجی با کلاینتِ واقعی** می‌شوند. از **۲۱ منبع** (۷ سبک + ۱۴ انبوه)
-گرفته می‌شوند، با موتورِ تکراری‌زداییِ **CDN-aware** تمیز می‌شوند و **هر حدود ۱۵ دقیقه**
-از طریق GitHub Actions به‌روزرسانی می‌شوند.
+<p><i>هر شمارندهٔ زیر به‌صورت زنده از <code>index.json</code> / <code>health.json</code>ِ خودِ همین ریپازیتوری خوانده می‌شود — پس نمی‌تواند کهنه شود:</i></p>
 
-ریمارکِ همهٔ کانفیگ‌ها به این فرمت بازنویسی می‌شود: `{کد کشور} {پرچم} | @Raydikalx | {شناسه}`
-که `{شناسه}` یک اثرِانگشتِ کوتاهِ **مشتق از محتوا** است، نه شمارنده. یک سرورِ ثابت
-همیشه همان برچسب را می‌گیرد، پس نامِ آیتم‌ها در کلاینتِ شما بین آپدیت‌ها جابه‌جا نمی‌شود.
+<p>
+<img alt="کانفیگ‌ها" src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2F0xRadikal%2FFree-v2ray-Configs%2Fmain%2Findex.json&query=%24.categories.all.unique&label=configs&color=2563eb&style=for-the-badge">
+<img alt="تأییدشده" src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2F0xRadikal%2FFree-v2ray-Configs%2Fmain%2Fhealth.json&query=%24.cascade.buckets.verified&label=verified&color=16a34a&style=for-the-badge&logo=checkmarx">
+<img alt="سریع" src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2F0xRadikal%2FFree-v2ray-Configs%2Fmain%2Fhealth.json&query=%24.cascade.buckets.fast&label=fast&color=f59e0b&style=for-the-badge">
+<img alt="امن" src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2F0xRadikal%2FFree-v2ray-Configs%2Fmain%2Fhealth.json&query=%24.cascade.buckets.secure&label=secure&color=7c3aed&style=for-the-badge">
+<img alt="منابعِ سالم" src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2F0xRadikal%2FFree-v2ray-Configs%2Fmain%2Fhealth.json&query=%24.summary.ok&label=sources%20live&color=0891b2&style=for-the-badge">
+<img alt="آخرین کامیت" src="https://img.shields.io/github/last-commit/0xRadikal/Free-v2ray-Configs/main?style=for-the-badge&color=334155&label=updated">
+</p>
 
-### ✅ هر انتشار با کلاینتِ واقعی تأیید می‌شود
+<p>
+🇬🇧 <a href="README.md">English version</a> · 🇨🇳 <a href="README_ZH.md">中文版</a> · 🇷🇺 <a href="README_RU.md">Русская версия</a>
+</p>
 
-یک کانفیگِ نامعتبر باعش می‌شود کلاینت **کلِ فایل** را رد کند، نه فقط همان یک نود.
-پس خروجیِ «تقریباً درست» بی‌ارزش است. پیش از انتشار، همهٔ فایل‌های `clash.yaml`
-و `singbox.json` با همان باینری‌هایی که شما اجرا می‌کنید بررسی می‌شوند:
+</div>
 
+## 🚀 از اینجا شروع کنید — یک خط را کپی کنید
+
+**فهرستِ ۱۰۰ برتر** کوتاه‌ترین راه به یک اتصالِ کارآمد است: همان فهرستِ `verified`
+است که بر اساسِ تأخیرِ میانه مرتب و در ۱۰۰ موردِ سریع‌تر بریده شده — آن‌قدر کوچک
+که همه‌جا وارد شود، و هر مورد از قبل **سه بار** به یک درخواستِ واقعی پاسخ داده است.
+
+```text
+https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/top100.txt
 ```
-sing-box check -c <file>      # sing-box 1.13.14
-mihomo -t -f <file>           # mihomo v1.19.29
+
+بیش از ۱۰۰ سرور می‌خواهید؟ به‌جایش فهرستِ کاملِ `verified` را بردارید — همان
+استانداردِ اثبات، فقط بلندتر:
+
+```text
+https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/verified/configs_base64.txt
 ```
 
-اگر حتی یک فایل رد شود، **اجرا متوقف می‌شود و هیچ‌چیز commit نمی‌شود** — نسخهٔ سالمِ
-قبلی سر جای خود می‌ماند.
+<div align="center">
 
-> ⚠️ هیچ تستِ اتصال (TCP) انجام نمی‌شود (به‌خاطر شرایط شبکهٔ ایران). کانفیگ‌ها
-> از نطرِ **درستیِ ساختار** اعتبارسنجی می‌شوند، نه **در دسترس بودن**. مواردِ
-> ساختاراً خراب (UUID صفر، `App not supported`، رمزِ پشتیبانی‌نشده، کلیدِ REALITY
-> نامعتبر) حذف می‌شوند؛ ولی یک کانفیگِ کاملاً معتبر هم ممکن است آفلاین باشد.
+<a href="#-subscription-links"><img alt="پرش به لینک‌های اشتراک" src="https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/assets/cta-links.svg"></a>
+<a href="https://t.me/Raydikalx"><img alt="عضویت در کانالِ تلگرام @Raydikalx" src="https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/assets/cta-telegram.svg"></a>
+<a href="https://github.com/0xRadikal/Free-v2ray-Configs"><img alt="ستاره‌دادن به ریپازیتوری در گیت‌هاب" src="https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/assets/cta-star.svg"></a>
 
----
+<br><br>
 
-## 📥 اشتراک سریع (لینک را در کلاینت خود وارد کنید)
+<b>📱 با گوشی آمده‌اید؟ اسکنرِ کلاینت‌تان را روی یکی از این‌ها بگیرید.</b>
 
-> **از لینک‌های `raw.githubusercontent.com` زیر استفاده کنید.** این‌ها منبعِ اصلی
-> و تازه‌ترین هستند. برای کسانی که دسترسیِ مستقیم به گیت‌هاب ندارند، آینهٔ
-> jsDelivr در پایین آمده است.
+<a href="https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/top100.txt"><img alt="کیو‌آرکدِ فهرستِ ۱۰۰ برتر" src="https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/assets/qr-top100.svg"></a>
+<a href="https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/verified/configs_base64.txt"><img alt="کیو‌آرکدِ اشتراکِ verified" src="https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/assets/qr-verified.svg"></a>
+<a href="https://t.me/Raydikalx"><img alt="کیو‌آرکدِ کانالِ تلگرام" src="https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/assets/qr-telegram.svg"></a>
+
+<br>
+
+<sub>هر کیو‌آرکد خودِ آدرسِ اشتراک را رمزگذاری می‌کند — کلاینتِ شما هر بار فهرستِ تازه می‌گیرد؛ این یک عکسِ منجمد نیست.</sub>
+
+</div>
+
+<img alt="" src="https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/assets/divider.svg">
+
+<a name="-subscription-links"></a>
+
+# ⚡ لینک‌های اشتراک
+
+> **مطمئن نیستید کدام را بردارید؟** از `verified` استفاده کنید — هر مورد در
+> **هر سه** دورِ مستقلِ تست، یک درخواستِ واقعیِ HTTP را از داخلِ پروکسی پاسخ داده است:
 >
-> **چرا raw و نه CDN؟** اندازه‌گیری‌شده روی همین ریپازیتوری:
+> ```
+> https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/verified/configs_base64.txt
+> ```
 >
-> | | دستورِ کش | کهنگیِ مؤثر |
-> |---|---|---|
-> | `raw.githubusercontent.com` | `max-age=300` | تا **۵ دقیقه** |
-> | `cdn.jsdelivr.net` (رفرنسِ شاخه) | `s-maxage=43200` | تا **۱۲ ساعت** |
->
-> مستنداتِ خودِ jsDelivr می‌گوید رفرنسِ شاخه ۱۲ ساعت کش می‌شود. در یک بررسیِ
-> زنده، CDN نسخه‌ای **۱۲ ساعت و ۴۵ دقیقه** کهنه سرو می‌کرد (۴٬۳۵۳ کانفیگ) در
-> حالی که raw نسخهٔ جاری را می‌داد (۸٬۱۶۸ کانفیگ) — یعنی **۵۱ برابرِ** بازهٔ
-> ۱۵ دقیقه‌ایِ به‌روزرسانی. اکنون کشِ CDN در هر اجرا purge می‌شود، ولی purge فقط
-> لبه (edge) را پاک می‌کند؛ مبدأِ خودِ jsDelivr هنگامِ resolve کردنِ نامِ شاخه
-> می‌تواند باز هم عقب بماند. raw چنین لایه‌ای ندارد.
->
-> 📌 **همه‌چیز روی شاخهٔ پیش‌فرض (`main`) است.** ریپازیتوری را باز کنید، فایل‌های
-> کانفیگ همان‌جا مقابلِ شماست — نه تغییرِ شاخه، نه محلِ پنهان. لینک‌هایی که ماه‌ها
-> پیش کپی کرده‌اید هم کار می‌کنند. ببینید:
-> [چطور هزینهٔ انتشار پایین می‌ماند](#-how-publishing-stays-cheap)
+> به‌جای مطمئن‌ترین فهرست، بزرگ‌ترین فهرست را می‌خواهید؟ `verified` را با `all` عوض کنید.
 
-### 🌐 همهٔ کانفیگ‌ها (سبک + انبوه)
-| فرمت | لینک (اصلی — raw) |
-|---|---|
-| ساده (v2ray) | `https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/all/configs.txt` |
-| **Base64** (اشتراک) | `https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/all/configs_base64.txt` |
-| Clash YAML | `https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/all/clash.yaml` |
-| Sing-box JSON | `https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/all/singbox.json` |
+## 🎛️ یک دسته (tier) انتخاب کنید
 
-### ⭐ سبک (گزیده — از منابعِ سرعت‌تست‌شده)
-- ساده: `…/main/light/configs.txt`
-- Base64: `…/main/light/configs_base64.txt`
-- Clash: `…/main/light/clash.yaml` · Sing-box: `…/main/light/singbox.json`
+در هر اجرا **شش دسته** منتشر می‌شود. این‌ها منابعِ متفاوت نیستند — همان **استخرِ
+واحد** هستند که بر اساسِ **میزانِ شواهدی که نشان می‌دهد یک کانفیگ واقعاً کار می‌کند**
+فیلتر شده‌اند.
 
-### 📦 انبوه (حجمِ بالا، تنوعِ زیاد)
-- ساده: `…/main/heavy/configs.txt`
-- Base64: `…/main/heavy/configs_base64.txt`
-- Clash: `…/main/heavy/clash.yaml` · Sing-box: `…/main/heavy/singbox.json`
+| دسته | چه چیزی وارد می‌شود | ساده | Base64 | Clash | Sing-box |
+|:--|:--|:--:|:--:|:--:|:--:|
+| 🏆 **`verified`** | در **هر ۳** دور یک درخواستِ واقعی از داخلِ پروکسی موفق بوده — *پیشنهادی* | [txt](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/verified/configs.txt) | [b64](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/verified/configs_base64.txt) | [yaml](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/verified/clash.yaml) | [json](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/verified/singbox.json) |
+| ⚡ **`fast`** | `verified` **و** تأخیرِ میانه `< ۸۰۰ms` | [txt](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/fast/configs.txt) | [b64](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/fast/configs_base64.txt) | [yaml](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/fast/clash.yaml) | [json](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/fast/singbox.json) |
+| 🔐 **`secure`** | `verified` **و** دارای forward secrecy، **و** لینک اعتبارسنجیِ گواهی را غیرفعال نکرده باشد | [txt](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/secure/configs.txt) | [b64](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/secure/configs_base64.txt) | [yaml](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/secure/clash.yaml) | [json](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/secure/singbox.json) |
+| 🌐 **`all`** | همه‌چیز، تکراری‌زدایی‌شده — بزرگ‌ترین فهرست، عمدتاً تست‌نشده | [txt](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/all/configs.txt) | [b64](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/all/configs_base64.txt) | [yaml](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/all/clash.yaml) | [json](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/all/singbox.json) |
+| 📦 **`heavy`** | فقط ۱۴ منبعِ پرحجم | [txt](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/heavy/configs.txt) | [b64](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/heavy/configs_base64.txt) | [yaml](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/heavy/clash.yaml) | [json](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/heavy/singbox.json) |
+| ⭐ **`light`** | فقط ۷ منبعِ گزیده / سرعت‌تست‌شده | [txt](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/light/configs.txt) | [b64](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/light/configs_base64.txt) | [yaml](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/light/clash.yaml) | [json](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/light/singbox.json) |
 
-### 🎯 بر اساس پروتکل (از دستهٔ ALL)
+**کدام فرمت؟** `configs_base64.txt` فرمتِ کلاسیکِ اشتراک و امن‌ترین پیش‌فرض است.
+`configs.txt` همان فهرست بدونِ رمزگذاری است. `clash.yaml` یک پروفایلِ کاملِ
+mihomo/Clash و `singbox.json` یک کانفیگِ کاملِ sing-box است — و هر دو پیش از انتشار
+با باینریِ واقعی اعتبارسنجی می‌شوند
+([پایین‌تر](#-every-release-is-checked-by-the-real-clients) را ببینید).
 
-معمولاً پر: `vless` · `vmess` · `shadowsocks` · `trojan` · `hysteria2` · `shadowsocksr` · `tuic`
+## 📋 کپی-پیست: آدرسِ همهٔ دسته‌ها
 
-پشتیبانی‌شده ولی مشروط (فایل فقط زمانی ساخته می‌شود که منابعِ بالادست واقعاً آن
-پروتکل را منتشر کنند — فایلِ خالی هرگز منتشر نمی‌شود، پس نبودِ فایل یعنی «در این
-دور هیچ‌کدام»): `hysteria` · `wireguard` · `juicity` · `anytls` · `snell` · `mieru` · `socks`
+```text
+# ── verified — قبول‌شده در هر ۳ دور (پیشنهادی) ─────────────────────────────────
+https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/verified/configs.txt
+https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/verified/configs_base64.txt
+https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/verified/clash.yaml
+https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/verified/singbox.json
 
+# ── fast — verified و تأخیرِ میانه < 800 ms ────────────────────────────────────
+https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/fast/configs.txt
+https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/fast/configs_base64.txt
+https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/fast/clash.yaml
+https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/fast/singbox.json
+
+# ── secure — verified و دارای forward secrecy ──────────────────────────────────
+https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/secure/configs.txt
+https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/secure/configs_base64.txt
+https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/secure/clash.yaml
+https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/secure/singbox.json
+
+# ── all — سبک + انبوه، تکراری‌زدایی‌شده ────────────────────────────────────────
+https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/all/configs.txt
+https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/all/configs_base64.txt
+https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/all/clash.yaml
+https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/all/singbox.json
+
+# ── heavy — منابعِ پرحجم ───────────────────────────────────────────────────────
+https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/heavy/configs.txt
+https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/heavy/configs_base64.txt
+https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/heavy/clash.yaml
+https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/heavy/singbox.json
+
+# ── light — منابعِ گزیده ───────────────────────────────────────────────────────
+https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/light/configs.txt
+https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/light/configs_base64.txt
+https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/light/clash.yaml
+https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/light/singbox.json
+
+# ── ۱۰۰ برتر — همان فهرستِ verified، مرتب‌شده بر اساسِ تأخیرِ میانه ─────────────
+https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/top100.txt
 ```
+
+## 🎯 لینک‌های تفکیک‌شده بر اساسِ پروتکل
+
+از `all/` جدا می‌شوند. یک فایل **فقط وقتی خالی نباشد** منتشر می‌شود، پس ۴۰۴ یعنی
+«در این دور هیچ‌چیز از این پروتکل نبود» — و هرگز به معنیِ اشتراکِ خالی نیست که
+فهرستِ کلاینتِ شما را پاک کند.
+
+| پروتکل | ساده | Base64 |
+|:--|:--|:--|
+| VLESS | `…/main/protocols/vless.txt` | `…/main/protocols/vless_base64.txt` |
+| VMess | `…/main/protocols/vmess.txt` | `…/main/protocols/vmess_base64.txt` |
+| Trojan | `…/main/protocols/trojan.txt` | `…/main/protocols/trojan_base64.txt` |
+| Shadowsocks | `…/main/protocols/shadowsocks.txt` | `…/main/protocols/shadowsocks_base64.txt` |
+| ShadowsocksR | `…/main/protocols/shadowsocksr.txt` | `…/main/protocols/shadowsocksr_base64.txt` |
+| Hysteria2 | `…/main/protocols/hysteria2.txt` | `…/main/protocols/hysteria2_base64.txt` |
+| TUIC | `…/main/protocols/tuic.txt` | `…/main/protocols/tuic_base64.txt` |
+| SOCKS | `…/main/protocols/socks.txt` | `…/main/protocols/socks_base64.txt` |
+
+<details>
+<summary><b>📎 آدرسِ کاملِ هر پروتکل (کپی-پیست)</b></summary>
+
+```text
 https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/protocols/vless.txt
 https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/protocols/vless_base64.txt
-… برای هر پروتکل به همین شکل
+https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/protocols/vmess.txt
+https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/protocols/vmess_base64.txt
+https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/protocols/trojan.txt
+https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/protocols/trojan_base64.txt
+https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/protocols/shadowsocks.txt
+https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/protocols/shadowsocks_base64.txt
+https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/protocols/shadowsocksr.txt
+https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/protocols/shadowsocksr_base64.txt
+https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/protocols/hysteria2.txt
+https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/protocols/hysteria2_base64.txt
+https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/protocols/tuic.txt
+https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/protocols/tuic_base64.txt
+https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/protocols/socks.txt
+https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/protocols/socks_base64.txt
 ```
 
-فایلِ `index.json` دقیقاً می‌گوید همین حالا چه فایل‌هایی موجود است، پس لازم نیست
-حدس بزنید.
+پارسر پروتکل‌های `hysteria` · `wireguard` · `juicity` · `anytls` · `snell` · `mieru`
+را هم می‌شناسد، ولی در **عکسِ لحظه‌ایِ پایین خالی بودند** — هیچ منبعی موردی منتشر
+نکرده بود. فهرستِ مرجع و همیشه‌به‌روزِ فایل‌های پروتکلی که همین حالا وجود دارند،
+بلوکِ `protocol_files` در [`index.json`](#-machine-readable-metadata) است.
 
-### 🪞 آینه (jsDelivr) — فقط اگر raw در دسترس نبود
+</details>
 
-پیشوند را با این جایگزین کنید:
-`https://cdn.jsdelivr.net/gh/0xRadikal/Free-v2ray-Configs@main/…`
+<a name="-machine-readable-metadata"></a>
 
-آینه در هر اجرا purge می‌شود، ولی ممکن است باز هم از منبعِ اصلی عقب بماند. اگر
-نسخهٔ **کاملاً یکسان** را از طریقِ CDN می‌خواهید، به‌جای شاخه یک کامیت را پین کنید
-(`@<commit-sha>/…`) — این حالت بیت‌به‌بیت با raw یکسان بودنش تأیید شده است.
+## 🧭 متادیتای ماشین‌خوان
+
+| فایل | چیست |
+|:--|:--|
+| [`index.json`](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/index.json) | همهٔ شمارنده‌ها، زمان‌ها، زمانِ تقریبیِ به‌روزرسانیِ بعدی و **آدرسِ همهٔ فایل‌ها** (raw + آینه) |
+| [`health.json`](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/health.json) | سلامتِ هر منبع، حذفیاتِ مبدل‌ها، آمارِ جغرافیایی و گزارشِ کاملِ تستِ `cascade` |
+| [`state.json`](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/state.json) | تاریخچهٔ چرخشیِ بازدهِ هر منبع و تصمیم‌های غیرفعال‌سازیِ خودکار |
+| [`top100.txt`](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/top100.txt) | ۱۰۰ کانفیگِ verified با کمترین تأخیر |
+| [`archive/all_broken.txt`](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/archive/all_broken.txt) | آنچه رد شده و عمداً قابلِ‌مشاهده نگه داشته شده (+ `_base64`، + `heavy_broken*`) |
+
+## 🪞 آینه (jsDelivr) — فقط اگر `raw.githubusercontent.com` مسدود بود
+
+پیشوندِ `https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main` را با
+`https://cdn.jsdelivr.net/gh/0xRadikal/Free-v2ray-Configs@main` جایگزین کنید — همهٔ
+مسیرهای بالا روی آینه بدونِ تغییر وجود دارند.
+
+```
+https://cdn.jsdelivr.net/gh/0xRadikal/Free-v2ray-Configs@main/verified/configs_base64.txt
+```
+
+**تا می‌توانید raw را ترجیح دهید.** این نظر نیست؛ همان `link_policy`ِ خودِ ریپازیتوری است:
+
+| | دستورِ کش | بدترین حالتِ کهنگی |
+|:--|:--|:--|
+| `raw.githubusercontent.com` | `max-age=300` | **۵ دقیقه** |
+| `cdn.jsdelivr.net` (رفرنسِ شاخه) | `s-maxage=43200` | **۱۲ ساعت** — ۱۴۴ برابر بیشتر |
+
+کشِ CDN در هر اجرا purge می‌شود، ولی purge فقط لبه (edge) را پاک می‌کند؛ مبدأِ خودِ
+jsDelivr هنگامِ resolve کردنِ نامِ شاخه می‌تواند باز هم عقب بماند. اگر از طریقِ CDN
+نسخهٔ **دقیقاً یکسان** می‌خواهید، به‌جای شاخه یک کامیت را پین کنید: `@<commit-sha>/…`.
+
+> 📌 **همه‌چیز روی شاخهٔ پیش‌فرض (`main`) است.** نه تغییرِ شاخه، نه محلِ پنهان —
+> لینکی که ماه‌ها پیش کپی کرده‌اید هنوز کار می‌کند. اینکه چرا این به آن بدیهی‌ای
+> که به‌نظر می‌رسد نیست:
+> [چطور هزینهٔ انتشار پایین می‌ماند](#-how-publishing-stays-cheap-and-why-the-files-live-on-main).
 
 ---
 
-## 🗂️ ساختار ریپازیتوری
+<a name="-does-it-actually-work"></a>
 
-**یک شاخه — `main`.** کدِ منبع و خروجیِ منتشرشده کنارِ هم روی شاخهٔ پیش‌فرض زندگی
-می‌کنند؛ یعنی دقیقاً همان چیزی که بازدیدکننده هنگامِ بازکردنِ ریپازیتوری می‌بیند.
+# 🧪 واقعاً کار می‌کند؟
 
-خروجیِ ماشینی، در هر اجرا تازه می‌شود:
+بیشترِ ریپازیتوری‌های کانفیگِ رایگان یک عددِ بزرگ منتشر می‌کنند و بقیه‌اش را به
+حدسِ شما می‌سپارند. پاسخِ ناخوشایند، که **اندازه‌گیری شده و نه تخمین زده**، این
+است: در هر لحظه، اکثریتِ قاطعِ هر استخرِ کانفیگِ رایگان مرده است. این ویژگیِ خودِ
+کانفیگِ رایگان است، نه ایرادِ این ریپازیتوری — پس به‌جای پنهان‌کردنش، هر اجرا
+آن را اندازه می‌گیرد و بر اساسِ همان مرتب می‌کند.
 
-```
-all/        configs.txt · configs_base64.txt · clash.yaml · singbox.json   (سبک + انبوه)
-heavy/      configs.txt · configs_base64.txt · clash.yaml · singbox.json   (۱۴ منبع انبوه)
-light/      configs.txt · configs_base64.txt · clash.yaml · singbox.json   (۷ منبع سبک)
-protocols/  vless.txt · vmess.txt · trojan.txt · … (+ *_base64.txt)         (تفکیک از ALL)
-archive/    <دسته>_broken.txt (+ _base64)                                  (کانفیگ‌های ردشده)
-index.json  متادیتای کامل: شمارش‌ها، زمان‌ها، تفکیک پروتکل، همهٔ لینک‌ها
-health.json گزارشِ سلامتِ هر منبع: ok/empty/fail، کد HTTP، تأخیر، خطاها
-```
+هر کانفیگ از چهار مرحله عبور می‌کند. هر مرحله آن‌قدر ارزان است که روی کلِ استخر
+اجرا شود، و هر کدام کاری را دور می‌ریزد که مرحلهٔ بعدی رویش هدر می‌داد:
 
-کدِ نوشته‌شده به‌دستِ انسان، با تاریخچهٔ گیتِ معمولی و blame:
+<div align="center">
 
-```
-scripts/    خط‌لوله (core.py · converters.py · sources.py · aggregate.py · validate.py)
-.github/    وُرک‌فلوی زمان‌بندی‌شده
-README.md · README_FA.md · LICENSE
-```
+<img alt="خط‌لولهٔ چهارمرحله‌ای: جمع‌آوری، ترمیم، اتصال، اثبات، انتشار" src="https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/assets/pipeline.svg">
 
-نکته‌ها:
+</div>
 
-- فایل‌های `protocols/` و `archive/` **فقط وقتی خالی نباشند** ساخته می‌شوند. نبودِ
-  فایل یعنی «در این دور چیزی در این دسته نبود» — فایلِ خالی از ۴۰۴ بدتر است،
-  چون کلاینتی که به آن اشتراک دارد لیستِ سالمِ خود را با هیچ جایگزین می‌کند، در
-  حالی که ۴۰۴ باعث می‌شود کلاینت لیستِ قبلی را نگه دارد.
-- `index.json` دقیقاً همان فایل‌هایی را اعلام می‌کند که وجود دارند، پس لیستِ
-  لینک‌هایش هرگز وعده‌ای نیست که ریپازیتوری نتواند به آن عمل کند.
+| مرحله | سؤالی که می‌پرسد | هزینه |
+|:--|:--|:--|
+| **L0 / L1** | قابلِ پارس است؟ endpoint یکتاست؟ قابلِ مسیریابی است؟ | بدونِ شبکه |
+| **L2** | آیا پورتِ TCP واقعاً اتصال را می‌پذیرد؟ | یک connect برای هر endpointِ یکتا |
+| **L3** | آیا یک **درخواستِ واقعیِ HTTP از داخلِ پروکسی** موفق می‌شود؟ | handshakeِ کامل، **۳ بار** تکرار |
+| **دسته‌ها** | کدام‌ها در *هر* دورِ L3 قبول شدند؟ | فقط مرتب‌سازی |
 
-<a name="-how-publishing-stays-cheap"></a>
-## 🌿 چطور هزینهٔ انتشار پایین می‌ماند (و چرا فایل‌ها روی `main` هستند)
+یک کانفیگ فقط وقتی به `verified/` می‌رسد که در **هر** دور قبول شده باشد — نه صرفاً
+در بهترین دورش.
 
-گیت هیچ blob‌ای را فراموش نمی‌کند. هر اجرای زمان‌بندی‌شده همان مجموعهٔ فایل‌های
-بزرگ را از نو تولید می‌کند، و افزودنِ آن‌ها به شاخه به روشِ معمولی یک نسخهٔ
-**جدید** از هر فایلِ تغییریافته را برای همیشه به تاریخچه اضافه می‌کند. پس هزینهٔ
-انتشار **O(تعدادِ کامیت‌ها)** است و هیچ سقفی ندارد.
+## 📉 قیف، روی یک انتشارِ واقعی
 
-این فرضی نیست. حجمِ این ریپازیتوری به **حدود ۳٫۵۵ گیگابایت در ~۵٬۶۴۹ کامیت**
-رسیده بود. با اندازه‌گیری روی **دو کامیتِ واقعیِ پشت‌سرهمِ ربات**، هر کامیتِ خروجی
-**۶۰۴ کیلوبایت** تاریخچهٔ دائمی اضافه می‌کرد — یعنی **حدود ۵۶٫۶ مگابایت در روز**
-با ~۹۶ اجرا در روز، و **حدود ۲۰ گیگابایت در سال**.
+<div align="center">
 
-### راه‌حلِ غلط (و دلیلِ برگرداندنش)
+**عکسِ لحظه‌ای: `2026-08-02 08:38:43 UTC` · اجرا ۲۱۳ ثانیه طول کشید · تست از یک رانرِ 🇺🇸 آمریکا (کلوی Cloudflare با کدِ `IAD`) اجرا شد**
 
-اولین تلاش، خروجی را به یک **شاخهٔ orphan** برد که در هر اجرا به‌صورتِ یک کامیتِ
-واحد force-push می‌شد. هزینهٔ انتشار واقعاً O(1) شد — و پروژه بی‌صدا خراب شد:
+</div>
 
-- **هر لینکِ اشتراکی که قبلاً کپی شده بود HTTP 404 برمی‌گرداند.** کاربری که
-  کلاینتش به `…/main/all/configs.txt` وصل بود هیچ پیامِ خطایی نمی‌دید؛ اشتراکش
-  فقط بی‌صدا خالی می‌شد.
-- **بازدیدکننده‌ای که ریپازیتوری را باز می‌کرد هیچ کانفیگی نمی‌دید** — فقط کد.
-  بیشترِ کسانی که دنبالِ کانفیگ‌اند نمی‌دانند «branch» چیست، چه رسد به اینکه بدانند
-  باید به شاخهٔ دوم سوئیچ کنند و دوباره بگردند.
-- **قابلِ‌کشف‌بودن از بین رفت.** جست‌وجوی گیت‌هاب، صفحهٔ اصلیِ ریپازیتوری و
-  موتورهای جست‌وجو همه شاخهٔ **پیش‌فرض** را ایندکس می‌کنند. پنهان‌کردنِ محصول
-  بیرون از شاخهٔ پیش‌فرض، ارزشمندترین محتوا را نامرئی کرد.
-- **حتی یک ریپازیتوریِ موفق در این حوزه این کار را نمی‌کند.** مستقیماً بررسی شد:
-  Epodonios/v2ray-configs (⭐ ۳٬۱۶۶ — ۲۴٫۷ گیگابایت، خروجی روی `main`)،
-  mahdibland/V2RayAggregator (⭐ ۴٬۰۰۳ — خروجی روی `master`)،
-  Pawdroid/Free-servers (⭐ ۱۸٬۴۲۰ — خروجی روی `main`).
+| مرحله | کانفیگ | سهم از استخر |
+|:--|--:|--:|
+| واکشی‌شده از ۱۷ منبعِ زنده | ۱۴٬۲۱۲ | — |
+| **یکتا پس از تکراری‌زداییِ CDN-aware** | **۱۰٬۱۱۸** | **۱۰۰ ٪** |
+| ساختاراً معتبر (L0/L1) | ۱۰٬۰۷۱ | ۹۹٫۵ ٪ |
+| پورتِ TCP باز (L2) | ۵٬۲۸۵ | ۵۲٫۲ ٪ |
+| **حداقل یک بار** کار کرد (L3) | ۱٬۲۳۱ | ۱۲٫۲ ٪ |
+| در **هر ۳** دور کار کرد ← `verified/` | **۸۵۶** | **۸٫۵ ٪** |
 
-تاریخچهٔ ارزان وقتی هیچ‌کس فایل‌ها را پیدا نکند، هیچ ارزشی ندارد.
+سه دورِ L3 به‌تنهایی **۱٬۰۴۰ / ۱٬۰۶۹ / ۱٬۰۷۴** موفقیت برگرداندند — ولی فقط **۸۵۶**
+کانفیگ در هر سه مجموعه هستند. یعنی **۳۰٫۴۶ ٪** از هر چیزی که تا به حال کار کرده،
+بی‌ثبات (flaky) است. انتشارِ «هر چیزی که یک بار کار کرد» نتیجه را **۱٫۴۴ برابر**
+بزرگ‌نمایی می‌کرد؛ انتشارِ بهترین دورِ تکی، **۱٫۲۵ برابر**. همین شکاف، تمامِ دلیلِ
+اجرای بیش از یک‌بارهٔ مرحلهٔ L3 است.
 
-### راه‌حلِ درست — «rolling squash» روی `main`
+> ### ⚠️ پیش از نقلِ این درصد، این را بخوانید
+>
+> **۸٫۵ ٪ یک ثابت نیست، و ادعایی دربارهٔ اتصالِ شما هم نیست.** این عدد از
+> **یک میزبان، در ایالات متحده، در یک روز** اندازه‌گیری شده است. کانفیگی که از یک
+> رانرِ گیت‌هاب در ویرجینیا شکست می‌خورد، ممکن است از تهران عالی کار کند — و
+> برعکسش هم به همان اندازه درست است.
+>
+> پس: **`verified/` یعنی «این کانفیگ به یک درخواستِ واقعی از همان ماشینی که تست را
+> اجرا کرد پاسخ داد» — نه «این کانفیگ برای شما کار خواهد کرد».** اعدادِ دقیقاً
+> همان انتشاری که دارید دانلود می‌کنید، به‌همراهِ کشوری که تست از آن اجرا شده، در
+> بلوکِ `cascade`ِ [`health.json`](#-source-health--healthjson) ثبت است. **به آن
+> فایل بیشتر از هر عددی که در این README نوشته شده اعتماد کنید**، چون این‌ها
+> ذاتاً یک عکسِ لحظه‌ایِ تاریخ‌دارند.
 
-خروجی **روی شاخهٔ پیش‌فرض** منتشر می‌شود، ولی شاخه همیشه در وضعیتِ
-**تاریخِ سورس + دقیقاً یک کامیتِ خروجی** نگه داشته می‌شود:
+<details>
+<summary><b>📊 هر چیزِ دیگری که آن عکسِ لحظه‌ای اندازه گرفت</b></summary>
 
-۱) تازه‌ترین کامیتی که نشانِ `[auto-output]` **ندارد** پیدا می‌شود — همان **anchor**
-   (آخرین کامیتِ انسانی/سورس).
-۲) یک tree ساخته می‌شود = *treeِ anchor* + *خروجیِ تازهٔ همین اجرا*.
-۳) `git commit-tree <tree> -p <anchor>` و سپس force-push **با lease**.
+| | |
+|:--|:--|
+| **اندازهٔ دسته‌ها** | `all` ۱۰٬۱۱۸ · `heavy` ۸٬۴۰۹ · `light` ۲٬۵۲۱ · `verified` ۸۵۶ · `fast` ۵۷۸ · `secure` ۴۹۵ · `top100` ۱۰۰ |
+| **پروتکل‌ها** | vless ۳٬۶۵۵ · vmess ۳٬۲۱۷ · shadowsocks ۲٬۱۱۳ · trojan ۹۷۸ · hysteria2 ۱۲۳ · shadowsocksr ۲۸ · tuic ۲ · socks ۲ |
+| **تکراری‌زدایی** | ۴٬۰۹۳ تکراری حذف شد؛ ۱۰٬۱۱۸ کانفیگ به ۸٬۵۶۰ endpointِ یکتا جمع می‌شوند (**۱۵٫۰ ٪** صرفه‌جویی در کارِ L2) |
+| **حذف‌شده در L0/L1** | مجموعاً ۴۷ — غیرقابلِ پارس ۱۸ · سرورِ غیرقابلِ مسیریابی ۱۶ · سرورِ نامعتبر ۱۰ · UUIDِ نامعتبر ۲ · پورتِ نامعتبر ۱ |
+| **DNS** | ۳۲۳ endpoint در L2 وضوح نشد؛ ۶٬۲۳۷ میزبان مکان‌یابی شد، ۳۰۳ نامعلوم |
+| **حذفیاتِ مبدل** | Clash ۴۷ · sing-box ۳۶۴ (که ۳۱۹ موردش اساساً در طرح‌وارهٔ sing-box *قابلِ بیان نیستند*) |
+| **منابع** | ۲۱ پیکربندی‌شده (۷ سبک + ۱۴ انبوه) · ۱۷ کانفیگ برگرداندند · ۰ خالی · ۰ ناموفق |
+| **زمانِ مراحل** | L0/L1 ۰٫۳۳ ثانیه · L2 ۳۳٫۵ ثانیه · L3 ۱۷۸٫۸ ثانیه · مجموع ۲۱۳٫۰ ثانیه |
 
-کامیتِ خروجیِ قبلی غیرقابل‌دسترس شده و garbage-collect می‌شود، پس تاریخچه هرگز
-snapshot انباشته نمی‌کند. هزینهٔ انتشار **O(1)** می‌شود — و در همان حال هر فایل
-دقیقاً همان‌جایی می‌ماند که کاربران (و خزنده‌ها) از قبل دنبالش‌اند.
-
-اندازه‌گیری روی ۲۵ دورِ متوالی، هر دور از یک clone تازهٔ shallow: حجمِ ریپازیتوری
-**ثابت روی ۱۷۲ کیلوبایت** ماند، رشد **صفر کیلوبایت در هر دور**.
-
-خواص ایمنی، که هر یک با یک تستِ اجرایی تأیید شده‌اند:
-
-- **`--force-with-lease`، هرگز `--force` خالی.** چون انتشار حالا روی همان شاخه‌ای
-  است که انسان‌ها رویش کامیت می‌کنند، یک force-pushِ ساده کارِ آن‌ها را پاک می‌کرد.
-  به‌عنوانِ **کنترلِ منفی** اجرا شد: با `--force` ساده، تعدادِ کامیتِ مالک روی
-  ریموت به **صفر** رسید. با lease، pushِ واقعاً متعارض رد می‌شود، مرحله anchor را
-  از نو می‌گیرد، و هم کامیتِ مالک و هم خروجیِ جدید سالم می‌مانند.
-- **گاردِ رگرسیونِ سورس.** هر مسیری که بین anchor و tip تفاوت دارد دسته‌بندی
-  می‌شود؛ اگر چیزی بیرون از مجموعهٔ خروجی عوض شده باشد، مرحله از انتشار
-  **امتناع** می‌کند تا کدِ کسی را برنگرداند.
-- **آگاه از checkoutِ shallow.** `actions/checkout` به‌صورتِ پیش‌فرض فقط depth=1
-  می‌گیرد، پس تنها کامیتِ قابلِ‌دیدن معمولاً یک کامیتِ خروجی است و جست‌وجوی anchor
-  هیچ نتیجه‌ای نمی‌داد — یعنی انتشار برای همیشه متوقف می‌شد. مرحله به‌تدریج
-  deepen می‌کند (۲ → ۴ → ۸ → ۳۲) تا anchor پیدا شود. (`fetch-depth: 0` رد شد:
-  کلون‌کردنِ ۳٫۵۵ گیگابایت، ۹۶ بار در روز.)
-- **همه‌جا fail-closed.** خروجیِ گم‌شده، فایلِ کانفیگِ مشکوکاً کوچک، یا treeِ خالی
-  انتشار را لغو می‌کند و انتشارِ سالمِ قبلی سرِ جایش می‌ماند.
-- **بدونِ بازگشتِ بی‌پایان.** pushهایی که با `GITHUB_TOKEN` انجام می‌شوند اجرای
-  جدیدِ ورک‌فلو راه نمی‌اندازند (رفتارِ مستندشدهٔ گیت‌هاب)، و علاوه بر آن تریگرِ
-  `push` فقط به `scripts/**` فیلتر شده که ربات هرگز رویش نمی‌نویسد.
-
-### قطعی‌بودنِ خروجی، عمدی است
-
-rolling squash سقفِ تاریخچه را می‌بندد؛ قطعی‌بودن باعث می‌شود diffِ هر دور واقعاً
-کوچک باشد. سه ریشهٔ churnِ بی‌دلیل با اندازه‌گیری پیدا و حذف شد:
-
-| قبلاً | حالا |
-|---|---|
-| برچسبِ کشور از منبعی خوانده می‌شد که اتفاقی اول واکشی شده بود — یک سرورِ ثابت بین اجراها `RU 🇷🇺` ⇄ `US 🇺🇸` می‌شد | برچسب به **endpoint** قفل است؛ اولین تشخیصِ قاطع برنده و فریز می‌شود |
-| برچسبِ remark یک **شمارندهٔ موقعیتی** بود — افزودنِ یک کانفیگ نامِ همهٔ خطوطِ بعدی را عوض می‌کرد | برچسب `sha256(کلیدِ یکتاسازی)[:6]` است — مشتق از محتوا، مستقل از موقعیت |
-| ترتیبِ خطوط تابعِ ترتیبِ پاسخِ شبکه بود | مرتب بر اساسِ کلیدِ یکتاسازی — مجموعهٔ یکسانِ کانفیگ ⇒ فایلِ یکسان، بایت‌به‌بایت |
-
-نتیجه: دو اجرای پشت‌سرهم حالا **۳۲ از ۳۴ فایل را بایت‌به‌بایت یکسان** تولید
-می‌کنند؛ تنها تفاوت، زمان‌های داخلِ `index.json` / `health.json` است.
-
-### یک هشدارِ صادقانه
-
-حدود ۳٫۵۵ گیگابایتی که از قبل در تاریخچه است **بازنویسی نشد**. چون گیت‌هاب
-آبجکت‌ها را در سطحِ شبکهٔ fork اشتراکی نگه می‌دارد، بازنویسی تقریباً هیچ فضایی
-آزاد نمی‌کرد و در عوض هر clone موجود و هر ۳ فورک را می‌شکست. خون‌ریزی از این به
-بعد بند آمده؛ زخمِ قدیمی عمداً دست‌نخورده رها شده است.
-
-## 📊 متادیتای زنده — `index.json`
-
-`https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/index.json`
-
-شاملِ شمارشِ هر دسته (یکتا / تکراری / خراب)، تفکیکِ پروتکل، زمانِ آخرین به‌روزرسانی،
-زمانِ تقریبیِ به‌روزرسانیِ بعدی، و آدرسِ همهٔ فایل‌ها (raw اصلی + آینهٔ CDN)، به‌همراهِ
-بخشِ `link_policy` که می‌گوید کدام را ترجیح دهید و چرا.
-
-## 🩺 سلامتِ منابع — `health.json`
-
-`https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/health.json`
-
-گزارشِ سلامتِ هر منبع که در هر اجرا بازتولید می‌شود: برای هر کدام از ۲۱ منبع،
-وضعیت (`ok` / `empty` / `fail`)، کد HTTP، تعدادِ تلاش، تأخیر، تعدادِ کانفیگِ
-برگردانده‌شده و آخرین خطا را ثبت می‌کند. با این کار، منبعِ مرده یا تغییرکرده
-بلافاصله دیده می‌شود. خلاصهٔ آن در `index.json` هم درج می‌شود.
+</details>
 
 ---
 
-## ⚙️ چطور کار می‌کند
+<a name="-every-release-is-checked-by-the-real-clients"></a>
 
-۱) **واکشی** — ۲۱ منبع به‌صورت هم‌زمان دانلود می‌شوند (تشخیصِ خودکارِ base64/direct).
-در خطای موقت تلاشِ مجدد می‌شود، ولی در خطای 4xx فوراً متوقف و گزارش می‌شود.
-۲) **تمیزسازی** — حذفِ خراب/جعلی (UUID صفر، `App not supported`، proxies خالی).
-۳) **تکراری‌زدایی** — اثرانگشتِ هویتِ سرور به‌صورتِ CDN-aware (IPهای چرخانِ CDN merge می‌شوند).
-۴) **برندینگ** — ریمارکِ هر کانفیگ به `{کد} {پرچم} | @Raydikalx | {شناسه}` بازنویسی
-   می‌شود، که `{شناسه}` همان `sha256(کلیدِ یکتاسازی)[:6]` است. چون از خودِ کانفیگ
-   مشتق می‌شود، با بزرگ‌شدنِ لیست جابه‌جا نمی‌شود. برچسبِ کشور هم به **endpoint**
-   قفل شده، نه به منبعی که اتفاقی اول واکشی شده، پس بین اجراها نمی‌چرخد.
-۵) **تبدیل** — ترجمه به طرح‌وارهٔ هر کلاینت با اعتبارسنجیِ سختگیرانهٔ فیلدها:
-لیستِ سفیدِ رمزها، طولِ دقیقِ کلیدِ SS-2022، الزامِ uTLS برای REALITY، بررسیِ قالبِ
-`short-id` و کلیدِ عمومی، و درجِ کاملِ transport (`ws` / `grpc` / `h2` / `http` /
-`httpupgrade` / `xhttp`). مواردی که یک کلاینت نمی‌تواند بیان کند **حذف** می‌شوند، نه
-اینکه بی‌صدا تنزل داده شوند — کانفیگِ تنزل‌یافته معتبر به نطر می‌رسد ولی هرگز وصل نمی‌شود.
-۶) **اعتبارسنجی** — `sing-box check` و `mihomo -t` روی هر شش فایلِ تولیدشده.
-**هر شکستی اجرا را متوقف می‌کند**، پس نسخهٔ خراب هرگز روی نسخهٔ سالم نوشته نمی‌شود.
-۷) **انتشار** — GitHub Actions هر حدود ۱۵ دقیقه نتایج را commit می‌کند؛ از طریق jsDelivr CDN سرو می‌شود.
+# ✅ هر انتشار با کلاینت‌های واقعی بررسی می‌شود
 
-### ⏱️ زمان‌بندیِ مقاومِ ۱۵ دقیقه‌ای
+**یک** ورودیِ خراب باعث می‌شود کلاینت **کلِ فایل** را رد کند — پس خروجیِ «تقریباً معتبر»
+هیچ ارزشی ندارد. پیش از هر انتشار، هر `clash.yaml` و `singbox.json`ِ تولیدشده با همان
+باینری‌هایی پارس می‌شود که خودتان اجرا می‌کنید:
 
-زمان‌بندیِ `schedule:` در گیت‌هاب «تلاشِ حداکثری» است و در ساعاتِ شلوغ اغلب تأخیر
-می‌خورد یا اصلاً اجرا نمی‌شود. برای تضمینِ تواترِ پایدار، این ریپو از رویکردِ
-**سه‌لایه** استفاده می‌کند:
+```bash
+sing-box check -c <file>      # sing-box 1.13.14
+mihomo -t -f <file>           # mihomo   v1.19.29
+```
 
-۱) **cron با تواترِ بالا** (`*/5 * * * *`) — شانسِ بیشتر برای اجرای واقعی.
-۲) **دروازهٔ زمانی** — اگر `index.json` در کمتر از ۱۳ دقیقهٔ اخیر به‌روز شده باشد، هر
-تیک زود خارج می‌شود؛ پس کارِ سنگین فقط هر ~۱۵ دقیقه انجام می‌شود.
-۳) **fallback با `repository_dispatch`** — سرورِ همیشه‌روشنِ ربات هر ۱۵ دقیقه رویدادِ
-`aggregate-now` می‌فرستد و اجرا را تضمین می‌کند، حتی اگر cron حذف شود.
-اجرای دستیِ `workflow_dispatch` (با گزینهٔ `force`) هم پشتیبانی می‌شود.
+هر دو باینری در زمانِ دانلود داخلِ ورک‌فلو **به نسخه پین شده و با SHA256 راستی‌آزمایی
+می‌شوند**. اگر هر فایلی در اعتبارسنجی رد شود، **اجرا متوقف می‌شود و هیچ چیز کامیت
+نمی‌شود** — انتشارِ سالمِ قبلی دقیقاً سرِ جای خودش می‌ماند.
+
+> ⚠️ **معتبر بودنِ ساختاری با کار کردن یکی نیست.** ورودی‌هایی که ساختارشان شکسته است
+> (UUIDِ صفر، `App not supported`، رمزنگاری‌های پشتیبانی‌نشده، کلیدهای خرابِ REALITY) حذف
+> می‌شوند — اما یک کانفیگ با نحوِ کاملاً درست هم می‌تواند مرده باشد. آن پرسشِ دیگری است و
+> جداگانه توسطِ [آبشارِ L3 در بالا](#-does-it-actually-work) پاسخ داده می‌شود.
+
+## 🏷️ نام‌های پایدار و مشتق‌شده از محتوا
+
+هر remark به `{CC} {flag} | @Raydikalx | {id}` بازنویسی می‌شود که در آن `{id}` برابرِ
+`sha256(dedup-key)[:6]` است — **از خودِ کانفیگ مشتق می‌شود، نه از جایگاهش در فهرست**. پس
+یک سرورِ یکسان همیشه همان برچسب را می‌گیرد و نامِ ورودی‌ها در کلاینتِ شما بینِ به‌روزرسانی‌ها
+پایدار می‌ماند، به‌جای اینکه هر ۱۵ دقیقه دوباره درهم شود.
+
+---
+
+# 🗂️ ساختار ریپازیتوری
+
+**فقط یک شاخه — `main`.** کدِ منبع و خروجیِ منتشرشده کنارِ هم روی شاخهٔ پیش‌فرض زندگی
+می‌کنند، یعنی دقیقاً همان چیزی که بازدیدکننده هنگامِ بازکردنِ ریپازیتوری می‌بیند.
+
+تولیدشده توسطِ ماشین، در هر اجرا تازه می‌شود (**۴۸ فایل**):
+
+```
+verified/   configs.txt · configs_base64.txt · clash.yaml · singbox.json   هر ۳ دور را رد کرد
+fast/       configs.txt · configs_base64.txt · clash.yaml · singbox.json   verified + میانه < 800ms
+secure/     configs.txt · configs_base64.txt · clash.yaml · singbox.json   verified + forward secrecy
+all/        configs.txt · configs_base64.txt · clash.yaml · singbox.json   light + heavy، تکراری‌زدایی‌شده
+heavy/      configs.txt · configs_base64.txt · clash.yaml · singbox.json   ۱۴ منبعِ پرحجم
+light/      configs.txt · configs_base64.txt · clash.yaml · singbox.json   ۷ منبعِ گزینش‌شده
+protocols/  vless.txt · vmess.txt · trojan.txt · … (+ *_base64.txt)        تفکیک‌شده از all/
+archive/    all_broken.txt · heavy_broken.txt (+ _base64)                  آنچه رد شد
+top100.txt  ۱۰۰ کانفیگِ verified با کمترین تأخیر
+index.json  شمارش‌ها · زمان‌ها · تفکیکِ پروتکل · آدرسِ همهٔ فایل‌ها
+health.json سلامتِ هر منبع · حذفیاتِ مبدل · موقعیتِ جغرافیایی · گزارشِ کاملِ آبشار
+state.json  تاریخچهٔ غلتانِ بازدهیِ هر منبع و تصمیم‌های غیرفعال‌سازیِ خودکار
+```
+
+نوشتهٔ انسان، با تاریخچه و blameِ عادیِ گیت:
+
+```
+scripts/    خطِ لوله — core · sources · filters · converters · geo · reachability
+            realtest · pipeline · aggregate · validate · state (+ test_pipeline.py)
+.github/    ورک‌فلوی زمان‌بندی‌شده · پیکربندیِ Dependabot · قالب‌های issue
+docs/       داشبوردِ زندهٔ وضعیت (index.json / health.json را در مرورگر می‌خواند)
+README.md · README_FA.md · README_ZH.md · README_RU.md
+SECURITY.md · CONTRIBUTING.md · LICENSE
+```
+
+دو قاعده که به‌راحتی از قلم می‌افتند و خیلی مهم‌اند:
+
+- **فایلِ خالی هرگز منتشر نمی‌شود.** فایلی در `protocols/` یا `archive/` فقط وقتی ظاهر
+  می‌شود که محتوا داشته باشد. فایلِ خالی *بدتر* از ۴۰۴ است: کلاینتی که مشترکِ آن است
+  فهرستِ کارآمدش را با هیچ جایگزین می‌کند، در حالی که ۴۰۴ باعث می‌شود کلاینت‌ها همان چیزی
+  را که دارند نگه دارند.
+- **`index.json` دقیقاً همان فایل‌هایی را اعلام می‌کند که وجود دارند** — فهرستِ آدرس‌هایش
+  هرگز وعده‌ای نیست که ریپازیتوری نتواند به آن عمل کند.
+
+<a name="-how-publishing-stays-cheap-and-why-the-files-live-on-main"></a>
+
+# 🌿 چطور انتشار ارزان می‌ماند (و چرا فایل‌ها روی `main` هستند)
+
+گیت هیچ blobی را فراموش نمی‌کند. هر اجرای زمان‌بندی‌شده همان مجموعهٔ فایل‌های بزرگ را
+دوباره تولید می‌کند، و افزودنِ آن‌ها به یک شاخه به روشِ معمول یک **نسخهٔ دائمیِ جدید** از
+هر فایلِ تغییرکرده را برای همیشه به تاریخچه اضافه می‌کند. آنگاه هزینهٔ انتشار **O(تعدادِ
+اجراها)** می‌شود، بدون هیچ سقفی. با حدودِ ۹۶ اجرا در روز این یک نگرانیِ نظری نیست:
+تاریخچهٔ همین ریپازیتوری پیش از اصلاح تا **≈ ۳٫۶ گیبی‌بایت** رشد کرده بود.
+
+### ❌ راه‌حلِ غلط (امتحان شد و برگردانده شد)
+
+انتقالِ خروجی به یک **شاخهٔ orphan** که با force به‌صورتِ یک کامیتِ واحد push شود. هزینهٔ
+انتشار واقعاً به O(1) افت کرد — و پروژه بی‌سروصدا خراب شد:
+
+- **هر لینکِ اشتراکی که قبلاً کپی شده بود HTTP 404 برگرداند.** کاربری که کلاینتش به
+  `…/main/all/configs.txt` اشاره می‌کرد پیامِ خطایی نمی‌دید؛ اشتراک فقط بی‌صدا خالی می‌شد.
+- **بازدیدکننده‌ای که ریپازیتوری را باز می‌کرد هیچ کانفیگی نمی‌دید** — فقط کد. بیشترِ
+  کسانی که دنبالِ کانفیگ‌اند اصلاً نمی‌دانند شاخهٔ گیت چیست، چه رسد به اینکه باید به شاخهٔ
+  دومی سوئیچ کنند و دوباره بگردند.
+- **قابلیتِ کشف‌شدن فرو ریخت.** جست‌وجوی گیت‌هاب، صفحهٔ اصلی و موتورهای جست‌وجو همگی شاخهٔ
+  پیش‌فرض را ایندکس می‌کنند.
+- **حتی یک ریپازیتوریِ موفق در این حوزه چنین نمی‌کند.** مستقیماً بررسی شد:
+  `Epodonios/v2ray-configs`، `mahdibland/V2RayAggregator`، `Pawdroid/Free-servers` —
+  همه روی شاخهٔ پیش‌فرضشان منتشر می‌کنند.
+
+تاریخچهٔ ارزان وقتی هیچ‌کس نتواند فایل‌ها را پیدا کند هیچ ارزشی ندارد.
+
+### ✅ راه‌حلِ درست — «rolling squash» روی `main`
+
+خروجی **روی شاخهٔ پیش‌فرض** منتشر می‌شود، اما شاخه در وضعیتِ
+*تاریخچهٔ منبع + دقیقاً یک کامیتِ خروجی* نگه داشته می‌شود:
+
+1. تازه‌ترین کامیتی که `[auto-output]` **ندارد** پیدا می‌شود — **لنگر (anchor)**.
+2. یک درخت ساخته می‌شود = *درختِ لنگر* + *خروجیِ تازهٔ همین اجرا*.
+3. `git commit-tree <tree> -p <anchor>` و سپس push **با lease**.
+
+کامیتِ خروجیِ قبلی غیرقابلِ دسترس می‌شود و توسطِ زباله‌روب پاک می‌شود. این را می‌توانید
+مستقیماً از لاگ بخوانید — به‌طور دقیق یک‌درمیان است، یک کامیتِ خروجی به‌ازای هر کامیتِ
+انسانی، فارغ از اینکه در این میان چند اجرا رخ داده باشد:
+
+```
+94a939f23  bot     chore: update configs — 07:42 UTC — 10116 configs   ← تنها خروجیِ زنده
+e5a0e7dbf  human   docs: rebuild the status dashboard …
+a72b66717  bot     chore: update configs — 22:12 UTC — 10146 configs
+19b8d6cca  human   docs(security): document the branch and tag rulesets …
+```
+
+هزینهٔ انتشار **O(1)** است — در حالی که هر فایل دقیقاً همان‌جایی می‌ماند که کاربران و
+خزنده‌ها از قبل دنبالش می‌گردند.
+
+هر یک از ویژگی‌های ایمنیِ زیر با یک تستِ اجراشدنی پشتیبانی می‌شود:
+
+- **`--force-with-lease`، هرگز `--force`ِ خالی.** انتشار همان شاخه‌ای را هدف می‌گیرد که
+  انسان‌ها رویش کامیت می‌کنند، پس یک force-pushِ ساده‌لوحانه کارِ آن‌ها را پاک می‌کرد. در
+  اجرای کنترلِ منفی، یک `--force`ِ ساده تعدادِ کامیت‌های مالک روی ریموت را به **۰** رساند.
+  با lease، یک pushِ واقعاً متعارض رد می‌شود، مرحله دوباره لنگر می‌گیرد، و هم کامیتِ مالک و
+  هم خروجیِ جدید زنده می‌مانند.
+- **نگهبانِ پس‌رفتِ منبع.** هر مسیری که بینِ لنگر و نوک تفاوت دارد دسته‌بندی می‌شود؛ اگر
+  چیزی بیرون از مجموعهٔ خروجی تغییر کرده باشد، مرحله به‌جای برگرداندنِ کدِ کسی، از انتشار
+  خودداری می‌کند.
+- **آگاه به checkoutِ کم‌عمق.** `actions/checkout` با عمقِ ۱ واکشی می‌کند، پس تنها کامیتِ
+  قابلِ مشاهده معمولاً یک کامیتِ خروجی است و جست‌وجوی لنگر چیزی پیدا نمی‌کرد — و انتشار
+  برای همیشه متوقف می‌شد. این مرحله عمق را به‌تدریج زیاد می‌کند (۲ ← ۴ ← ۸ ← ۳۲) تا لنگر
+  پیدا شود. (`fetch-depth: 0` رد شد: کلونِ گیگابایتی ۹۶ بار در روز.)
+- **همه‌جا fail-closed.** نبودِ خروجی، فایلِ کانفیگِ مشکوکانه کوچک، یا درختِ خالی انتشار را
+  متوقف می‌کند و انتشارِ سالمِ قبلی را سرِ جایش می‌گذارد.
+- **بدونِ بازگشت.** pushهایی که با `GITHUB_TOKEN` انجام می‌شوند اجرای ورک‌فلوی جدید را
+  تحریک نمی‌کنند، و تریگرِ `push` علاوه بر آن به `scripts/**` محدود شده که ربات هرگز در
+  آن نمی‌نویسد.
+
+### 🧊 قطعی‌بودنِ خروجی عمدی است
+
+rolling squash تاریخچه را کران‌دار می‌کند؛ قطعی‌بودن باعث می‌شود diffِ هر دور واقعاً کوچک
+بماند. سه منبعِ churnِ بی‌فایده با اندازه‌گیری پیدا و حذف شدند:
+
+| قبلاً | اکنون |
+|:--|:--|
+| برچسبِ کشور از هر منبعی که اول واکشی می‌شد گرفته می‌شد — همان سرور بینِ اجراها `RU 🇷🇺` ⇄ `US 🇺🇸` می‌شد | برچسب به **endpoint** قفل شده؛ نخستین تشخیصِ قاطع برنده و منجمد می‌شود |
+| برچسبِ remark یک **شمارندهٔ مکانی** بود — افزودنِ یک کانفیگ نامِ هر خطِ بعدش را عوض می‌کرد | برچسب `sha256(dedup-key)[:6]` است، مشتق از محتوا و مصون از جایگاه |
+| ترتیبِ خطوط از ترتیبِ پاسخِ شبکه پیروی می‌کرد | مرتب‌شده بر اساسِ dedup key — همان مجموعه کانفیگ همان فایل را بایت‌به‌بایت تولید می‌کند |
+
+قطعی‌بودن به معنای **توقفِ تغییرِ فایل‌ها نیست**؛ یعنی فایل‌ها *فقط وقتی داده تغییر کند*
+تغییر می‌کنند — و آن churnی که قبلاً *بدونِ* تغییرِ داده رخ می‌داد از بین رفته است.
+
+### 🩹 یک هشدارِ صادقانه
+
+آن ≈ ۳٫۶ گیبی‌بایتی که از قبل در تاریخچه است بازنویسی **نشد**. چون گیت‌هاب اشیا را در کلِ
+شبکهٔ fork به اشتراک می‌گذارد، بازنویسی تقریباً هیچ فضایی آزاد نمی‌کرد ولی هر کلونِ موجود
+و هر دو fork را می‌شکست. خون‌ریزی از این پس متوقف شده؛ زخمِ قدیمی عمداً دست‌نخورده رها
+شده است.
+
+---
+
+# 📊 متادیتای زنده — `index.json`
+
+```
+https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/index.json
+```
+
+شمارشِ هر دسته (یکتا / تکراری / خراب / منابعِ فعال)، تفکیکِ پروتکل، زمانِ آخرین
+به‌روزرسانی، تخمینِ زمانِ به‌روزرسانیِ بعدی، **آدرسِ همهٔ فایل‌ها** (rawِ اصلی + آینهٔ CDN)، و
+یک بلوکِ `link_policy` که می‌گوید کدام را ترجیح دهید و چرا.
+
+اگر دارید چیزی روی این ریپازیتوری می‌سازید، به‌جای hardcode کردنِ مسیرها `index.json` را
+بخوانید — آن قرارداد است، و هرگز نمی‌تواند فایلی را اعلام کند که وجود ندارد.
+
+<a name="-source-health--healthjson"></a>
+
+# 🩺 سلامتِ منابع و گزارشِ تست — `health.json`
+
+```
+https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/health.json
+```
+
+در هر اجرا بازتولید می‌شود. برای هر یک از ۲۱ منبع، `status` (`ok` / `empty` / `fail`)،
+کدِ HTTP، تعدادِ تلاش، تأخیر، تعدادِ کانفیگِ برگردانده‌شده و آخرین خطا را ثبت می‌کند — پس
+یک منبعِ مرده یا تغییرکرده بی‌درنگ دیده می‌شود، به‌جای اینکه بی‌صدا خروجی را آب کند.
+
+همین فایل بلوکِ **`cascade`** را هم دارد: اعداد از همان ماشینی می‌آیند که انتشار را تولید
+کرده، نه از این README. این همان بلوکِ عکسِ لحظه‌ایِ بالاست، به‌صورتِ خلاصه:
+
+```jsonc
+"cascade": {
+  "exit_country": { "colo": "IAD", "loc": "US",          // تست از کجا اجرا شد
+                    "source": "https://cp.cloudflare.com/cdn-cgi/trace" },
+  "layers": {
+    "l0_l1": { "in": 10118, "out": 10071, "seconds": 0.33,
+               "endpoints_unique": 8560, "dedup_saving_pct": 15.0,
+               "dropped": { "unparsable": 18, "invalid_port": 1, "invalid_uuid": 2,
+                            "unroutable_server": 16, "invalid_server": 10 } },
+    "l2":    { "in": 10071, "out": 5285, "open_pct": 52.48,
+               "open_pct_of_raw_input": 52.23, "dns_failed": 323,
+               "dns_seconds": 17.52, "tcp_seconds": 15.58, "seconds": 33.47 },
+    "l3":    { "in": 5285, "rounds": 3, "per_run_ok": [1040, 1069, 1074],
+               "ever_ok": 1231, "stable": 856, "flaky_pct": 30.46,
+               "seconds": 178.77 }
+  },
+  "buckets": { "verified": 856, "fast": 578, "secure": 495, "top": 100,
+               "top_short_by": 0, "fast_threshold_ms": 800 },
+  "total_seconds": 213.03
+}
+```
+
+سه نکته که دانستنشان می‌ارزد:
+
+- **`exit_country`** کشوری است که *تست* از آنجا اجرا شده — مهم‌ترین هشدار هنگامِ خواندنِ
+  هر نرخِ موفقیتی. فقط `loc` و `colo` ثبت می‌شوند؛ نشانیِ IPِ رانر عمداً هرگز منتشر
+  نمی‌شود.
+- **`dropped`** دلیلِ ردشدنِ هر کانفیگ را نام می‌برد، پس منبعی که شروع به فرستادنِ آشغال
+  کند دیده می‌شود، نه اینکه فقط بی‌صدا خروجی را کوچک کند.
+- **`per_run_ok` در برابرِ `stable`** بی‌ثباتی را مستقیم نشان می‌دهد. `stable` فقط
+  کانفیگ‌هایی را می‌شمارد که *هر* دور را رد کرده‌اند — و `verified/` از همین ساخته می‌شود.
+
+## 📈 داشبوردِ زنده
+
+**<https://0xradikal.github.io/Free-v2ray-Configs/>**
+
+یک صفحهٔ کاملاً خودبسنده که `index.json` و `health.json` را در مرورگرِ شما واکشی می‌کند و
+آبشار، دسته‌ها، سلامتِ هر منبع، تفکیکِ جغرافیایی و حذفیاتِ مبدل را رسم می‌کند. **هیچ**
+درخواستِ بیرونی نمی‌فرستد — نه CDN، نه ردیاب، نه فونت — و اگر raw در دسترس نباشد به‌صورتِ
+خودکار به آینهٔ jsDelivr برمی‌گردد.
+
+---
+
+# ⚙️ چطور کار می‌کند
+
+1. **واکشی** — ۲۱ منبع به‌صورتِ هم‌زمان دانلود می‌شوند، با تشخیصِ خودکارِ base64/متنِ ساده.
+   در خطاهای گذرا دوباره تلاش می‌کند، اما روی ۴xx سریع شکست می‌خورد تا یک آدرسِ مرده
+   *گزارش* شود، نه اینکه بی‌صدا تا ابد دوباره تلاش شود.
+2. **پاک‌سازی** — حذفِ ورودی‌های ساختگی و ساختاراً خراب (UUIDِ صفر،
+   `App not supported`، پراکسیِ خالی، سرورهای غیرقابلِ مسیریابی).
+3. **تکراری‌زدایی** — اثرانگشتِ هویتِ سرور با آگاهی از CDN، پس میزبانی که پشتِ IPهای چرخانِ
+   CDN است به یک ورودیِ واحد جمع می‌شود، نه اینکه ده‌ها بار ظاهر شود.
+4. **برچسب‌گذاری** — هر remark به `{CC} {flag} | @Raydikalx | {id}` بازنویسی می‌شود با
+   `{id}`ِ مشتق از محتوا و برچسبِ کشورِ قفل‌شده به endpoint.
+5. **تبدیل** — ترجمهٔ طرح‌واره برای هر کلاینت با اعتبارسنجیِ سخت‌گیرانهٔ فیلدها: فهرستِ سفیدِ
+   cipherها، طولِ کلیدِ SS-2022، uTLS برای REALITY، بررسیِ قالبِ `short-id` / کلیدِ عمومی، و
+   انتشارِ کاملِ transport (`ws` / `grpc` / `h2` / `http` / `httpupgrade` / `xhttp`).
+   ورودی‌هایی که کلاینت نمی‌تواند بیانشان کند **حذف می‌شوند، نه اینکه بی‌صدا تنزل داده
+   شوند** — یک کانفیگِ تنزل‌یافته معتبر به نظر می‌رسد و هرگز وصل نمی‌شود.
+6. **راستی‌آزمایی** — `sing-box check` + `mihomo -t` روی هر فایلِ تولیدشده. **هر شکستی
+   اجرا را متوقف می‌کند.**
+7. **تست** — آبشارِ L0→L3 واقعاً از طریقِ پراکسی‌ها وصل می‌شود، سه بار، و `verified/`،
+   `fast/`، `secure/` و `top100.txt` را می‌سازد.
+8. **انتشار** — کامیتِ rolling-squash روی `main`، به‌علاوهٔ purge کردنِ jsDelivr.
+
+## ⏱️ زمان‌بندیِ قابلِ اتکای ~۱۵ دقیقه‌ای
+
+`schedule:`ِ کرانِ گیت‌هاب «حداکثرِ تلاش» است و در دوره‌های شلوغ مکرراً تأخیر می‌خورد یا رد
+می‌شود. برای حفظِ آهنگِ ثابت با این حال، این ریپازیتوری از **سه لایه** استفاده می‌کند:
+
+1. **کرانِ پرتکرار** (`*/5 * * * *`) — شانسِ بیشتری برای اینکه واقعاً شلیک شود.
+2. **دروازهٔ تازگی** — هر تیک بی‌درنگ خارج می‌شود اگر `index.json` کمتر از ۱۳ دقیقه پیش
+   به‌روز شده باشد، پس کارِ سنگین تقریباً هر ۱۵ دقیقه یک‌بار اجرا می‌شود: نه اجرای هدررفته،
+   نه به‌روزرسانیِ دوتایی.
+3. **پشتیبانِ `repository_dispatch`** — یک رباتِ همیشه‌روشن هر ۱۵ دقیقه رویدادِ
+   `aggregate-now` می‌فرستد و اجرا را تضمین می‌کند، حتی اگر کران کاملاً حذف شود.
+   `workflow_dispatch`ِ دستی (با `force`ِ اختیاری) هم پشتیبانی می‌شود.
+
+---
+
+# 🤝 مشارکت، امنیت، مجوز
+
+| | |
+|:--|:--|
+| 🐛 **منبعِ خراب یا کانفیگِ بد پیدا کردید؟** | یک issue باز کنید — قالب‌ها در `.github/` هستند |
+| 🔐 **سیاستِ امنیتی** | [`SECURITY.md`](SECURITY.md) |
+| 📐 **راهنمای مشارکت** | [`CONTRIBUTING.md`](CONTRIBUTING.md) |
+| 📜 **مجوز** | [MIT](LICENSE) |
 
 ## 🙌 منابع
 
-با تشکر از همهٔ نگه‌دارندگانِ منابعِ بالادست (mahdibland، peasoft، mahsanet، barry-far،
+با تشکر از همهٔ نگهدارندگانِ منابعِ بالادستی — mahdibland، peasoft، mahsanet، barry-far،
 roosterkid، 4n0nymou3، ALIILAPRO، Epodonios، V2RAYCONFIGSPOOL، ShadowException،
-w1770946466 و دیگران). این ریپازیتوری صرفاً کانفیگ‌های عمومیِ در دسترس را
-تجمیع، اعتبارسنجی و تمیزسازی می‌کند.
+w1770946466 و دیگران. این ریپازیتوری فقط کانفیگ‌های در دسترسِ عموم را گردآوری،
+تکراری‌زدایی، اعتبارسنجی و تست می‌کند. فهرستِ کامل و به‌روز به‌همراهِ سلامتِ هر منبع در
+[`health.json`](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/health.json)
+است.
 
-## 📜 سلب مسئولیت
+## 📜 سلبِ مسئولیت
 
-برای اهدافِ آموزشی و پژوهشی. هیچ تضمینی برای کیفیت/در دسترس بودن وجود ندارد.
+برای مقاصدِ آموزشی و پژوهشی. هیچ تضمینی برای در دسترس بودن یا کیفیت وجود ندارد — به
+[واقعیتِ اندازه‌گیری‌شدهٔ](#-does-it-actually-work) بالا نگاه کنید، که دقیقاً به همین دلیل
+منتشر می‌شود که لازم نباشد هیچ‌چیزِ اینجا را بر اساسِ اعتماد بپذیرید. مسئولانه و مطابقِ
+قوانینِ محلِ خودتان استفاده کنید.
 
----
+<img alt="" src="https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/assets/divider.svg">
 
-**کانال:** [@Raydikalx](https://t.me/Raydikalx) · **ربات:** [@RaydikalxBot](https://t.me/RaydikalxBot)
+<div align="center">
+
+## دو چیز این پروژه را زنده نگه می‌دارد
+
+اینجا نه ثبت‌نامی هست، نه تبلیغی، نه دیوارِ پرداختی — و هرگز هم نخواهد بود. آن دو چیزی که
+واقعاً زنده نگهش می‌دارند هیچ هزینه‌ای برای شما ندارند:
+
+<a href="https://github.com/0xRadikal/Free-v2ray-Configs"><img alt="Star the repository on GitHub" src="https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/assets/cta-star.svg"></a>
+<a href="https://t.me/Raydikalx"><img alt="Join the Telegram channel @Raydikalx" src="https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/assets/cta-telegram.svg"></a>
+
+<table>
+<tr>
+<td width="380" valign="top">
+
+**⭐ یک ستاره** تنها راهی است که کسی این پروژه را پیدا می‌کند. گیت‌هاب جست‌وجو و
+«ریپازیتوری‌های مرتبط» را بر اساسِ ستاره رتبه‌بندی می‌کند، پس یک کلیک واقعاً تعیین می‌کند
+که نفرِ بعدی که دنبالِ یک کانفیگِ کارآمد است اصلاً این صفحه را ببیند یا نه.
+
+</td>
+<td width="380" valign="top">
+
+**📣 [@Raydikalx](https://t.me/Raydikalx)** جایی است که قطعی، منبعِ مرده یا لینکِ
+تغییرکرده *پیش از* آنکه متوجه سکوتِ کلاینتتان شوید اعلام می‌شود. پرسش‌ها و گزارشِ
+کانفیگ‌های خراب هم آنجا پذیرفته می‌شود.
+
+</td>
+</tr>
+</table>
+
+</div>
+
+<img alt="" src="https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/assets/divider.svg">
+
+<div align="center">
+
+## 💜 اختیاری — یک انعام بگذارید
+
+هیچ‌چیز در این صفحه پشتِ پرداخت نیست و هرگز نخواهد بود: هر لینکِ بالا دقیقاً یکسان کار
+می‌کند، چه این بخش را بخوانید چه نخوانید. اما اگر این پروژه یک شب گشتن به‌دنبالِ کانفیگی
+که واقعاً وصل شود را برایتان صرفه‌جویی کرد، می‌توانید انعامی بفرستید. هر مبلغی قدردانی
+می‌شود — مبلغِ کوچک کاملاً خوب است.
+
+<img alt="Donate on the TRON TRC20 network" src="https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/assets/qr-donate-trc20.svg">
+<img alt="Donate on any EVM network" src="https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/assets/qr-donate-evm.svg">
+<img alt="Donate on The Open Network" src="https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/assets/qr-donate-ton.svg">
+
+</div>
+
+**TRC20 — شبکهٔ Tron**
+
+```text
+TYBumju6Mjd8JCn4RTq95Kk2HPsdcinuz5
+```
+
+**زنجیره‌های EVM — Ethereum، BSC، Polygon، Arbitrum، Base، …**
+
+```text
+0x2F6ec47e416B42C623cF81a64266EE4910a698Cf
+```
+
+**TON — The Open Network**
+
+```text
+UQBbZrE5aDsdGVi6enpf_vPuG022W4KjkJNzTDkjVEn4gmu6
+```
+
+> [!IMPORTANT]
+> فقط روی شبکه‌ای بفرستید که بالای هر نشانی نام برده شده است. هر QR دقیقاً همان نشانیِ
+> چاپ‌شده زیرش را رمزگذاری می‌کند و هیچ‌چیزِ دیگری — نه مبلغ، نه memo، نه قراردادِ توکن —
+> پس کد و متن دو راهِ خواندنِ یک چیزِ واحدند. هرکدام را بیشتر باور دارید، اسکن یا کپی کنید.
+
+<div align="center">
+
+**کانال:** [@Raydikalx](https://t.me/Raydikalx) · **ربات:** [@RaydikalxBot](https://t.me/RaydikalxBot) · **داشبورد:** [وضعیتِ زنده](https://0xradikal.github.io/Free-v2ray-Configs/)
+
+<sub>هر عددی که در این README نوشته شده یک عکسِ لحظه‌ایِ تاریخ‌دار است. اعداد زنده همیشه در
+<a href="https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/index.json"><code>index.json</code></a> و
+<a href="https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/health.json"><code>health.json</code></a> هستند.</sub>
+
+</div>
