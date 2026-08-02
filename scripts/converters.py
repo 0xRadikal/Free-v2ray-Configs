@@ -139,10 +139,41 @@ SS2022_KEY_BYTES: Dict[str, int] = {
 }
 
 # ── ShadowsocksR ──────────────────────────────────────────────────────────────
-#: ssr تنها پروتکلی است که **فقط** در mihomo بیان‌شدنی است: sing-box آن را در
-#: نسخهٔ ۱.۶.۰ حذف کرده و امروز یک stub ثبت می‌کند که خطای «ShadowsocksR is
-#: deprecated and removed in sing-box 1.6.0» می‌دهد و **کل** سند را رد می‌کند.
-#: پس ssr عمداً و به‌صورتِ مستند فقط به Clash می‌رود (فاز C11، بندِ ۲.۳).
+#: 🔄 بازنگریِ سیاست — ۲۰۲۶-۰۸-۰۲ (جایگزینِ سیاستِ فازِ C11، بندِ ۲.۳)
+#:
+#: سیاستِ پیشین: «ssr فقط به clash.yaml می‌رود، چون sing-box آن را در ۱.۶.۰
+#: حذف کرده». نیمهٔ اولِ آن جمله دربارهٔ sing-box هنوز درست است، ولی نتیجه‌گیری
+#: غلط بود، و این با **اجرای هستهٔ رسمیِ Hiddify v4.1.0** روی خروجیِ زندهٔ خودِ
+#: همین مخزن ثابت شد، نه با استدلال:
+#:
+#:   • Hiddify فایلِ Clash را با `xmdhs/clash2singbox` تبدیل می‌کند و در
+#:     `convert/convert.go` سطرِ `"ssr": "shadowsocksr"` در `typeMap`
+#:     **کامنت** است. نوعِ پشتیبانی‌نشده `continue` می‌شود، ولی هم‌زمان
+#:     `jerr = errors.Join(jerr, fmt.Errorf("comm: %w %v", ErrNotSupportType, …))`
+#:     خطا را انباشته می‌کند و تابع آن را در انتها برمی‌گرداند.
+#:   • `hiddify-core/v2/config/parser.go:101-104` هر خطای این تبدیل را
+#:     **کشنده** می‌گیرد: `if err != nil { return nil, … }`.
+#:   ⇒ یک نودِ ssr کلِ clash.yaml را می‌سوزاند. اندازه‌گیریِ زنده روی خروجیِ
+#:     منتشرشده: all/heavy/light هر سه `exit 1` با پیامِ
+#:     «[ClashParser] converting clash to sing-box error: comm: 不支持的类型 ssr»
+#:     و fast/secure/verified (که ssr ندارند) `exit 0`. پس همبستگی کامل بود.
+#:   ⇒ پس از حذفِ ssr، هر سه فایل `exit 0` شدند با ۱۰٬۶۵۹ / ۹٬۰۰۹ / ۲٬۵۲۳
+#:     برون‌مسیر — یعنی ۲۸ نودِ ssr داشتند ۲۲٬۱۹۱ نودِ سالم را گروگان می‌گرفتند.
+#:
+#: چرا این یک «معاوضه» نیست، بلکه **اکیداً بهتر** است؟ چون کاربرِ mihomo چیزی
+#: از دست نمی‌دهد: mihomo خودش لینکِ `ssr://` را می‌فهمد
+#: (`common/convert/converter.go`, `case "ssr":`) و همان نودها در
+#: `configs.txt`، `configs_base64.txt` و `protocols/shadowsocksr.txt` دست‌نخورده
+#: منتشر می‌شوند. تنها چیزی که تغییر می‌کند، حضورِ ssr در فایلِ **clash.yaml**
+#: است — همان فایلی که به‌خاطرش برای Hiddify کاملاً بی‌مصرف می‌شد.
+#:
+#: مجموعه‌های `SSR_CIPHERS`/`SSR_OBFS`/`SSR_PROTOCOLS` عمداً **نگه داشته
+#: شده‌اند**: `_sanitize_ssr` هنوز برای اعتبارسنجیِ لینکِ ssr در مسیرِ متنی به
+#: کار می‌رود و حذفشان یک اعتبارسنجیِ واقعی را از بین می‌برد.
+#:
+#: (متنِ تاریخی، برای ثبت: sing-box از ۱.۶.۰ یک stub ثبت می‌کند که خطای
+#: «ShadowsocksR is deprecated and removed in sing-box 1.6.0» می‌دهد و **کل**
+#: سند را رد می‌کند — به همین دلیل `_to_singbox_outbound` هم `None` می‌دهد.)
 #:
 #: هر سه مجموعهٔ زیر کلمه‌به‌کلمه از سورسِ mihomo v1.19.29 استخراج شده‌اند —
 #: هیچ مقداری حدسی نیست:
@@ -1099,23 +1130,12 @@ def _to_clash_proxy(p: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         if t == "shadowsocks":
             return {**base, "type": "ss", "cipher": p["cipher"], "password": p["password"], "udp": True}
         if t == "shadowsocksr":
-            # نامِ نوع در mihomo دقیقاً «ssr» است (adapter/parser.go:37 →
-            # `case "ssr"`). در `ShadowSocksROption` میدان‌های
-            # name/server/port/password/cipher/obfs/protocol بدونِ omitempty
-            # هستند، یعنی **الزامی**؛ obfs-param/protocol-param/udp اختیاری.
-            out = {**base, "type": "ssr",
-                   "cipher": p["cipher"], "password": p["password"],
-                   "obfs": p["obfs"], "protocol": p["protocol"],
-                   # mihomo برای ssr `ListenPacketContext` را پیاده کرده، پس
-                   # UDP واقعاً کار می‌کند و روشن‌کردنش ادعای دروغ نیست.
-                   "udp": True}
-            # پارامترِ تهی نوشته نمی‌شود: mihomo آن‌ها را با omitempty تعریف
-            # کرده و رشتهٔ تهی در obfsهایی مثلِ http_simple رفتارِ متفاوت دارد.
-            if p.get("obfs_param"):
-                out["obfs-param"] = p["obfs_param"]
-            if p.get("protocol_param"):
-                out["protocol-param"] = p["protocol_param"]
-            return out
+            # ⛔ عامدانه بیان نمی‌شود — بازبینیِ ۲۰۲۶-۰۸-۰۲، با اجرای هستهٔ رسمیِ
+            # Hiddify. توضیحِ کامل در بالای همین فایل، بخشِ «ShadowsocksR».
+            # خلاصه: نوشتنِ یک نودِ ssr در clash.yaml، **کلِ** آن فایل را برای
+            # Hiddify از کار می‌انداخت (measured: all/heavy/light هر سه exit 1)
+            # در حالی که خودِ نودها از راهِ configs.txt به mihomo می‌رسند.
+            return None
         if t == "hysteria2":
             # نام‌گذاریِ کلیدها با mihomo v1.19.29 آزمون شد (rc=0).
             out = {**base, "type": "hysteria2", "password": p["password"]}

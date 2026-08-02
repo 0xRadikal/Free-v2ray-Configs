@@ -373,7 +373,10 @@ def write_buckets(out_dir: str, buckets: Dict[str, Any]) -> Dict[str, str]:
 
     for cat in CATEGORIES:
         path = os.path.join(out_dir, cat, "configs.txt")
-        _write_lines(path, heads[cat], buckets[cat])
+        # سپرِ `#` — توضیحِ کامل در core.py، بخشِ «سپرِ `#`». عامدانه اینجا و نه
+        # داخلِ `_write_lines`: آن تابع پایین‌تر برای بدنهٔ yaml/json هم به کار
+        # می‌رود و آنجا مفهومِ «خطِ کانفیگ» وجود ندارد.
+        _write_lines(path, heads[cat], core.shield_unsupported_runs(buckets[cat]))
         written[cat] = path
         # ── چرا سه فایلِ دیگر هم لازم است ────────────────────────────────
         # سنجیده شد، حدس نیست: `validate.py` هر دایرکتوریِ دسته را که
@@ -409,7 +412,7 @@ def write_buckets(out_dir: str, buckets: Dict[str, Any]) -> Dict[str, str]:
         top_head += (f"# NOTE: only {len(buckets['top'])} configs met the bar "
                      f"this round ({short} short of {TOP_N}). The file is NOT "
                      f"padded with untested configs.\n")
-    _write_lines(top_path, top_head, buckets["top"])
+    _write_lines(top_path, top_head, core.shield_unsupported_runs(buckets["top"]))
     written["top"] = top_path
     return written
 

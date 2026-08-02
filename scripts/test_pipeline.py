@@ -7181,11 +7181,23 @@ def test_zz_c11_ssr_accepts_base64url_and_missing_padding():
 
 
 def test_zz_c11_ssr_different_password_never_merges():
+    """دو ssr با گذرواژهٔ متفاوت دو نودِ **مستقل**اند.
+
+    از بازنگریِ ۲۰۲۶-۰۸-۰۲ (سازگاریِ Hiddify) ssr دیگر به clash.yaml نمی‌رود،
+    پس این ویژگی جایی سنجیده می‌شود که هنوز هست: کلیدِ یکتاییِ خطِ متنی (که
+    `configs.txt` و `protocols/shadowsocksr.txt` بر پایهٔ آن ساخته می‌شوند) و
+    شمارشِ مستقلِ افت‌ها.
+    """
     a = _c11_ssr(host="dup.example.com", port=9001, pwd="AAA")
     b = _c11_ssr(host="dup.example.com", port=9001, pwd="BBB")
     assert core.dedup_key(a) != core.dedup_key(b)
+    pa, pb = converters.parse_proxy(a), converters.parse_proxy(b)
+    assert pa and pb and pa["password"] != pb["password"]
     nodes, _ = _c11_clash([a, b])
-    assert len(nodes) == 2 and nodes[0]["name"] != nodes[1]["name"]
+    assert nodes == []
+    st = converters.drop_stats().get("clash", {})
+    assert st["by_reason"].get("not_expressible") == 2, st
+    assert st["by_protocol"].get("shadowsocksr") == 2, st
 
 
 def test_zz_c11_ssr_name_comes_from_fragment_then_brand_fallback():
@@ -7196,27 +7208,45 @@ def test_zz_c11_ssr_name_comes_from_fragment_then_brand_fallback():
         converters._branded_fallback("ssr")
 
 
-def test_zz_c11_ssr_clash_node_carries_every_required_mihomo_field():
+def test_zz_c11_ssr_is_not_expressible_in_clash_but_stays_fully_parsed():
     """
-    در `ShadowSocksROption` میدان‌های name/server/port/password/cipher/obfs/
-    protocol بدونِ omitempty هستند، یعنی **الزامی**. نامِ نوع هم دقیقاً «ssr»
-    است (adapter/parser.go:37).
+    🔒 قفلِ سیاستِ ۲۰۲۶-۰۸-۰۲: ssr **نباید** در clash.yaml بیاید.
+
+    علت با اجرای هستهٔ رسمیِ Hiddify v4.1.0 ثابت شد: `clash2singbox` سطرِ
+    `"ssr": "shadowsocksr"` را در `typeMap` کامنت کرده و برای نوعِ
+    پشتیبانی‌نشده خطا **انباشته** می‌کند، و `hiddify-core/v2/config/parser.go`
+    هر خطای این تبدیل را کشنده می‌گیرد ⇒ یک نودِ ssr کلِ فایل را می‌سوزاند.
+
+    ولی خودِ تجزیه باید **کامل** بماند: لینکِ ssr همچنان در `configs.txt` و
+    `protocols/shadowsocksr.txt` منتشر می‌شود و mihomo آن را مستقیم می‌فهمد
+    (`common/convert/converter.go`, `case "ssr":`). پس همان میدان‌هایی که
+    `ShadowSocksROption` الزامی می‌داند باید از تجزیه بیرون بیایند.
     """
-    nodes, _ = _c11_clash([_c11_ssr(obfsparam="cdn.example.org",
-                                    protoparam="64", frag="N1")])
-    assert len(nodes) == 1
-    n = nodes[0]
-    assert n["type"] == "ssr"
+    ln = _c11_ssr(obfsparam="cdn.example.org", protoparam="64", frag="N1")
+    p = converters.parse_proxy(ln)
+    assert p and p["type"] == "shadowsocksr"
     for k in ("name", "server", "port", "password", "cipher", "obfs",
               "protocol"):
-        assert k in n and n[k] != "", (k, n)
-    assert n["udp"] is True
-    assert n["obfs-param"] == "cdn.example.org"
-    assert n["protocol-param"] == "64"
+        assert p.get(k) not in (None, ""), (k, p)
+    assert p["obfs_param"] == "cdn.example.org"
+    assert p["protocol_param"] == "64"
+    # …ولی به clash نمی‌رسد، و این افت **ثبت** می‌شود نه خاموش.
+    assert converters._to_clash_proxy(p) is None
+    nodes, _ = _c11_clash([ln])
+    assert nodes == []
+    st = converters.drop_stats().get("clash", {})
+    assert st["by_reason"].get("not_expressible") == 1, st
+    assert st["by_protocol"].get("shadowsocksr") == 1, st
 
 
 def test_zz_c11_ssr_optional_params_are_omitted_not_emptied():
-    """رشتهٔ تهی در obfs-param رفتارِ mihomo را عوض می‌کند؛ باید **نیاید**."""
+    """پارامترِ اختیاریِ تهی باید **غایب** باشد، نه رشتهٔ تهی.
+
+    پس از بازنگریِ ۲۰۲۶-۰۸-۰۲ ssr به clash نمی‌رود، پس این تمایز آنجا سنجیده
+    می‌شود که هنوز معنا دارد: خروجیِ `parse_proxy`. اهمیتش پابرجاست، چون
+    mihomo همین پارامترها را از خودِ لینکِ `ssr://` می‌خواند و رشتهٔ تهی در
+    obfsهایی مثلِ `http_simple` رفتارِ متفاوت می‌سازد.
+    """
     cases = {
         "absent": (_c11_ssr(), False, False),
         "empty": (_c11_ssr(obfsparam="", protoparam=""), False, False),
@@ -7228,13 +7258,12 @@ def test_zz_c11_ssr_optional_params_are_omitted_not_emptied():
             False, False),
     }
     for label, (ln, want_o, want_p) in cases.items():
-        nodes, _ = _c11_clash([ln])
-        assert len(nodes) == 1, label
-        n = nodes[0]
-        assert ("obfs-param" in n) is want_o, (label, n)
-        assert ("protocol-param" in n) is want_p, (label, n)
-        assert "" not in [v for v in n.values() if isinstance(v, str)], (
-            label, n)
+        p = converters.parse_proxy(ln)
+        assert p and p["type"] == "shadowsocksr", label
+        assert bool(p.get("obfs_param")) is want_o, (label, p)
+        assert bool(p.get("protocol_param")) is want_p, (label, p)
+        # و در هیچ حالتی به clash نمی‌رسد.
+        assert converters._to_clash_proxy(p) is None, label
 
 
 def test_zz_c11_ssr_must_never_appear_in_singbox():
@@ -7249,7 +7278,9 @@ def test_zz_c11_ssr_must_never_appear_in_singbox():
     p = converters.parse_proxy(ln)
     assert p and p["type"] == "shadowsocksr"
     assert converters._to_singbox_outbound(p) is None
-    assert converters._to_clash_proxy(p) is not None
+    # از ۲۰۲۶-۰۸-۰۲ همین حکم برای clash هم برقرار است — به همان دلیلِ ریشه‌ای
+    # (تبدیل‌کنندهٔ Hiddify نوعِ ssr را نمی‌شناسد و خطایش کشنده است).
+    assert converters._to_clash_proxy(p) is None
     doc = json.loads(converters.build_singbox_json([ln]))
     assert doc["outbounds"] == [{"type": "direct", "tag": "direct"}], doc
     st = converters.drop_stats().get("singbox", {})
@@ -7257,8 +7288,13 @@ def test_zz_c11_ssr_must_never_appear_in_singbox():
     assert st["by_protocol"].get("shadowsocksr") == 1, st
 
 
-def test_zz_c11_ssr_mixed_input_keeps_singbox_intact():
-    """ssr نباید هیچ همسایه‌ای را در singbox بیندازد — دو حلقه مستقل‌اند."""
+def test_zz_c11_ssr_mixed_input_keeps_neighbours_intact():
+    """ssr نباید هیچ همسایه‌ای را بیندازد — نه در singbox، نه در clash.
+
+    این دقیقاً همان نقصی است که در دنیای واقعی رخ داد: ۲۸ نودِ ssr باعث شدند
+    `clash.yaml` دسته‌های all/heavy/light برای Hiddify کاملاً بی‌مصرف شود
+    (۲۲٬۱۹۱ نودِ سالم گروگانِ ۲۸ نود). حالا ssr می‌افتد و همسایه‌ها می‌مانند.
+    """
     ss = ("ss://" + base64.urlsafe_b64encode(
         b"aes-256-gcm:pw@ss.example.com:8388").decode().rstrip("=") + "#SS")
     lines = [ss, _c11_ssr(frag="R1"), ss.replace("ss.example", "ss2.example"),
@@ -7266,15 +7302,27 @@ def test_zz_c11_ssr_mixed_input_keeps_singbox_intact():
     nodes, _ = _c11_clash(lines)
     doc = json.loads(converters.build_singbox_json(lines))
     kinds = [o["type"] for o in doc["outbounds"]]
-    assert sorted(n["type"] for n in nodes) == ["ss", "ss", "ssr", "ssr"], nodes
+    assert sorted(n["type"] for n in nodes) == ["ss", "ss"], nodes
     assert kinds.count("shadowsocks") == 2, kinds
     assert "shadowsocksr" not in kinds and "ssr" not in kinds, kinds
 
 
-def test_zz_c11_ssr_group_name_collision_gets_suffix():
-    nodes, doc = _c11_clash([_c11_ssr(frag=converters.GROUP_MAIN)])
+def test_zz_c11_group_name_collision_gets_suffix():
+    """برخوردِ نامِ نود با نامِ گروه باید پسوند بگیرد.
+
+    این منطق **عمومی** است و به ssr ربطی ندارد؛ چون ssr دیگر نودِ clash تولید
+    نمی‌کند (بازنگریِ ۲۰۲۶-۰۸-۰۲)، همان قاعده با یک پروتکلِ بیان‌شدنی سنجیده
+    می‌شود تا پوشش از دست نرود.
+    """
+    ss = ("ss://" + base64.urlsafe_b64encode(
+        b"aes-256-gcm:pw@ss.example.com:8388").decode().rstrip("=")
+        + "#" + converters.GROUP_MAIN)
+    nodes, doc = _c11_clash([ss])
     assert nodes[0]["name"] == f"{converters.GROUP_MAIN} #1", nodes
     assert converters.GROUP_MAIN in [g["name"] for g in doc["proxy-groups"]]
+    # و ssr اصلاً نودی نمی‌سازد که بخواهد با نامِ گروه برخورد کند.
+    ssr_nodes, _ = _c11_clash([_c11_ssr(frag=converters.GROUP_MAIN)])
+    assert ssr_nodes == []
 
 
 def test_zz_c11_ssr_build_is_deterministic():
@@ -8441,6 +8489,374 @@ def test_zzz_p3_singbox_and_mihomo_verify_archive_before_extract_and_binary_befo
             f"{bin_key} یا installِ {tool} در بدنه نیست"
         assert pos_verify < pos_install, \
             f"تأییدِ باینریِ {tool} پس از install آمده است"
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# فازِ HD — سازگاریِ Hiddify (۲۰۲۶-۰۸-۰۲)
+# ══════════════════════════════════════════════════════════════════════════════
+# گزارشِ میدانیِ مالکِ مخزن: «ساب top100 را روی گوشی با آخرین نسخهٔ Hiddify تست
+# کردم، وصل نشد و ارورِ failed to start background core داد.»
+#
+# بازتولید و ریشه‌یابی با **خودِ باینریِ رسمیِ hiddify-core v4.1.0** (همان هسته‌ای
+# که داخلِ اپ اجرا می‌شود) روی خروجیِ زندهٔ همین مخزن انجام شد. سه نقص پیدا شد و
+# هر سه با اجرا — نه با استدلال — تأیید شدند:
+#
+#   ۱) `packetEncoding=none` در ۲۷ خطِ vless ⇒ `panic: unknown value` در
+#      `protocol/vless/outbound.go:86` ⇒ **کلِ** پروفایل ساقط (exit 2).
+#   ۲) دنبالهٔ `ssr://` در متنِ اشتراک ⇒ `spliter.go` آن را به تکهٔ قبلی می‌چسباند
+#      و نامِ یک نودِ سالم را آلوده می‌کند (نقصِ خاموش، exit 0).
+#   ۳) نودِ `ssr` در `clash.yaml` ⇒ `clash2singbox` خطا انباشته می‌کند و
+#      `parser.go:102` آن را کشنده می‌گیرد ⇒ کلِ فایل ساقط (exit 1).
+#
+# تست‌های زیر هر سه قاعده را قفل می‌کنند. اعدادِ ذکرشده اندازه‌گیریِ واقعی‌اند.
+
+
+def _hd_vless(query: str, frag: str = "T") -> str:
+    return f"vless://uuid-1@example.com:443?{query}#{frag}"
+
+
+def _hd_vmess(obj: dict, frag: str = "") -> str:
+    enc = base64.b64encode(
+        json.dumps(obj, ensure_ascii=False, separators=(",", ":")).encode()
+    ).decode()
+    return "vmess://" + enc + frag
+
+
+def _hd_vmess_obj(line: str) -> dict:
+    body = line[len("vmess://"):].split("#")[0]
+    return json.loads(base64.b64decode(body + "=" * (-len(body) % 4)).decode())
+
+
+# ── ۱) نرمال‌سازیِ packet_encoding ────────────────────────────────────────────
+
+def test_zzz_hd_packet_encoding_none_is_stripped_from_vless():
+    """`none` در sing-box وجود ندارد و باعثِ panic می‌شود ⇒ باید حذف شود."""
+    got = core._normalize_packet_encoding(
+        _hd_vless("type=ws&packetEncoding=none&sni=a.example"))
+    assert got == _hd_vless("type=ws&sni=a.example")
+    assert "packetEncoding" not in got
+
+
+def test_zzz_hd_packet_encoding_supported_values_are_preserved_byte_for_byte():
+    """`xudp` و `packetaddr` تنها مقادیرِ رسیدنی از راهِ URL‌اند و باید بمانند.
+
+    اندازه‌گیریِ زنده: ۱۲۴ خط `packetEncoding=xudp` داشتند و هیچ‌کدام نباید
+    تغییر کنند — churnِ بی‌دلیل یعنی بازنویسیِ فایل در هر دور.
+    """
+    for val in ("xudp", "packetaddr"):
+        ln = _hd_vless(f"type=ws&packetEncoding={val}&sni=a")
+        assert core._normalize_packet_encoding(ln) == ln, val
+
+
+def test_zzz_hd_packet_encoding_key_normalisation_matches_ray2sing():
+    """کلید در ray2sing `ToLower` + حذفِ `_` می‌شود، ولی **مقدار** عیناً می‌ماند.
+
+    منبع: `ray2sing/url_schema.go::ParseUrl` →
+        data.Params[strings.ReplaceAll(strings.ToLower(key), "_", "")] = …
+    پس `PACKET_ENCODING` همان کلید است، ولی `XUDP` مقدارِ دیگری است و
+    sing-box آن را نمی‌شناسد.
+    """
+    # کلید: هر املایی که به `packetencoding` نرمال شود
+    for key in ("packetEncoding", "PacketEncoding", "PACKET_ENCODING",
+                "packet_encoding", "p_a_c_k_e_t_e_n_c_o_d_i_n_g"):
+        ln = _hd_vless(f"a=1&{key}=none&b=2")
+        assert core._normalize_packet_encoding(ln) == _hd_vless("a=1&b=2"), key
+    # مقدار: حساس به حروف ⇒ `XUDP` پشتیبانی‌شده نیست
+    assert core._normalize_packet_encoding(
+        _hd_vless("a=1&packetEncoding=XUDP")) == _hd_vless("a=1")
+    # مقدارِ percent-encode شده باید decode و سپس داوری شود
+    assert core._normalize_packet_encoding(
+        _hd_vless("a=1&packetEncoding=%6eone")) == _hd_vless("a=1")
+    assert core._normalize_packet_encoding(
+        _hd_vless("a=1&packetEncoding=%78udp")) == _hd_vless(
+            "a=1&packetEncoding=%78udp")
+
+
+def test_zzz_hd_packet_encoding_repeated_keys_follow_go_join_semantics():
+    """`url.Values` مقادیرِ یک کلید را با `,` می‌چسباند ⇒ نتیجه نامعتبر است.
+
+    و وقتی دو املای مختلف به یک کلیدِ نرمال‌شده می‌رسند، ترتیبِ پیمایشِ mapِ Go
+    تصادفی است؛ پس اگر **هر کدام** نامعتبر باشد، همه حذف می‌شوند تا نتیجه
+    قطعی بماند.
+    """
+    assert core._normalize_packet_encoding(
+        _hd_vless("packetEncoding=xudp&packetEncoding=none")) == \
+        "vless://uuid-1@example.com:443#T"
+    assert core._normalize_packet_encoding(
+        _hd_vless("packetEncoding=xudp&packet_encoding=none")) == \
+        "vless://uuid-1@example.com:443#T"
+    # …ولی وقتی هر دو معتبرند، هیچ ابهامی نیست و دست نمی‌خورند.
+    both_ok = _hd_vless("packetEncoding=xudp&packet_encoding=packetaddr")
+    assert core._normalize_packet_encoding(both_ok) == both_ok
+
+
+def test_zzz_hd_packet_encoding_go_parsequery_skips_are_left_untouched():
+    """جفتی که Go اصلاً وارد map نمی‌کند، برای ray2sing نامرئی است ⇒ بی‌خطر.
+
+    `net/url.parseQuery`: جفتِ حاویِ `;` را رد می‌کند و خطای `QueryUnescape`
+    (مثلاً `%zz`) هم باعثِ `continue` می‌شود. چون این‌ها به هسته نمی‌رسند،
+    دست‌کاری‌شان فقط churn است.
+    """
+    for q in ("a=1&packetEncoding=%zz", "a=1&packetEncoding=none;x",
+              "a=1&packet%zzEncoding=none"):
+        ln = _hd_vless(q)
+        assert core._normalize_packet_encoding(ln) == ln, q
+
+
+def test_zzz_hd_packet_encoding_only_in_query_not_in_fragment_or_other_schemes():
+    """fragment نامِ نود است و هرگز پارامتر نیست؛ بقیهٔ scheme‌ها هم دست‌نخورده."""
+    frag_only = "vless://uuid-1@example.com:443#packetEncoding=none"
+    assert core._normalize_packet_encoding(frag_only) == frag_only
+    # fragmentِ حاویِ `?` نباید کوئری تلقی شود
+    assert core._normalize_packet_encoding(
+        "vless://u@h:443?a=1&packetEncoding=none#tag?x=1") == \
+        "vless://u@h:443?a=1#tag?x=1"
+    for other in ("trojan://p@h:443?packetEncoding=none#T",
+                  "ss://YWVzOnB3@h:443?packetEncoding=none#T",
+                  "hysteria2://p@h:443?packetEncoding=none#T"):
+        assert core._normalize_packet_encoding(other) == other, other
+
+
+def test_zzz_hd_packet_encoding_vmess_uses_verbatim_json_key():
+    """`ray2sing/vmess.go:61` کلید را **عیناً** (camelCase) از JSON می‌خواند.
+
+    و `convertToStrings` هر مقدارِ غیررشته‌ای را با `fmt.Sprintf("%v")` به متن
+    بدل می‌کند (`null` → `<nil>`)، پس فقط رشتهٔ دقیقِ xudp/packetaddr بی‌خطر است.
+    اندازه‌گیریِ زنده: از ۳٬۲۵۷ خطِ vmess، **صفر** مورد این کلید را داشت ⇒ این
+    شاخه امروز خاموش است و صفر churn تولید می‌کند؛ دفاعی نوشته شده است.
+    """
+    base_obj = {"v": "2", "ps": "n", "add": "h", "port": "443", "id": "u"}
+    for bad in ("none", "", "NONE", None, 0, True):
+        ln = _hd_vmess({**base_obj, "packetEncoding": bad})
+        out = core._normalize_packet_encoding(ln)
+        assert out != ln, bad
+        obj = _hd_vmess_obj(out)
+        assert "packetEncoding" not in obj, bad
+        assert {k: obj[k] for k in base_obj} == base_obj, bad
+    for good in ("xudp", "packetaddr"):
+        ln = _hd_vmess({**base_obj, "packetEncoding": good})
+        assert core._normalize_packet_encoding(ln) == ln, good
+    # کلیدِ snake_case را ray2sing در vmess **نمی‌خواند** ⇒ نباید دست بخورد
+    ln = _hd_vmess({**base_obj, "packet_encoding": "none"})
+    assert core._normalize_packet_encoding(ln) == ln
+    # fragment (اگر منبع گذاشته باشد) باید حفظ شود
+    ln = _hd_vmess({**base_obj, "packetEncoding": "none"}, frag="#keep-me")
+    assert core._normalize_packet_encoding(ln).endswith("#keep-me")
+    # vmessِ غیر-JSON (سبکِ URI) از این مسیر رد نمی‌شود
+    uri = "vmess://user@host:443?type=ws&packetEncoding=none#T"
+    assert core._normalize_packet_encoding(uri) == uri
+
+
+def test_zzz_hd_packet_encoding_runs_inside_the_single_ingestion_point():
+    """قاعده باید در `extract_valid_lines` باشد — تنها دروازهٔ ورودیِ داده.
+
+    اگر کسی آن را از زنجیرهٔ sanitizer بردارد، همین تست می‌شکند.
+    """
+    blob = "\n".join([
+        _hd_vless("type=ws&packetEncoding=none&sni=a"),
+        _hd_vless("type=ws&packetEncoding=xudp&sni=b", frag="U"),
+        "trojan://p@h:443?packetEncoding=none#K",
+    ])
+    out = core.extract_valid_lines(blob)
+    assert len(out) == 3
+    assert "packetEncoding" not in out[0]
+    assert "packetEncoding=xudp" in out[1]
+    assert "packetEncoding=none" in out[2]      # trojan: بی‌ربط، دست‌نخورده
+    # همان بلاب به شکلِ base64 هم باید همان نتیجه را بدهد
+    b64 = base64.b64encode(blob.encode()).decode()
+    assert core.extract_valid_lines(b64) == out
+
+
+def test_zzz_hd_packet_encoding_is_identity_preserving_and_idempotent():
+    """حذفِ پارامتر نباید هویت/برچسب/پروتکلِ نود را عوض کند.
+
+    اندازه‌گیریِ زنده روی ۱۰٬۷۲۷ خط: ۲۷ خط تغییر کرد و در هر ۲۷ مورد
+    `dedup_key`، `stable_label` و `protocol_of` **یکسان** ماندند ⇒ نه dedup
+    به‌هم می‌ریزد، نه نامِ نود در هر دور جابه‌جا می‌شود.
+    """
+    src = _hd_vless("type=ws&packetEncoding=none&sni=a.example&fp=chrome")
+    out = core._normalize_packet_encoding(src)
+    assert out != src
+    assert core.dedup_key(out) == core.dedup_key(src)
+    assert core.stable_label(out) == core.stable_label(src)
+    assert core.protocol_of(out) == core.protocol_of(src)
+    assert core._normalize_packet_encoding(out) == out      # idempotent
+    assert core._normalize_packet_encoding("") == ""
+
+
+# ── ۲) سپرِ `#` برای scheme‌های خارج از prefixهای ray2sing ────────────────────
+
+def test_zzz_hd_ray2sing_prefix_set_matches_the_pinned_source():
+    """قفلِ مجموعهٔ prefix روی `ray2sing/convert.go` @ f58be84.
+
+    اگر روزی کسی این مجموعه را دستکاری کند بی‌آنکه منبع را دوباره بخواند،
+    سپر یا بیش‌ازحد شلیک می‌کند یا اصلاً نمی‌کند. پس عیناً تثبیت می‌شود.
+    """
+    expected = {
+        # configTypes
+        "vmess://", "vless://", "trojan://", "svmess://", "svless://",
+        "strojan://", "ss://", "tuic://", "hysteria://", "hysteria2://",
+        "hy2://", "ssh://", "naive://", "ssconf://", "direct://", "socks://",
+        "phttp://", "phttps://", "http://", "https://", "xvmess://",
+        "xvless://", "xtrojan://", "xdirect://", "mieru://", "mierus://",
+        "psiphon://", "dnstt://",
+        # endpointParsers
+        "wg://", "wireguard://", "warp://", "awg://", "[Interface]",
+    }
+    assert set(core.RAY2SING_PREFIXES) == expected
+    # `ssr://` عمداً بیرون است — sing-box از ۱.۶.۰ آن را حذف کرده.
+    assert "ssr://" not in core.RAY2SING_PREFIXES
+    # و `ss://` نجاتش نمی‌دهد، چون تطبیق عینی است.
+    assert not core.is_ray2sing_prefixed("ssr://AAAA")
+    assert core.is_ray2sing_prefixed("ss://AAAA")
+    # تطبیق حساس به حروف است، دقیقاً مثلِ regexِ `(?m)^(?:…)`
+    assert not core.is_ray2sing_prefixed("VLESS://x@h:443")
+
+
+def test_zzz_hd_shield_is_inserted_once_per_maximal_run():
+    """یک سپر برای هر **دنباله**، نه برای هر خط.
+
+    چون تکهٔ `#` تا prefixِ بعدی ادامه دارد، یک سپر کلِ دنباله را می‌بلعد.
+    """
+    v = "vless://u@h:443#A"
+    lines = [v, "ssr://a", "ssr://b", "ssr://c", v.replace("#A", "#B"),
+             "ssr://d", v.replace("#A", "#C")]
+    out = core.shield_unsupported_runs(lines)
+    assert out.count(core.SHIELD_LINE) == 2
+    assert out == [v, core.SHIELD_LINE, "ssr://a", "ssr://b", "ssr://c",
+                   v.replace("#A", "#B"), core.SHIELD_LINE, "ssr://d",
+                   v.replace("#A", "#C")]
+    # هیچ خطی گم یا بازچینش نمی‌شود
+    assert [l for l in out if l != core.SHIELD_LINE] == lines
+
+
+def test_zzz_hd_shield_is_idempotent_and_respects_existing_comments():
+    """اگر خطِ پیشین از قبل `#`/`//` باشد، سپرِ اضافه لازم نیست.
+
+    `expandDecodedConfig::add()` تکه‌ای را که با `#` یا `/` شروع شود دور
+    می‌اندازد، پس سرآیندِ فایل خودش سپر است.
+    """
+    once = core.shield_unsupported_runs(["vless://u@h:443#A", "ssr://a"])
+    assert core.shield_unsupported_runs(once) == once          # idempotent
+    assert core.shield_unsupported_runs(["# header", "ssr://a"]) == \
+        ["# header", "ssr://a"]
+    assert core.shield_unsupported_runs(["// note", "ssr://a"]) == \
+        ["// note", "ssr://a"]
+    # خطِ تهی نه سپر می‌خواهد نه دنباله را می‌شکند
+    assert core.shield_unsupported_runs(["vless://u@h:443#A", "", "ssr://a"]) \
+        == ["vless://u@h:443#A", "", core.SHIELD_LINE, "ssr://a"]
+    # ورودیِ بدونِ خطِ ناشناخته اصلاً تغییر نمی‌کند (صفر churn)
+    clean = ["vless://u@h:443#A", "vmess://AAAA", "ss://BBBB"]
+    assert core.shield_unsupported_runs(clean) == clean
+
+
+def test_zzz_hd_shield_line_is_inert_for_line_based_clients():
+    """سپر نباید در هیچ کلاینتی به‌عنوانِ کانفیگ خوانده شود.
+
+    v2rayNG/v2rayN/mihomo هر سه خط‌به‌خط پارس می‌کنند و خطِ ناشناخته را رد
+    می‌کنند؛ mihomo با `strings.Cut(line, "://")` تصمیم می‌گیرد، پس سپر
+    عامدانه هیچ `://` ندارد.
+    """
+    s = core.SHIELD_LINE
+    assert s.startswith("#")
+    assert "://" not in s
+    assert not core.is_proxy_config(s)
+    assert core.protocol_of(s) in (None, "")
+    assert s == s.strip() and "\n" not in s
+    # و در سرِ خط، خودش یک prefixِ دورانداختنیِ ray2sing است
+    assert s[0] in "#/"
+    # از دروازهٔ ورودی هم رد نمی‌شود (اگر خروجیِ خودمان دوباره بلعیده شود)
+    assert core.extract_valid_lines(s + "\nvless://u@h:443#A") == \
+        ["vless://u@h:443#A"]
+
+
+def test_zzz_hd_every_subscription_writer_applies_the_shield():
+    """هیچ نویسنده‌ای نباید سپر را فراموش کند — تستِ سرتاسری روی خودِ نویسنده‌ها.
+
+    این تست عمداً *فایلِ نوشته‌شده* را می‌خوانَد، نه تابعِ کمکی را: تنها
+    چیزی که کاربر می‌بیند همان فایل است.
+    """
+    import tempfile
+    ssr = "ssr://" + base64.b64encode(
+        b"h.example.com:8388:origin:aes-256-cfb:plain:cHcxMjM").decode()
+    good = "vless://u@h.example.com:443?type=ws#A"
+    lines = [good, ssr]
+
+    def _assert_shielded(text, label):
+        rows = [r for r in text.splitlines() if r.strip()]
+        for i, row in enumerate(rows):
+            if core.is_ray2sing_prefixed(row) or row.startswith(("#", "//")):
+                continue
+            assert i > 0 and rows[i - 1].startswith(("#", "//")), (label, rows)
+        assert ssr in rows, label            # نود حذف نشده، فقط سپر خورده
+
+    d = tempfile.mkdtemp(prefix="hd_shield_")
+    r = aggregate.CategoryResult()
+    r.unique = list(lines)
+    r.broken = list(lines)
+    aggregate.write_category(d, "all", r)
+    aggregate.write_archive(d, "all", r)
+    aggregate.write_protocols(d, list(lines))
+
+    for rel in ("all/configs.txt", "archive/all_broken.txt",
+                "protocols/shadowsocksr.txt"):
+        p = os.path.join(d, rel)
+        assert os.path.exists(p), rel
+        _assert_shielded(open(p, encoding="utf-8").read(), rel)
+
+    # نسخهٔ base64 نباید از نسخهٔ متنی واگرا شود
+    for rel in ("all/configs_base64.txt", "archive/all_broken_base64.txt",
+                "protocols/shadowsocksr_base64.txt"):
+        p = os.path.join(d, rel)
+        assert os.path.exists(p), rel
+        decoded = base64.b64decode(open(p, encoding="utf-8").read()).decode()
+        _assert_shielded(decoded, rel)
+        assert core.SHIELD_LINE in decoded, rel
+
+    # و مسیرِ pipeline (سطل‌های verified/fast/secure + top100)
+    d2 = tempfile.mkdtemp(prefix="hd_shield2_")
+    buckets = {c: list(lines) for c in pipeline.CATEGORIES}
+    buckets["top"] = list(lines)
+    buckets["stats"] = {
+        "rounds": 1, "verified": len(lines), "fast": len(lines),
+        "secure": len(lines), "flaky_pct": 0.0, "fast_threshold_ms": 500,
+        "top_short_by": 0,
+    }
+    written = pipeline.write_buckets(d2, buckets)
+    checked = 0
+    for key, path in written.items():
+        if not (path.endswith("configs.txt") or path.endswith("top100.txt")):
+            continue
+        _assert_shielded(open(path, encoding="utf-8").read(), key)
+        checked += 1
+    assert checked == len(pipeline.CATEGORIES) + 1, written
+
+
+# ── ۳) ssr هرگز در clash.yaml ────────────────────────────────────────────────
+
+def test_zzz_hd_clash_yaml_never_contains_ssr_and_neighbours_survive():
+    """۲۸ نودِ ssr نباید ۲۲٬۱۹۱ نودِ سالم را گروگان بگیرند.
+
+    ریشه: `clash2singbox/convert/convert.go` سطرِ `"ssr": "shadowsocksr"` را
+    در `typeMap` کامنت کرده و برای نوعِ ناشناخته
+    `jerr = errors.Join(jerr, …ErrNotSupportType…)` می‌گذارد؛
+    `hiddify-core/v2/config/parser.go:102` هر خطای این تبدیل را کشنده
+    می‌گیرد. اندازه‌گیریِ زنده: all/heavy/light هر سه exit 1 ⇒ پس از حذفِ ssr
+    هر سه exit 0 با ۱۰٬۶۵۹ / ۹٬۰۰۹ / ۲٬۵۲۳ برون‌مسیر.
+    """
+    ssr = "ssr://" + base64.b64encode(
+        b"h.example.com:8388:origin:aes-256-cfb:plain:cHcxMjM").decode()
+    ss = ("ss://" + base64.urlsafe_b64encode(
+        b"aes-256-gcm:pw@ss.example.com:8388").decode().rstrip("=") + "#SS")
+    v = "vless://11111111-1111-1111-1111-111111111111@h.example.com:443?type=ws#V"
+    doc = yaml.safe_load(converters.build_clash_yaml([ss, ssr, v]))
+    kinds = [p["type"] for p in (doc.get("proxies") or [])]
+    assert "ssr" not in kinds, kinds
+    assert sorted(kinds) == ["ss", "vless"], kinds
+    assert "ssr" not in converters.build_clash_yaml([ss, ssr, v])
+    # و نودِ ssr همچنان در مسیرِ متنی منتشر می‌شود (mihomo آن را می‌فهمد)
+    assert core.extract_valid_lines(ssr) == [ssr]
+    assert core.protocol_of(ssr) == "shadowsocksr"
 
 
 if __name__ == "__main__":

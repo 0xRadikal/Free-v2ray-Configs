@@ -365,7 +365,10 @@ def write_category(out_dir: str, cat: str, r: CategoryResult) -> None:
     """فایل‌های یک دسته (configs.txt / base64 / clash / singbox)."""
     base = os.path.join(out_dir, cat)
     header = f"# @Raydikalx — {cat.upper()} — {len(r.unique)} unique configs\n"
-    _write_text(os.path.join(base, "configs.txt"), header + "\n".join(r.unique) + "\n")
+    # سپرِ `#`: توضیحِ کامل در core.py، بخشِ «سپرِ `#`». شمارشِ سرآیند عمداً از
+    # `r.unique` گرفته می‌شود، نه از لیستِ سپرخورده — سپر «کانفیگ» نیست.
+    _write_text(os.path.join(base, "configs.txt"),
+                header + "\n".join(core.shield_unsupported_runs(r.unique)) + "\n")
     _write_text(os.path.join(base, "configs_base64.txt"),
                 core.encode_base64_subscription(r.unique))
     try:
@@ -425,7 +428,7 @@ def write_archive(out_dir: str, cat: str, r: CategoryResult) -> None:
     bb64 = os.path.join(base, f"{cat}_broken_base64.txt")
     if r.broken:
         bh = f"# @Raydikalx — {cat.upper()} BROKEN/dummy — {len(r.broken)} configs\n"
-        _write_text(btxt, bh + "\n".join(r.broken) + "\n")
+        _write_text(btxt, bh + "\n".join(core.shield_unsupported_runs(r.broken)) + "\n")
         _write_text(bb64, core.encode_base64_subscription(r.broken))
     else:
         # همان سیاستِ «فایلِ خالی منتشر نمی‌شود»: وقتی این دور هیچ کانفیگِ خرابی نبود،
@@ -483,7 +486,7 @@ def write_protocols(out_dir: str, all_unique: List[str]) -> Dict[str, int]:
         b64 = os.path.join(base, f"{proto}_base64.txt")
         if lines:
             h = f"# @Raydikalx — {proto} — {len(lines)} configs\n"
-            _write_text(txt, h + "\n".join(lines) + "\n")
+            _write_text(txt, h + "\n".join(core.shield_unsupported_runs(lines)) + "\n")
             _write_text(b64, core.encode_base64_subscription(lines))
             written += 1
         else:

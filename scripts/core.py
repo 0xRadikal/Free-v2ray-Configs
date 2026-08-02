@@ -12,6 +12,7 @@ core.py — Self-contained V2Ray config processing engine for the aggregator.
   • protocol_of()                → تشخیص پروتکل یک کانفیگ
   • try_base64_decode()          → دیکد امن base64 (با بررسی کیفیت)
   • extract_valid_lines()        → استخراج خطوط کانفیگ معتبر از یک blob
+  • _normalize_packet_encoding() → حذفِ `packetEncoding`ِ ناسازگار با sing-box
 
 منبع منطق: raydikalx/freeconfigs.py , raydikalx/fetcher.py , raydikalx/subscription.py
 (کاملاً معادل، فقط مستقل و قابل اجرا در محیط CI)
@@ -1378,6 +1379,171 @@ def _repair_control_chars(line: str) -> str:
     return repaired
 
 
+# ══════════════════════════════════════════════════════════════════════════════
+# 🩹 نرمال‌سازیِ `packetEncoding` — سازگاریِ Hiddify / sing-box
+# ══════════════════════════════════════════════════════════════════════════════
+# گزارشِ میدانیِ مالکِ مخزن: افزودنِ اشتراکِ `top100` در Hiddify (آخرین نسخه) با
+# خطای «failed to start background core» شکست می‌خورد. علت با اجرای **خودِ هستهٔ
+# رسمی** (hiddify-core v4.1.0، همان باینریِ داخلِ اپ) روی پیکرهٔ منتشرشده
+# ایزوله شد و به **یک مقدارِ پارامتر** رسید: `packetEncoding=none`.
+#
+# زنجیرهٔ علت، خط‌به‌خط از منبعِ پین‌شده (نه از حافظه):
+#
+#   ۱) `ray2sing/url_schema.go::ParseUrl` کلیدِ کوئری را نرمال می‌کند:
+#          data.Params[strings.ReplaceAll(strings.ToLower(key), "_", "")] = ...
+#      یعنی **کلید** case-insensitive و بی‌`_` می‌شود، ولی **مقدار** عیناً و
+#      حساس‌به‌حروف می‌ماند.
+#   ۲) `ray2sing/vless.go:30-32`:
+#          packetEncoding := decoded["packetencoding"]
+#          if packetEncoding == "" { packetEncoding = "xudp" }
+#      و سپس `PacketEncoding: &packetEncoding` — یک **اشاره‌گر**.
+#   ۳) `hiddify-sing-box/protocol/vless/outbound.go:76-88`:
+#          nil → xudp ، "" → هیچ‌کدام ، "packetaddr" ، "xudp" ،
+#          default → E.New("unknown packet encoding: ", options.PacketEncoding)
+#      و چون آرگومان یک `*string` است، `sing/common/format.ToString` به‌جای
+#      چاپِ مقدار **panic: unknown value** می‌دهد.
+#   ۴) `v2/config/parser.go::parseConfigContent` در پایانِ هر مسیر
+#      `libbox.CheckConfigOptions(options)` را روی **کلِ** پروفایل صدا می‌زند.
+#      پس یک خطِ بد، تمامِ اشتراک را ساقط می‌کند (اثباتِ اجرایی: ۱ کانفیگ سالم
+#      + ۱ کانفیگ بد ⇒ شکستِ کامل).
+#
+# نتیجهٔ مهم: مقدارِ `none` (که در Xray به‌معنای «بدون xudp» است) در sing-box
+# اصلاً وجود ندارد؛ معادلِ معناییِ آن رشتهٔ تهی است، و آن هم به‌خاطر بندِ ۲ از
+# مسیرِ URL **دست‌نیافتنی** است. یعنی تنها مقادیرِ عملاً پذیرفتنی از راهِ لینک،
+# دقیقاً `xudp` و `packetaddr` هستند و بس.
+#
+# چرا «حذفِ پارامتر» و نه «تبدیل به xudp»؟ حذف، رفتارِ پیش‌فرضِ ray2sing را
+# فعال می‌کند که خودش `xudp` است (vless.go:31) ⇒ همان نتیجه، ولی بدونِ آنکه ما
+# مقداری را به کانفیگِ منبع **تحمیل** کنیم؛ اگر روزی ray2sing پیش‌فرض را عوض
+# کند، خروجیِ ما همچنان «سکوت» است نه «ادعای اشتباه».
+#
+# اثباتِ صفر-پس‌رفت برای سایرِ کلاینت‌ها (خواندنِ مستقیمِ منبع، نه حدس):
+#   • v2rayNG (`VlessFmt.kt`, `FmtBase.kt`, `CoreConfigManager.kt`) → صفر رخدادِ
+#     `packetEncoding`/`xudp`/`packetaddr`؛ فهرستِ کاملِ پارامترهایی که می‌خوانَد
+#     این پارامتر را ندارد.
+#   • v2rayN (`ServiceLib/Handler/Fmt/BaseFmt.cs`) → صفر رخداد.
+#   • mihomo (`common/convert/converter.go`) → صفر رخدادِ `packet`.
+#   پس این پارامتر برای همهٔ خانواده‌های دیگرِ کلاینت **بی‌اثر** است و حذفش
+#   هیچ قابلیتی را از هیچ کاربری نمی‌گیرد.
+#
+# اندازه‌گیریِ زنده (۲۰۲۶-۰۸-۰۲، پیکرهٔ ۱۰٬۷۲۸ خطیِ `all/configs.txt`):
+#   • `packetEncoding=xudp` → ۱۲۴ خط  ⇒ دست‌نخورده می‌مانند (پشتیبانی‌شده)
+#   • `packetEncoding=none` → ۲۷ خط   ⇒ پارامتر حذف می‌شود
+#   • هیچ املای دیگری (`packet_encoding`, `PacketEncoding`, …) دیده نشد.
+#   • در ۳٬۲۵۷ خطِ `vmess://`، صفر شیء JSON کلیدِ `packetEncoding` داشت ⇒ شاخهٔ
+#     vmess امروز کاملاً **خاموش** است و صفر churn تولید می‌کند؛ عامدانه
+#     پیاده‌سازی شده چون sing-box همان اعتبارسنجی را برای vmess هم دارد
+#     (`protocol/vmess/outbound.go:74-82`) و آنجا `PacketEncoding` یک `string`
+#     ساده است ⇒ خطا به‌جای panic، ولی باز هم کلِ پروفایل را ساقط می‌کند.
+#   • جست‌وجوی ایستا در کلِ ray2sing نشان داد تنها دو نقطه این پارامتر را
+#     می‌خوانند: `vless.go:30` (کلیدِ نرمال‌شدهٔ کوئری) و `vmess.go:61` (کلیدِ
+#     عیناً camelCase از دلِ JSON). در `xrayvless/xrayvmess/xraytrojan/xraydirect`
+#     همهٔ ارجاع‌ها **کامنت** شده‌اند. پس دامنهٔ این تابع دقیقاً همین دو است.
+
+#: تنها مقادیری که sing-box از راهِ لینک می‌پذیرد. `""` عمداً اینجا نیست: از
+#: مسیرِ URL دست‌نیافتنی است (ray2sing تهی را به `xudp` بدل می‌کند).
+_PACKET_ENCODING_SUPPORTED = frozenset({"xudp", "packetaddr"})
+
+#: یک `%` که پس از آن دو رقمِ hex نیاید ⇒ `net/url.QueryUnescape` خطا می‌دهد و
+#: Go آن جفت را **کاملاً نادیده** می‌گیرد. برای هم‌رفتاریِ دقیق شبیه‌سازی شده.
+_BAD_PCT_ESCAPE_RE = re.compile(r"%(?![0-9A-Fa-f]{2})")
+
+
+def _go_query_unescape(text: str) -> Optional[str]:
+    """معادلِ `net/url.QueryUnescape`؛ در escapeٔ نامعتبر `None` می‌دهد."""
+    if _BAD_PCT_ESCAPE_RE.search(text):
+        return None
+    return urllib.parse.unquote_plus(text)
+
+
+def _strip_vless_packet_encoding(line: str) -> str:
+    """پارامترِ `packetEncoding` را از کوئریِ vless حذف می‌کند اگر نامعتبر باشد.
+
+    شبیه‌سازیِ دقیقِ `net/url.ParseQuery` + نرمال‌سازیِ کلیدِ ray2sing:
+      • جداکننده فقط `&` است؛ جفتی که `;` داشته باشد در Go رد می‌شود.
+      • کلید و مقدار percent-decode می‌شوند (`+` → فاصله).
+      • کلید lower و بدونِ `_` مقایسه می‌شود؛ مقدار عیناً.
+      • چند مقدار برای **یک کلیدِ یکسان** با `,` به‌هم می‌چسبند.
+    پارامتر تنها وقتی نگه داشته می‌شود که هر گروهِ کلیدِ نظیر، مقدارِ مؤثرش
+    دقیقاً یکی از مقادیرِ پشتیبانی‌شده باشد؛ در غیرِ این‌صورت **همهٔ** رخدادها
+    حذف می‌شوند (رفتارِ قطعی، حتی وقتی Go ترتیبِ map را تصادفی می‌پیماید).
+    """
+    head, frag_sep, frag = line.partition("#")
+    base, query_sep, query = head.partition("?")
+    if not query_sep or not query:
+        return line
+    pairs = query.split("&")
+    hits: List[int] = []
+    groups: Dict[str, List[str]] = {}
+    for i, pair in enumerate(pairs):
+        if not pair or ";" in pair:
+            continue  # Go: جفتِ تهی/دارای `;` نادیده گرفته می‌شود
+        raw_key, _eq, raw_val = pair.partition("=")
+        key = _go_query_unescape(raw_key)
+        val = _go_query_unescape(raw_val)
+        if key is None or val is None:
+            continue  # Go: خطای unescape ⇒ جفت اصلاً وارد map نمی‌شود
+        if key.lower().replace("_", "") != "packetencoding":
+            continue
+        hits.append(i)
+        groups.setdefault(key, []).append(val)
+    if not hits:
+        return line
+    if all(",".join(vals) in _PACKET_ENCODING_SUPPORTED for vals in groups.values()):
+        return line
+    drop = set(hits)
+    kept = [p for i, p in enumerate(pairs) if i not in drop]
+    new_query = "&".join(kept)
+    rebuilt = base + ("?" + new_query if new_query else "")
+    if frag_sep:
+        rebuilt += frag_sep + frag
+    return rebuilt
+
+
+def _strip_vmess_packet_encoding(line: str) -> str:
+    """کلیدِ `packetEncoding` را از JSONِ vmess حذف می‌کند اگر نامعتبر باشد.
+
+    `ray2sing/vmess.go:61` این کلید را **عیناً** (camelCase) از شیء JSON
+    می‌خوانَد و `convertToStrings` هر مقدارِ غیررشته‌ای را با `fmt.Sprintf("%v")`
+    به متن بدل می‌کند (مثلاً `null` → `<nil>`). پس تنها رشتهٔ دقیقِ `xudp` یا
+    `packetaddr` بی‌خطر است.
+    """
+    b64 = line[8:].split("#")[0].strip()
+    if not b64:
+        return line
+    try:
+        txt = decode_base64_text(b64)
+        obj = json.loads(txt) if txt is not None else None
+    except Exception:
+        return line
+    if not isinstance(obj, dict) or "packetEncoding" not in obj:
+        return line
+    value = obj["packetEncoding"]
+    if isinstance(value, str) and value in _PACKET_ENCODING_SUPPORTED:
+        return line
+    try:
+        del obj["packetEncoding"]
+        encoded = base64.b64encode(
+            json.dumps(obj, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+        ).decode("ascii")
+    except Exception:
+        return line
+    frag = line[8:].partition("#")
+    return f"vmess://{encoded}" + (frag[1] + frag[2] if frag[1] else "")
+
+
+def _normalize_packet_encoding(line: str) -> str:
+    """`packetEncoding`ِ نامعتبر را از vless/vmess برمی‌دارد (بی‌اثر برای بقیه)."""
+    if not line:
+        return line
+    scheme = line[:8].lower()
+    if scheme == "vless://":
+        return _strip_vless_packet_encoding(line)
+    if scheme == "vmess://":
+        return _strip_vmess_packet_encoding(line)
+    return line
+
+
 def extract_valid_lines(content: str) -> List[str]:
     """از یک blob (direct یا base64) خطوط کانفیگ معتبر را استخراج می‌کند."""
     if not content:
@@ -1393,19 +1559,133 @@ def extract_valid_lines(content: str) -> List[str]:
         if decoded:
             content = decoded
     # هوشمند: هر scheme:// معتبر پذیرفته می‌شود (حتی پروتکل‌های جدید)
-    # ترتیب عامدانه است: نخست نرمال‌سازیِ `&amp;`، سپس ترمیمِ بایتِ کنترلی. پس از
-    # sanitizer هیچ مرحله‌ای بایتِ کنترلی بازنمی‌گرداند ⇒ هر خطی که از این تابع
-    # بیرون می‌آید، تضمیناً بدونِ بایتِ کنترلیِ خام است.
+    # ترتیب عامدانه است: نخست نرمال‌سازیِ `&amp;` (تا کلیدهای کوئری واقعاً کلید
+    # شوند)، سپس ترمیمِ بایتِ کنترلی، و در پایان نرمال‌سازیِ `packetEncoding` که
+    # روی کوئریِ **تمیزشده** کار می‌کند. پس از sanitizer هیچ مرحله‌ای بایتِ کنترلی
+    # بازنمی‌گرداند ⇒ هر خطی که از این تابع بیرون می‌آید، تضمیناً بدونِ بایتِ
+    # کنترلیِ خام است و `packetEncoding`ِ ساقط‌کنندهٔ sing-box هم ندارد.
     return [
         line for raw in content.splitlines()
-        if (line := _repair_control_chars(_repair_amp_separator(raw.strip())))
+        if (line := _normalize_packet_encoding(
+            _repair_control_chars(_repair_amp_separator(raw.strip()))))
         and is_proxy_config(line)
     ]
 
 
+# ══════════════════════════════════════════════════════════════════════════════
+# 🛡️ سپرِ `#` — جلوگیری از «بلعیده‌شدنِ» خطوطِ ناشناخته توسطِ ray2sing
+# ══════════════════════════════════════════════════════════════════════════════
+# Hiddify اشتراکِ متنی را خط‌به‌خط نمی‌خوانَد؛ `ray2sing/spliter.go` نخست یک
+# regexِ `(?m)^(?:<prefixes>)` می‌سازد و متن را از هر prefix تا prefixِ **بعدی**
+# تکه می‌کند (`splitByPrefix`). پیامدِ مستقیم: خطی که با هیچ prefixِ شناخته‌شده
+# شروع نشود، «خطِ جدا» نیست — به تکهٔ **قبلی** می‌چسبد و چون تکهٔ قبلی یک URL
+# است، آن متن داخلِ fragment (نامِ نود) می‌نشیند.
+#
+# اثباتِ اجراییِ A/B با خودِ هستهٔ رسمی (v4.1.0) روی دادهٔ زنده: در حضورِ یک
+# دنبالهٔ `ssr://`، تگِ نودِ درست پیش از آن به این شکل درآمد —
+#     "US 🇺🇸 | @Raydikalx | D50052\nssr://MTIw…#CN 🇨🇳 … § 0"
+# یعنی نامِ یک نودِ سالم با کلِ متنِ چند خطِ ssr آلوده شد (خروجی exit 0 بود، پس
+# این نقص **خاموش** است و بدونِ اجرای هسته دیده نمی‌شد).
+#
+# چرا `ssr://`؟ مجموعهٔ prefixها در `spliter.go::buildRegex()` دقیقاً اجتماعِ
+# `configTypes` ∪ `endpointParsers` ∪ `xrayConfigTypes` ∪ {"#", "//"} است و
+# `ssr://` در هیچ‌کدام نیست (sing-box از نسخهٔ ۱.۶.۰ ShadowsocksR را حذف کرده).
+# توجه: `ss://` هم آن را نجات نمی‌دهد، چون تطبیق روی متنِ عینی است و
+# `"ssr:"` ≠ `"ss:/"`.
+#
+# راهِ حل — و این کشفِ کلیدیِ همین بررسی است: خودِ `#` یک prefix است و
+# `expandDecodedConfig::add()` هر تکه‌ای را که با `#` یا `/` شروع شود **دور
+# می‌اندازد**. پس یک خطِ `#` بلافاصله پیش از هر دنبالهٔ ناشناخته، کلِ آن دنباله
+# را به یک تکهٔ دورانداختنی تبدیل می‌کند: نه تگی آلوده می‌شود، نه نودی از دست
+# می‌رود (آن نودها از ابتدا هم برای Hiddify قابلِ استفاده نبودند).
+#
+# اثباتِ صفر-پس‌رفت برای بقیهٔ کلاینت‌ها (خواندنِ مستقیمِ منبع):
+#   • v2rayNG `AngConfigManager.parseBatchConfig` →
+#     `servers.lines().distinct().reversed().forEach { parseConfig(it) }`
+#     و `parseConfig` با `configFmtParsers.firstNotNullOfOrNull { … startsWith }`
+#     خطِ ناشناخته را `null` می‌کند ⇒ رد می‌شود، بدونِ اثر بر خطوطِ مجاور.
+#   • v2rayN `ConfigHandler.AddBatchServersCommon` →
+#     `strData.Split(NewLine)…foreach`، و `FmtHandler.ResolveConfig(str)` برای
+#     خطِ ناشناخته `null` می‌دهد ⇒ `continue`.
+#   • mihomo `convert.ConvertsV2Ray` → `strings.Cut(line, "://")`؛ خطِ `#`
+#     جداکنندهٔ `://` ندارد ⇒ `continue`.
+#   هر سه **خط‌به‌خط**اند، پس افزودنِ یک خطِ `#` برایشان کاملاً بی‌اثر است.
+#   به همین دلیل متنِ سپر عامدانه هیچ `://`ای ندارد.
+#
+# اندازه‌گیریِ زنده (۲۰۲۶-۰۸-۰۲): تنها یک scheme خارج از مجموعهٔ prefix در کلِ
+# خروجیِ منتشرشده دیده شد — `ssr://` با ۲۸ خط در `all`، ۲۴ در `heavy`، ۴ در
+# `light` و ۲۸ در `protocols/shadowsocksr.txt`. بقیهٔ ۳۵٬۳۱۶ خط همگی prefixِ
+# شناخته‌شده داشتند. قاعده با این حال **عمومی** نوشته شده (بر پایهٔ مجموعهٔ
+# prefix، نه فهرستِ سیاهِ `ssr`) تا اگر فردا منبعی scheme تازه‌ای بیاورد،
+# خودکار پوشش داده شود.
+
+#: مجموعهٔ prefixهای `ray2sing` — عیناً از منبعِ پین‌شده
+#: (`ray2sing/convert.go` @ f58be84: configTypes + endpointParsers +
+#: xrayConfigTypes). مقایسه مثلِ خودِ regex **حساس به حروف** است.
+RAY2SING_PREFIXES = frozenset({
+    "vmess://", "vless://", "trojan://", "svmess://", "svless://", "strojan://",
+    "ss://", "tuic://", "hysteria://", "hysteria2://", "hy2://", "ssh://",
+    "naive://", "ssconf://", "direct://", "socks://", "phttp://", "phttps://",
+    "http://", "https://", "xvmess://", "xvless://", "xtrojan://", "xdirect://",
+    "mieru://", "mierus://", "psiphon://", "dnstt://",
+    "wg://", "wireguard://", "warp://", "awg://", "[Interface]",
+})
+
+#: خطِ سپر. عامدانه بدونِ `://` تا هیچ کلاینتی آن را URL نبیند، و با متنِ
+#: خوانا تا کاربری که فایل را باز می‌کند بداند چرا اینجاست.
+SHIELD_LINE = "# --- below: schemes sing-box cannot parse (skipped by Hiddify) ---"
+
+
+#: همان مجموعه به شکلِ tuple — `str.startswith` روی tuple در C اجرا می‌شود و
+#: روی پیکرهٔ ده‌هزار خطی محسوس است.
+_RAY2SING_PREFIX_TUPLE = tuple(sorted(RAY2SING_PREFIXES))
+
+
+def is_ray2sing_prefixed(line: str) -> bool:
+    """آیا این خط با یکی از prefixهای شناخته‌شدهٔ ray2sing شروع می‌شود؟"""
+    return line.startswith(_RAY2SING_PREFIX_TUPLE)
+
+
+def _is_shield(line: str) -> bool:
+    """آیا این خط خودش یک «تکهٔ دورانداختنی» است؟ (`#` یا `//` — spliter.go)"""
+    return line.startswith("#") or line.startswith("//")
+
+
+def shield_unsupported_runs(lines: List[str]) -> List[str]:
+    """پیش از هر دنبالهٔ خطوطِ خارج از prefixهای ray2sing یک خطِ `#` می‌گذارد.
+
+    تابع **idempotent** است: اگر خطِ پیشین از قبل `#`/`//` باشد (مثلاً سرآیندِ
+    فایل یا سپرِ قبلی)، سپرِ تازه‌ای اضافه نمی‌شود. پس فراخوانیِ دوباره روی
+    خروجیِ خودش، خروجی را عوض نمی‌کند.
+    """
+    out: List[str] = []
+    prev_is_shield = False
+    for line in lines:
+        if not line.strip():
+            # خطِ تهی در ray2sing به‌عنوانِ فضای خالیِ انتهای تکهٔ قبلی
+            # `TrimSpace` می‌شود ⇒ بی‌اثر است و نه سپر می‌خواهد نه دنباله را
+            # می‌شکند.
+            out.append(line)
+            continue
+        if _is_shield(line):
+            prev_is_shield = True
+        elif is_ray2sing_prefixed(line):
+            prev_is_shield = False
+        elif not prev_is_shield:
+            out.append(SHIELD_LINE)
+            prev_is_shield = True
+        out.append(line)
+    return out
+
+
 def encode_base64_subscription(lines: List[str]) -> str:
-    """لیست کانفیگ‌ها → بلوک base64 استاندارد اشتراک (v2rayN/v2rayNG)."""
-    joined = "\n".join(lines)
+    """لیست کانفیگ‌ها → بلوک base64 استاندارد اشتراک (v2rayN/v2rayNG).
+
+    سپرِ `#` **داخلِ** همین تابع اعمال می‌شود تا نسخهٔ base64 هرگز نتواند از
+    نسخهٔ متنی واگرا شود؛ چون idempotent است، فراخوان می‌تواند بی‌خطر خودش هم
+    `shield_unsupported_runs` را صدا زده باشد.
+    """
+    joined = "\n".join(shield_unsupported_runs(lines))
     return base64.b64encode(joined.encode("utf-8")).decode("ascii")
 
 
