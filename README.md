@@ -1,26 +1,26 @@
 <div align="center">
 
-<h1>🛰️ Free V2Ray Configs</h1>
-
-<p><b>Auto-aggregated · CDN-aware deduplicated · client-validated · reachability-tested</b><br>
-Fresh subscriptions every <b>~15 minutes</b>, published on the default branch — by <a href="https://t.me/Raydikalx">@Raydikalx</a></p>
+<a href="https://github.com/0xRadikal/Free-v2ray-Configs">
+<img alt="Free V2Ray Configs — auto-aggregated, CDN-aware deduplicated, client-validated, reachability-tested" src="https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/assets/hero.svg">
+</a>
 
 <p>
 <a href="https://github.com/0xRadikal/Free-v2ray-Configs/actions/workflows/aggregate.yml"><img alt="pipeline" src="https://img.shields.io/github/actions/workflow/status/0xRadikal/Free-v2ray-Configs/aggregate.yml?style=for-the-badge&label=pipeline&logo=githubactions&logoColor=white"></a>
 <img alt="auto-update" src="https://img.shields.io/badge/auto--update-every%2015%20min-0ea5e9?style=for-the-badge">
+<a href="https://t.me/Raydikalx"><img alt="telegram subscribers" src="https://img.shields.io/endpoint?url=https%3A%2F%2Ftg.sumanjay.workers.dev%2FRaydikalx&label=telegram&color=229ED9&style=for-the-badge&logo=telegram&logoColor=white"></a>
+<a href="https://github.com/0xRadikal/Free-v2ray-Configs/stargazers"><img alt="stars" src="https://img.shields.io/github/stars/0xRadikal/Free-v2ray-Configs?style=for-the-badge&color=FBBF24&logo=github"></a>
 <a href="https://0xradikal.github.io/Free-v2ray-Configs/"><img alt="dashboard" src="https://img.shields.io/badge/live-dashboard-ec4899?style=for-the-badge&logo=githubpages&logoColor=white"></a>
-<a href="https://t.me/Raydikalx"><img alt="telegram" src="https://img.shields.io/badge/Telegram-%40Raydikalx-229ED9?style=for-the-badge&logo=telegram&logoColor=white"></a>
 </p>
 
-<p><i>Live counters — these read the repository's own <code>index.json</code> / <code>health.json</code>, so they are never stale:</i></p>
+<p><i>Every counter below is read live from this repository's own <code>index.json</code> / <code>health.json</code> — they cannot go stale:</i></p>
 
 <p>
 <img alt="configs" src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2F0xRadikal%2FFree-v2ray-Configs%2Fmain%2Findex.json&query=%24.categories.all.unique&label=configs&color=2563eb&style=for-the-badge">
 <img alt="verified" src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2F0xRadikal%2FFree-v2ray-Configs%2Fmain%2Fhealth.json&query=%24.cascade.buckets.verified&label=verified&color=16a34a&style=for-the-badge&logo=checkmarx">
 <img alt="fast" src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2F0xRadikal%2FFree-v2ray-Configs%2Fmain%2Fhealth.json&query=%24.cascade.buckets.fast&label=fast&color=f59e0b&style=for-the-badge">
 <img alt="secure" src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2F0xRadikal%2FFree-v2ray-Configs%2Fmain%2Fhealth.json&query=%24.cascade.buckets.secure&label=secure&color=7c3aed&style=for-the-badge">
-<img alt="sources live" src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2F0xRadikal%2FFree-v2ray-Configs%2Fmain%2Fhealth.json&query=%24.summary.ok&label=sources%20live&color=0891b2&style=for-the-badge">
-<img alt="license" src="https://img.shields.io/github/license/0xRadikal/Free-v2ray-Configs?style=for-the-badge&color=334155">
+<img alt="healthy sources" src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2F0xRadikal%2FFree-v2ray-Configs%2Fmain%2Fhealth.json&query=%24.summary.ok&label=sources%20live&color=0891b2&style=for-the-badge">
+<img alt="last commit" src="https://img.shields.io/github/last-commit/0xRadikal/Free-v2ray-Configs/main?style=for-the-badge&color=334155&label=updated">
 </p>
 
 <p>
@@ -29,13 +29,49 @@ Fresh subscriptions every <b>~15 minutes</b>, published on the default branch �
 
 </div>
 
----
+## 🚀 Start here — copy one line
+
+**The Top 100** is the shortest path to a working connection: it is the `verified` list
+sorted by median delay and cut at the 100 fastest, so it is small enough to import
+anywhere and every entry already answered a real request three times.
+
+```text
+https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/top100.txt
+```
+
+Want more than 100 servers? Take the full verified list instead — same standard of proof,
+just longer:
+
+```text
+https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/verified/configs_base64.txt
+```
+
+<div align="center">
+
+<a href="#-subscription-links"><img alt="Jump to the subscription links" src="https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/assets/cta-links.svg"></a>
+<a href="https://t.me/Raydikalx"><img alt="Join the Telegram channel @Raydikalx" src="https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/assets/cta-telegram.svg"></a>
+<a href="https://github.com/0xRadikal/Free-v2ray-Configs"><img alt="Star the repository on GitHub" src="https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/assets/cta-star.svg"></a>
+
+<br><br>
+
+<b>📱 On your phone? Point your client's scanner at one of these.</b>
+
+<a href="https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/top100.txt"><img alt="QR code for the top 100 list" src="https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/assets/qr-top100.svg"></a>
+<a href="https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/verified/configs_base64.txt"><img alt="QR code for the verified subscription" src="https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/assets/qr-verified.svg"></a>
+<a href="https://t.me/Raydikalx"><img alt="QR code for the Telegram channel" src="https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/assets/qr-telegram.svg"></a>
+
+<br>
+
+<sub>Each QR encodes the subscription URL itself — your client fetches a fresh list every time, it is not a frozen snapshot.</sub>
+
+</div>
+
+<img alt="" src="https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/assets/divider.svg">
 
 # ⚡ Subscription links
 
-> **In a hurry? Copy this one line into your client.** It is the most reliable list this
-> repository produces — every entry answered a real HTTP request through the proxy in
-> **all three** independent test rounds:
+> **Not sure which one to take?** Use `verified` — every entry answered a real HTTP
+> request through the proxy in **all three** independent test rounds:
 >
 > ```
 > https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/verified/configs_base64.txt
@@ -202,6 +238,12 @@ repository — so instead of hiding it, every run measures it and sorts by it.
 Each config is pushed through four stages. Every stage is cheap enough to run on the
 whole pool, and each one throws away work the next stage would have wasted:
 
+<div align="center">
+
+<img alt="The four-stage pipeline: collect, repair, dial, prove, publish" src="https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/assets/pipeline.svg">
+
+</div>
+
 | Stage | The question it asks | Cost |
 |:--|:--|:--|
 | **L0 / L1** | Is it parsable, is the endpoint unique, is it routable? | no network |
@@ -215,30 +257,30 @@ A config reaches `verified/` only if it passed **every** round — never just it
 
 <div align="center">
 
-**Snapshot: `2026-08-02 07:38:41 UTC` · run took 216 s · test ran from a 🇺🇸 US runner (Cloudflare colo `SJC`)**
+**Snapshot: `2026-08-02 08:38:43 UTC` · run took 213 s · test ran from a 🇺🇸 US runner (Cloudflare colo `IAD`)**
 
 </div>
 
 | Stage | Configs | Share of pool |
 |:--|--:|--:|
-| fetched from 17 live sources | 14,225 | — |
-| **unique after CDN-aware dedup** | **10,116** | **100 %** |
-| structurally valid (L0/L1) | 10,066 | 99.5 % |
-| TCP port open (L2) | 5,231 | 51.7 % |
-| worked **at least once** (L3) | 1,280 | 12.7 % |
-| worked in **all 3** rounds → `verified/` | **844** | **8.3 %** |
+| fetched from 17 live sources | 14,212 | — |
+| **unique after CDN-aware dedup** | **10,118** | **100 %** |
+| structurally valid (L0/L1) | 10,071 | 99.5 % |
+| TCP port open (L2) | 5,285 | 52.2 % |
+| worked **at least once** (L3) | 1,231 | 12.2 % |
+| worked in **all 3** rounds → `verified/` | **856** | **8.5 %** |
 
-The three L3 rounds individually returned **1,125 / 1,053 / 1,042** successes — but only
-**844** configs are in all three sets. **34.06 %** of everything that ever worked is
+The three L3 rounds individually returned **1,040 / 1,069 / 1,074** successes — but only
+**856** configs are in all three sets. **30.46 %** of everything that ever worked is
 flaky. Publishing "everything that worked once" would have overstated the result by
-**1.52×**; publishing the best single round, by **1.33×**. That gap is the entire reason
+**1.44×**; publishing the best single round, by **1.25×**. That gap is the entire reason
 the L3 stage runs more than once.
 
 > ### ⚠️ Read this before quoting the percentage
 >
-> **8.3 % is not a constant, and it is not a claim about your connection.** It was
+> **8.5 % is not a constant, and it is not a claim about your connection.** It was
 > measured from **one host, in the United States, on one day**. A config that fails from
-> a GitHub runner in San José may work perfectly from Tehran — and the reverse is just
+> a GitHub runner in Virginia may work perfectly from Tehran — and the reverse is just
 > as true.
 >
 > So: **`verified/` means "this config answered a real request from the machine that ran
@@ -252,14 +294,14 @@ the L3 stage runs more than once.
 
 | | |
 |:--|:--|
-| **Tier sizes** | `all` 10,116 · `heavy` 8,462 · `light` 2,472 · `verified` 844 · `fast` 460 · `secure` 474 · `top100` 100 |
-| **Protocols** | vless 3,668 · vmess 3,215 · shadowsocks 2,117 · trojan 961 · hysteria2 120 · shadowsocksr 28 · socks 5 · tuic 2 |
-| **Dedup** | 4,108 duplicates removed; 10,116 configs collapse to 8,574 unique endpoints (**14.82 %** of L2 work saved) |
-| **Dropped at L0/L1** | 50 total — unparsable 21 · unroutable server 16 · invalid server 10 · invalid UUID 2 · invalid port 1 |
-| **DNS** | 324 endpoints failed to resolve at L2; 6,268 hosts geolocated, 303 unknown |
-| **Converter drops** | Clash 50 · sing-box 379 (331 of them simply *not expressible* in the sing-box schema) |
+| **Tier sizes** | `all` 10,118 · `heavy` 8,409 · `light` 2,521 · `verified` 856 · `fast` 578 · `secure` 495 · `top100` 100 |
+| **Protocols** | vless 3,655 · vmess 3,217 · shadowsocks 2,113 · trojan 978 · hysteria2 123 · shadowsocksr 28 · tuic 2 · socks 2 |
+| **Dedup** | 4,093 duplicates removed; 10,118 configs collapse to 8,560 unique endpoints (**15.0 %** of L2 work saved) |
+| **Dropped at L0/L1** | 47 total — unparsable 18 · unroutable server 16 · invalid server 10 · invalid UUID 2 · invalid port 1 |
+| **DNS** | 323 endpoints failed to resolve at L2; 6,237 hosts geolocated, 303 unknown |
+| **Converter drops** | Clash 47 · sing-box 364 (319 of them simply *not expressible* in the sing-box schema) |
 | **Sources** | 21 configured (7 light + 14 heavy) · 17 returned configs · 0 empty · 0 failed |
-| **Stage timings** | L0/L1 0.4 s · L2 36.4 s · L3 178.3 s · total 215.6 s |
+| **Stage timings** | L0/L1 0.33 s · L2 33.5 s · L3 178.8 s · total 213.0 s |
 
 </details>
 
@@ -465,23 +507,23 @@ abridged:
 
 ```jsonc
 "cascade": {
-  "exit_country": { "colo": "SJC", "loc": "US",          // where the test ran from
+  "exit_country": { "colo": "IAD", "loc": "US",          // where the test ran from
                     "source": "https://cp.cloudflare.com/cdn-cgi/trace" },
   "layers": {
-    "l0_l1": { "in": 10116, "out": 10066, "seconds": 0.42,
-               "endpoints_unique": 8574, "dedup_saving_pct": 14.82,
-               "dropped": { "unparsable": 21, "invalid_port": 1, "invalid_uuid": 2,
+    "l0_l1": { "in": 10118, "out": 10071, "seconds": 0.33,
+               "endpoints_unique": 8560, "dedup_saving_pct": 15.0,
+               "dropped": { "unparsable": 18, "invalid_port": 1, "invalid_uuid": 2,
                             "unroutable_server": 16, "invalid_server": 10 } },
-    "l2":    { "in": 10066, "out": 5231, "open_pct": 51.97,
-               "open_pct_of_raw_input": 51.71, "dns_failed": 324,
-               "dns_seconds": 20.41, "tcp_seconds": 15.59, "seconds": 36.44 },
-    "l3":    { "in": 5231, "rounds": 3, "per_run_ok": [1125, 1053, 1042],
-               "ever_ok": 1280, "stable": 844, "flaky_pct": 34.06,
-               "seconds": 178.26 }
+    "l2":    { "in": 10071, "out": 5285, "open_pct": 52.48,
+               "open_pct_of_raw_input": 52.23, "dns_failed": 323,
+               "dns_seconds": 17.52, "tcp_seconds": 15.58, "seconds": 33.47 },
+    "l3":    { "in": 5285, "rounds": 3, "per_run_ok": [1040, 1069, 1074],
+               "ever_ok": 1231, "stable": 856, "flaky_pct": 30.46,
+               "seconds": 178.77 }
   },
-  "buckets": { "verified": 844, "fast": 460, "secure": 474, "top": 100,
+  "buckets": { "verified": 856, "fast": 578, "secure": 495, "top": 100,
                "top_short_by": 0, "fast_threshold_ms": 800 },
-  "total_seconds": 215.59
+  "total_seconds": 213.03
 }
 ```
 
@@ -567,13 +609,85 @@ For educational and research purposes. No uptime or quality guarantee — see th
 nothing here has to be taken on faith. Use responsibly and in accordance with your local
 laws.
 
----
+<img alt="" src="https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/assets/divider.svg">
 
 <div align="center">
 
-**Channel:** [@Raydikalx](https://t.me/Raydikalx) · **Bot:** [@RaydikalxBot](https://t.me/RaydikalxBot)
+## Two things keep this running
 
-<sub>Every number in this README is a dated snapshot. The live numbers are always in
+There is no sign-up, no ad and no paywall here, and there never will be. The two things
+that actually keep it alive cost you nothing at all:
+
+<a href="https://github.com/0xRadikal/Free-v2ray-Configs"><img alt="Star the repository on GitHub" src="https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/assets/cta-star.svg"></a>
+<a href="https://t.me/Raydikalx"><img alt="Join the Telegram channel @Raydikalx" src="https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/assets/cta-telegram.svg"></a>
+
+<table>
+<tr>
+<td width="380" valign="top">
+
+**⭐ A star** is how anyone finds this. GitHub ranks search and "related repositories" by
+stars, so one click genuinely decides whether the next person looking for a working
+config ever sees this page.
+
+</td>
+<td width="380" valign="top">
+
+**📣 [@Raydikalx](https://t.me/Raydikalx)** is where an outage, a dead upstream or a
+changed link is announced *before* you notice your client went quiet. Questions and
+broken-config reports are welcome there too.
+
+</td>
+</tr>
+</table>
+
+</div>
+
+<img alt="" src="https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/assets/divider.svg">
+
+<div align="center">
+
+## 💜 Optional — leave a tip
+
+Nothing on this page is behind a payment and nothing ever will be: every link above works
+exactly the same whether or not you read this section. But if the project saved you an
+evening of hunting for a config that actually connects, you can send a tip. Any amount is
+appreciated — a small one is completely fine.
+
+<img alt="Donate on the TRON TRC20 network" src="https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/assets/qr-donate-trc20.svg">
+<img alt="Donate on any EVM network" src="https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/assets/qr-donate-evm.svg">
+<img alt="Donate on The Open Network" src="https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/assets/qr-donate-ton.svg">
+
+</div>
+
+**TRC20 — Tron network**
+
+```text
+TYBumju6Mjd8JCn4RTq95Kk2HPsdcinuz5
+```
+
+**EVM chains — Ethereum, BSC, Polygon, Arbitrum, Base, …**
+
+```text
+0x2F6ec47e416B42C623cF81a64266EE4910a698Cf
+```
+
+**TON — The Open Network**
+
+```text
+UQBbZrE5aDsdGVi6enpf_vPuG022W4KjkJNzTDkjVEn4gmu6
+```
+
+> [!IMPORTANT]
+> Send only on the network named above each address. Each QR encodes exactly the address
+> printed under it and nothing else — no amount, no memo, no token contract — so the code
+> and the text are two ways of reading the same thing. Scan it or copy it, whichever you
+> trust more.
+
+<div align="center">
+
+**Channel:** [@Raydikalx](https://t.me/Raydikalx) · **Bot:** [@RaydikalxBot](https://t.me/RaydikalxBot) · **Dashboard:** [live status](https://0xradikal.github.io/Free-v2ray-Configs/)
+
+<sub>Every number written in this README is a dated snapshot. The live numbers are always in
 <a href="https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/index.json"><code>index.json</code></a> and
 <a href="https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/health.json"><code>health.json</code></a>.</sub>
 

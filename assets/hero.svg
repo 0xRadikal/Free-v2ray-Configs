@@ -1,0 +1,95 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 300" width="1280" height="300" role="img"
+     aria-label="Free V2Ray Configs — auto-updated every 15 minutes, verified by real clients">
+  <title>Free V2Ray Configs — auto-updated every ~15 minutes, verified by real clients</title>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0B1120"/><stop offset=".55" stop-color="#131F38"/><stop offset="1" stop-color="#0B1120"/>
+    </linearGradient>
+    <radialGradient id="aur" cx="50%" cy="50%" r="50%">
+      <stop offset="0" stop-color="#22D3EE" stop-opacity=".42"/><stop offset="1" stop-color="#22D3EE" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="aur2" cx="50%" cy="50%" r="50%">
+      <stop offset="0" stop-color="#A78BFA" stop-opacity=".40"/><stop offset="1" stop-color="#A78BFA" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="beam" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#fff" stop-opacity="0"/>
+      <stop offset=".5" stop-color="#fff" stop-opacity=".07"/>
+      <stop offset="1" stop-color="#fff" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="ttl" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#FFFFFF"/><stop offset=".55" stop-color="#BAE6FD"/><stop offset="1" stop-color="#22D3EE"/>
+    </linearGradient>
+    <pattern id="dots" width="26" height="26" patternUnits="userSpaceOnUse">
+      <circle cx="1.5" cy="1.5" r="1.1" fill="#FFFFFF" fill-opacity=".05"/>
+    </pattern>
+    <clipPath id="card"><rect x="0" y="0" width="1280" height="300" rx="20"/></clipPath>
+  </defs>
+
+  <g clip-path="url(#card)">
+    <rect width="1280" height="300" fill="url(#bg)"/>
+    <rect width="1280" height="300" fill="url(#dots)"/>
+
+    <ellipse cx="240" cy="60" rx="360" ry="220" fill="url(#aur)">
+      <animate attributeName="cx" values="240;520;240" dur="14s" repeatCount="indefinite"/>
+      <animate attributeName="ry" values="220;170;220" dur="9s"  repeatCount="indefinite"/>
+    </ellipse>
+    <ellipse cx="1080" cy="250" rx="330" ry="200" fill="url(#aur2)">
+      <animate attributeName="cx" values="1080;860;1080" dur="17s" repeatCount="indefinite"/>
+    </ellipse>
+
+    <rect x="-260" y="0" width="260" height="300" fill="url(#beam)">
+      <animate attributeName="x" values="-260;1280" dur="7s" repeatCount="indefinite"/>
+    </rect>
+
+    <!-- globe -->
+    <g transform="translate(92,150)">
+      <circle r="60" fill="none" stroke="#22D3EE" stroke-opacity=".22" stroke-width="1" stroke-dasharray="4 7">
+        <animateTransform attributeName="transform" type="rotate" from="0" to="360" dur="24s" repeatCount="indefinite"/>
+      </circle>
+      <circle r="46" fill="#22D3EE" fill-opacity=".07" stroke="#22D3EE" stroke-opacity=".55" stroke-width="1.6"/>
+      <path d="M-46 0 H46 M-40-22 H40 M-40 22 H40" stroke="#22D3EE" stroke-opacity=".38" stroke-width="1.2" fill="none"/>
+      <ellipse rx="20" ry="46" fill="none" stroke="#22D3EE" stroke-opacity=".38" stroke-width="1.2"/>
+      <ellipse rx="38" ry="46" fill="none" stroke="#22D3EE" stroke-opacity=".22" stroke-width="1.2"/>
+      <circle r="46" fill="none" stroke="#22C55E" stroke-opacity=".9" stroke-width="2"
+              stroke-dasharray="16 273" stroke-linecap="round">
+        <animateTransform attributeName="transform" type="rotate" from="0" to="360" dur="4.5s" repeatCount="indefinite"/>
+      </circle>
+    </g>
+
+    <!-- eyebrow -->
+    <circle cx="184" cy="72" r="4" fill="#22C55E">
+      <animate attributeName="fill-opacity" values="1;.25;1" dur="1.8s" repeatCount="indefinite"/>
+    </circle>
+    <circle cx="184" cy="72" r="4" fill="none" stroke="#22C55E" stroke-width="1.4">
+      <animate attributeName="r" values="4;12" dur="1.8s" repeatCount="indefinite"/>
+      <animate attributeName="stroke-opacity" values=".8;0" dur="1.8s" repeatCount="indefinite"/>
+    </circle>
+    <text x="200" y="77" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,'DejaVu Sans',sans-serif" font-size="13.5" font-weight="700"
+          fill="#22C55E" letter-spacing="2.6">LIVE  ·  A NEW RELEASE EVERY ~15 MINUTES</text>
+
+    <text x="180" y="140" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,'DejaVu Sans',sans-serif" font-size="54" font-weight="800"
+          fill="url(#ttl)" letter-spacing="-1">Free V2Ray Configs</text>
+
+    <text x="182" y="176" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,'DejaVu Sans',sans-serif" font-size="18" fill="#E2E8F0" fill-opacity=".92">
+      Not a scraped dump — every config is parsed, deduplicated, dialled and
+    </text>
+    <text x="182" y="200" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,'DejaVu Sans',sans-serif" font-size="18" fill="#E2E8F0" fill-opacity=".92">
+      <tspan>proxied through a real HTTP request </tspan><tspan font-weight="700" fill="#22C55E">three times</tspan><tspan> before it ships.</tspan>
+    </text>
+
+    <g><rect x="182" y="216" width="66" height="28" rx="14" fill="#22D3EE" fill-opacity=".10" stroke="#22D3EE" stroke-opacity=".38"/><text x="215" y="235" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,'DejaVu Sans',sans-serif" font-size="13" font-weight="600" fill="#22D3EE" letter-spacing=".3">VLESS</text></g><g><rect x="258" y="216" width="66" height="28" rx="14" fill="#A78BFA" fill-opacity=".10" stroke="#A78BFA" stroke-opacity=".38"/><text x="291" y="235" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,'DejaVu Sans',sans-serif" font-size="13" font-weight="600" fill="#A78BFA" letter-spacing=".3">VMess</text></g><g><rect x="334" y="216" width="74" height="28" rx="14" fill="#22C55E" fill-opacity=".10" stroke="#22C55E" stroke-opacity=".38"/><text x="371" y="235" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,'DejaVu Sans',sans-serif" font-size="13" font-weight="600" fill="#22C55E" letter-spacing=".3">Trojan</text></g><g><rect x="418" y="216" width="114" height="28" rx="14" fill="#FBBF24" fill-opacity=".10" stroke="#FBBF24" stroke-opacity=".38"/><text x="475" y="235" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,'DejaVu Sans',sans-serif" font-size="13" font-weight="600" fill="#FBBF24" letter-spacing=".3">Shadowsocks</text></g><g><rect x="542" y="216" width="98" height="28" rx="14" fill="#FB7185" fill-opacity=".10" stroke="#FB7185" stroke-opacity=".38"/><text x="591" y="235" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,'DejaVu Sans',sans-serif" font-size="13" font-weight="600" fill="#FB7185" letter-spacing=".3">Hysteria2</text></g><g><rect x="650" y="216" width="58" height="28" rx="14" fill="#22D3EE" fill-opacity=".10" stroke="#22D3EE" stroke-opacity=".38"/><text x="679" y="235" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,'DejaVu Sans',sans-serif" font-size="13" font-weight="600" fill="#22D3EE" letter-spacing=".3">TUIC</text></g><g><rect x="718" y="216" width="122" height="28" rx="14" fill="#A78BFA" fill-opacity=".10" stroke="#A78BFA" stroke-opacity=".38"/><text x="779" y="235" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,'DejaVu Sans',sans-serif" font-size="13" font-weight="600" fill="#A78BFA" letter-spacing=".3">ShadowsocksR</text></g><g><rect x="850" y="216" width="66" height="28" rx="14" fill="#22C55E" fill-opacity=".10" stroke="#22C55E" stroke-opacity=".38"/><text x="883" y="235" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,'DejaVu Sans',sans-serif" font-size="13" font-weight="600" fill="#22C55E" letter-spacing=".3">SOCKS</text></g>
+
+    <!-- proof panel: the three gates, stated as gates and not as numbers -->
+    <g>
+      <rect x="908" y="48" width="344" height="166" rx="14"
+            fill="#FFFFFF" fill-opacity=".04" stroke="#FFFFFF" stroke-opacity=".10"/>
+      <text x="928" y="76" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,'DejaVu Sans',sans-serif" font-size="12" font-weight="700"
+            fill="#94A3B8" letter-spacing="1.8">WHAT EVERY LINK HAS SURVIVED</text>
+      <g><circle cx="938" cy="102" r="9" fill="#22C55E" fill-opacity=".16" stroke="#22C55E" stroke-opacity=".75"/><path d="M934 102 l3 3.4 5.6-6" fill="none" stroke="#22C55E" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><animate attributeName="stroke-opacity" values="0;1;1;1" dur="4s" begin="0.0s" repeatCount="indefinite"/></path><text x="958" y="107" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,'DejaVu Sans',sans-serif" font-size="14.5" fill="#E2E8F0" fill-opacity=".95">Parsed, repaired, deduplicated</text></g><g><circle cx="938" cy="134" r="9" fill="#22C55E" fill-opacity=".16" stroke="#22C55E" stroke-opacity=".75"/><path d="M934 134 l3 3.4 5.6-6" fill="none" stroke="#22C55E" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><animate attributeName="stroke-opacity" values="0;1;1;1" dur="4s" begin="0.45s" repeatCount="indefinite"/></path><text x="958" y="139" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,'DejaVu Sans',sans-serif" font-size="14.5" fill="#E2E8F0" fill-opacity=".95">TCP handshake actually completed</text></g><g><circle cx="938" cy="166" r="9" fill="#22C55E" fill-opacity=".16" stroke="#22C55E" stroke-opacity=".75"/><path d="M934 166 l3 3.4 5.6-6" fill="none" stroke="#22C55E" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><animate attributeName="stroke-opacity" values="0;1;1;1" dur="4s" begin="0.9s" repeatCount="indefinite"/></path><text x="958" y="171" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,'DejaVu Sans',sans-serif" font-size="14.5" fill="#E2E8F0" fill-opacity=".95">Fetched a real URL through the proxy</text></g><g><circle cx="938" cy="198" r="9" fill="#22C55E" fill-opacity=".16" stroke="#22C55E" stroke-opacity=".75"/><path d="M934 198 l3 3.4 5.6-6" fill="none" stroke="#22C55E" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><animate attributeName="stroke-opacity" values="0;1;1;1" dur="4s" begin="1.35s" repeatCount="indefinite"/></path><text x="958" y="203" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,'DejaVu Sans',sans-serif" font-size="14.5" fill="#E2E8F0" fill-opacity=".95">Re-parsed by sing-box &amp; mihomo</text></g>
+    </g>
+
+    <text x="1252" y="278" text-anchor="end" font-family="ui-monospace,SFMono-Regular,'SF Mono',Menlo,Consolas,'DejaVu Sans Mono',monospace" font-size="12.5"
+          fill="#94A3B8" fill-opacity=".85">@Raydikalx · sing-box + mihomo validated · MIT</text>
+    <rect x="0" y="297" width="1280" height="3" fill="#22C55E" fill-opacity=".55"/>
+  </g>
+</svg>

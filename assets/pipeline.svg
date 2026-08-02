@@ -1,0 +1,168 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 330" width="1280" height="330" role="img"
+     aria-label="Pipeline: collect, repair, dial, prove, publish">
+  <title>How a config becomes a published link: collect → repair → dial → prove → publish</title>
+  <defs>
+    <linearGradient id="pbg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0B1120"/><stop offset=".6" stop-color="#131F38"/><stop offset="1" stop-color="#0B1120"/>
+    </linearGradient>
+    <linearGradient id="funnel" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0"   stop-color="#22D3EE"   stop-opacity=".55"/>
+      <stop offset=".35" stop-color="#A78BFA" stop-opacity=".5"/>
+      <stop offset=".7"  stop-color="#FBBF24"  stop-opacity=".5"/>
+      <stop offset="1"   stop-color="#22C55E"  stop-opacity=".75"/>
+    </linearGradient>
+    <clipPath id="pcard"><rect width="1280" height="330" rx="20"/></clipPath>
+  </defs>
+  <g clip-path="url(#pcard)">
+    <rect width="1280" height="330" fill="url(#pbg)"/>
+    <text x="40" y="42" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,'DejaVu Sans',sans-serif" font-size="13" font-weight="700"
+          fill="#94A3B8" letter-spacing="2.4">FROM AN UPSTREAM DUMP TO A LINK YOU CAN PASTE</text>
+    
+    <g>
+      <path d="M256 137 H286" stroke="#94A3B8" stroke-opacity=".45" stroke-width="1.4"/>
+      <path d="M279 133 l6 4 -6 4" fill="none" stroke="#94A3B8" stroke-opacity=".7"
+            stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+      <circle r="3.2" cx="256" cy="137" fill="#22D3EE" opacity="0">
+        <animate attributeName="cx" values="256;286" dur="1.5s" begin="0.0s"
+                 repeatCount="indefinite"/>
+        <animate attributeName="opacity" values="0;1;1;0" dur="1.5s" begin="0.0s"
+                 repeatCount="indefinite"/>
+      </circle>
+    </g>
+    <g>
+      <path d="M502 137 H532" stroke="#94A3B8" stroke-opacity=".45" stroke-width="1.4"/>
+      <path d="M525 133 l6 4 -6 4" fill="none" stroke="#94A3B8" stroke-opacity=".7"
+            stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+      <circle r="3.2" cx="502" cy="137" fill="#A78BFA" opacity="0">
+        <animate attributeName="cx" values="502;532" dur="1.5s" begin="0.32s"
+                 repeatCount="indefinite"/>
+        <animate attributeName="opacity" values="0;1;1;0" dur="1.5s" begin="0.32s"
+                 repeatCount="indefinite"/>
+      </circle>
+    </g>
+    <g>
+      <path d="M748 137 H778" stroke="#94A3B8" stroke-opacity=".45" stroke-width="1.4"/>
+      <path d="M771 133 l6 4 -6 4" fill="none" stroke="#94A3B8" stroke-opacity=".7"
+            stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+      <circle r="3.2" cx="748" cy="137" fill="#FBBF24" opacity="0">
+        <animate attributeName="cx" values="748;778" dur="1.5s" begin="0.64s"
+                 repeatCount="indefinite"/>
+        <animate attributeName="opacity" values="0;1;1;0" dur="1.5s" begin="0.64s"
+                 repeatCount="indefinite"/>
+      </circle>
+    </g>
+    <g>
+      <path d="M994 137 H1024" stroke="#94A3B8" stroke-opacity=".45" stroke-width="1.4"/>
+      <path d="M1017 133 l6 4 -6 4" fill="none" stroke="#94A3B8" stroke-opacity=".7"
+            stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+      <circle r="3.2" cx="994" cy="137" fill="#22C55E" opacity="0">
+        <animate attributeName="cx" values="994;1024" dur="1.5s" begin="0.96s"
+                 repeatCount="indefinite"/>
+        <animate attributeName="opacity" values="0;1;1;0" dur="1.5s" begin="0.96s"
+                 repeatCount="indefinite"/>
+      </circle>
+    </g>
+    
+    <g>
+      <rect x="40" y="74" width="216" height="126" rx="14" fill="#22D3EE" fill-opacity=".07"
+            stroke="#22D3EE" stroke-opacity=".45" stroke-width="1.3"/>
+      <rect x="40" y="74" width="216" height="3" rx="1.5" fill="#22D3EE" fill-opacity=".85"/>
+      <text x="56" y="104" font-family="ui-monospace,SFMono-Regular,'SF Mono',Menlo,Consolas,'DejaVu Sans Mono',monospace" font-size="12" font-weight="700"
+            fill="#22D3EE" letter-spacing="1.4">L0</text>
+      <text x="240" y="104" text-anchor="end" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,'DejaVu Sans',sans-serif" font-size="12.5"
+            font-weight="800" fill="#22D3EE" letter-spacing="1.6">COLLECT</text>
+      <text x="56" y="140" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,'DejaVu Sans',sans-serif" font-size="15" font-weight="600"
+            fill="#E2E8F0">every healthy upstream</text>
+      <text x="56" y="166" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,'DejaVu Sans',sans-serif" font-size="13" fill="#94A3B8">polled in parallel</text>
+      <rect x="56" y="178" width="184" height="4" rx="2" fill="#22D3EE" fill-opacity=".14"/>
+      <rect x="56" y="178" width="184" height="4" rx="2" fill="#22D3EE" fill-opacity=".8">
+        <animate attributeName="width" values="0;184" dur="2.4s" begin="0.0s"
+                 repeatCount="indefinite"/>
+        <animate attributeName="opacity" values="1;1;0" dur="2.4s" begin="0.0s"
+                 repeatCount="indefinite"/>
+      </rect>
+    </g>
+    <g>
+      <rect x="286" y="74" width="216" height="126" rx="14" fill="#A78BFA" fill-opacity=".07"
+            stroke="#A78BFA" stroke-opacity=".45" stroke-width="1.3"/>
+      <rect x="286" y="74" width="216" height="3" rx="1.5" fill="#A78BFA" fill-opacity=".85"/>
+      <text x="302" y="104" font-family="ui-monospace,SFMono-Regular,'SF Mono',Menlo,Consolas,'DejaVu Sans Mono',monospace" font-size="12" font-weight="700"
+            fill="#A78BFA" letter-spacing="1.4">L1</text>
+      <text x="486" y="104" text-anchor="end" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,'DejaVu Sans',sans-serif" font-size="12.5"
+            font-weight="800" fill="#A78BFA" letter-spacing="1.6">REPAIR</text>
+      <text x="302" y="140" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,'DejaVu Sans',sans-serif" font-size="15" font-weight="600"
+            fill="#E2E8F0">parse · fix · deduplicate</text>
+      <text x="302" y="166" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,'DejaVu Sans',sans-serif" font-size="13" fill="#94A3B8">identity-aware key</text>
+      <rect x="302" y="178" width="184" height="4" rx="2" fill="#A78BFA" fill-opacity=".14"/>
+      <rect x="302" y="178" width="184" height="4" rx="2" fill="#A78BFA" fill-opacity=".8">
+        <animate attributeName="width" values="0;184" dur="2.4s" begin="0.5s"
+                 repeatCount="indefinite"/>
+        <animate attributeName="opacity" values="1;1;0" dur="2.4s" begin="0.5s"
+                 repeatCount="indefinite"/>
+      </rect>
+    </g>
+    <g>
+      <rect x="532" y="74" width="216" height="126" rx="14" fill="#FBBF24" fill-opacity=".07"
+            stroke="#FBBF24" stroke-opacity=".45" stroke-width="1.3"/>
+      <rect x="532" y="74" width="216" height="3" rx="1.5" fill="#FBBF24" fill-opacity=".85"/>
+      <text x="548" y="104" font-family="ui-monospace,SFMono-Regular,'SF Mono',Menlo,Consolas,'DejaVu Sans Mono',monospace" font-size="12" font-weight="700"
+            fill="#FBBF24" letter-spacing="1.4">L2</text>
+      <text x="732" y="104" text-anchor="end" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,'DejaVu Sans',sans-serif" font-size="12.5"
+            font-weight="800" fill="#FBBF24" letter-spacing="1.6">DIAL</text>
+      <text x="548" y="140" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,'DejaVu Sans',sans-serif" font-size="15" font-weight="600"
+            fill="#E2E8F0">real TCP handshake</text>
+      <text x="548" y="166" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,'DejaVu Sans',sans-serif" font-size="13" fill="#94A3B8">no handshake, no entry</text>
+      <rect x="548" y="178" width="184" height="4" rx="2" fill="#FBBF24" fill-opacity=".14"/>
+      <rect x="548" y="178" width="184" height="4" rx="2" fill="#FBBF24" fill-opacity=".8">
+        <animate attributeName="width" values="0;184" dur="2.4s" begin="1.0s"
+                 repeatCount="indefinite"/>
+        <animate attributeName="opacity" values="1;1;0" dur="2.4s" begin="1.0s"
+                 repeatCount="indefinite"/>
+      </rect>
+    </g>
+    <g>
+      <rect x="778" y="74" width="216" height="126" rx="14" fill="#22C55E" fill-opacity=".07"
+            stroke="#22C55E" stroke-opacity=".45" stroke-width="1.3"/>
+      <rect x="778" y="74" width="216" height="3" rx="1.5" fill="#22C55E" fill-opacity=".85"/>
+      <text x="794" y="104" font-family="ui-monospace,SFMono-Regular,'SF Mono',Menlo,Consolas,'DejaVu Sans Mono',monospace" font-size="12" font-weight="700"
+            fill="#22C55E" letter-spacing="1.4">L3</text>
+      <text x="978" y="104" text-anchor="end" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,'DejaVu Sans',sans-serif" font-size="12.5"
+            font-weight="800" fill="#22C55E" letter-spacing="1.6">PROVE</text>
+      <text x="794" y="140" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,'DejaVu Sans',sans-serif" font-size="15" font-weight="600"
+            fill="#E2E8F0">HTTP through the proxy</text>
+      <text x="794" y="166" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,'DejaVu Sans',sans-serif" font-size="13" fill="#94A3B8">3 independent rounds</text>
+      <rect x="794" y="178" width="184" height="4" rx="2" fill="#22C55E" fill-opacity=".14"/>
+      <rect x="794" y="178" width="184" height="4" rx="2" fill="#22C55E" fill-opacity=".8">
+        <animate attributeName="width" values="0;184" dur="2.4s" begin="1.5s"
+                 repeatCount="indefinite"/>
+        <animate attributeName="opacity" values="1;1;0" dur="2.4s" begin="1.5s"
+                 repeatCount="indefinite"/>
+      </rect>
+    </g>
+    <g>
+      <rect x="1024" y="74" width="216" height="126" rx="14" fill="#FB7185" fill-opacity=".07"
+            stroke="#FB7185" stroke-opacity=".45" stroke-width="1.3"/>
+      <rect x="1024" y="74" width="216" height="3" rx="1.5" fill="#FB7185" fill-opacity=".85"/>
+      <text x="1040" y="104" font-family="ui-monospace,SFMono-Regular,'SF Mono',Menlo,Consolas,'DejaVu Sans Mono',monospace" font-size="12" font-weight="700"
+            fill="#FB7185" letter-spacing="1.4">→</text>
+      <text x="1224" y="104" text-anchor="end" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,'DejaVu Sans',sans-serif" font-size="12.5"
+            font-weight="800" fill="#FB7185" letter-spacing="1.6">PUBLISH</text>
+      <text x="1040" y="140" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,'DejaVu Sans',sans-serif" font-size="15" font-weight="600"
+            fill="#E2E8F0">re-parsed by clients</text>
+      <text x="1040" y="166" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,'DejaVu Sans',sans-serif" font-size="13" fill="#94A3B8">sing-box + mihomo gate</text>
+      <rect x="1040" y="178" width="184" height="4" rx="2" fill="#FB7185" fill-opacity=".14"/>
+      <rect x="1040" y="178" width="184" height="4" rx="2" fill="#FB7185" fill-opacity=".8">
+        <animate attributeName="width" values="0;184" dur="2.4s" begin="2.0s"
+                 repeatCount="indefinite"/>
+        <animate attributeName="opacity" values="1;1;0" dur="2.4s" begin="2.0s"
+                 repeatCount="indefinite"/>
+      </rect>
+    </g>
+    <path d="M40 232 H1240 L1240 243 C860 245, 510 278, 40 278 Z" fill="url(#funnel)"/>
+    <text x="56" y="262" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,'DejaVu Sans',sans-serif" font-size="13.5" font-weight="700"
+          fill="#04121F">everything the upstreams published</text>
+    <text x="1240" y="223" text-anchor="end" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,'DejaVu Sans',sans-serif" font-size="13.5"
+          font-weight="800" fill="#22C55E" letter-spacing=".4">what actually survives &#8595;</text>
+    <text x="40" y="312" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,'DejaVu Sans',sans-serif" font-size="13" fill="#94A3B8"><tspan>The width is the honest part: most of what upstreams publish never reaches you, because it never worked. The surviving count lives in </tspan><tspan font-family="ui-monospace,SFMono-Regular,'SF Mono',Menlo,Consolas,'DejaVu Sans Mono',monospace" fill="#22C55E">health.json</tspan><tspan>, re-measured every run.</tspan></text>
+  </g>
+</svg>
