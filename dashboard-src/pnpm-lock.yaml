@@ -141,6 +141,12 @@ importers:
       '@parcel/config-default':
         specifier: ^2.16.4
         version: 2.16.4(@parcel/core@2.16.4(@swc/helpers@0.5.23))(@swc/helpers@0.5.23)
+      '@parcel/packager-raw-url':
+        specifier: 2.16.4
+        version: 2.16.4(@parcel/core@2.16.4(@swc/helpers@0.5.23))
+      '@parcel/transformer-jsonld':
+        specifier: 2.16.4
+        version: 2.16.4(@parcel/core@2.16.4(@swc/helpers@0.5.23))
       '@types/node':
         specifier: ^24.13.3
         version: 24.13.3
@@ -631,6 +637,10 @@ packages:
     resolution: {integrity: sha512-L2o39f/fhta+hxto7w8OTUKdstY+te5BmHZREckbQm0KTBg93BG7jB0bfoxLSZF0d8uuAYIVXjzeHNqha+du1g==}
     engines: {node: '>= 16.0.0', parcel: ^2.16.4}
 
+  '@parcel/packager-raw-url@2.16.4':
+    resolution: {integrity: sha512-qrpsz/wTlPvYM5qnz3N+3pW0a9MRivrN7TiduoS1W1U/UBhsPoOYNG+S6F67KDCmq47mmBKTgEFN9tEazSV+Qw==}
+    engines: {node: '>= 16.0.0', parcel: ^2.16.4}
+
   '@parcel/packager-raw@2.16.4':
     resolution: {integrity: sha512-A9j60G9OmbTkEeE4WRMXCiErEprHLs9NkUlC4HXCxmSrPMOVaMaMva2LdejE3A9kujZqYtYfuc8+a+jN+Nro4w==}
     engines: {node: '>= 16.0.0', parcel: ^2.16.4}
@@ -774,6 +784,10 @@ packages:
 
   '@parcel/transformer-json@2.16.4':
     resolution: {integrity: sha512-pB3ZNqgokdkBCJ+4G0BrPYcIkyM9K1HVk0GvjzcLEFDKsoAp8BGEM68FzagFM/nVq9anYTshIaoh349GK0M/bg==}
+    engines: {node: '>= 16.0.0', parcel: ^2.16.4}
+
+  '@parcel/transformer-jsonld@2.16.4':
+    resolution: {integrity: sha512-M8e8YFqaSFPgwhS3eepU11qAppnjx9VQaBrghXY6EYt31fTIY3N77y8tqbTe3/4pJrTI79SbakR6Z1skegET+Q==}
     engines: {node: '>= 16.0.0', parcel: ^2.16.4}
 
   '@parcel/transformer-node@2.16.4':
@@ -3023,6 +3037,14 @@ snapshots:
       - '@parcel/core'
       - napi-wasm
 
+  '@parcel/packager-raw-url@2.16.4(@parcel/core@2.16.4(@swc/helpers@0.5.23))':
+    dependencies:
+      '@parcel/plugin': 2.16.4(@parcel/core@2.16.4(@swc/helpers@0.5.23))
+      '@parcel/utils': 2.16.4
+    transitivePeerDependencies:
+      - '@parcel/core'
+      - napi-wasm
+
   '@parcel/packager-raw@2.16.4(@parcel/core@2.16.4(@swc/helpers@0.5.23))':
     dependencies:
       '@parcel/plugin': 2.16.4(@parcel/core@2.16.4(@swc/helpers@0.5.23))
@@ -3242,6 +3264,15 @@ snapshots:
   '@parcel/transformer-json@2.16.4(@parcel/core@2.16.4(@swc/helpers@0.5.23))':
     dependencies:
       '@parcel/plugin': 2.16.4(@parcel/core@2.16.4(@swc/helpers@0.5.23))
+      json5: 2.2.3
+    transitivePeerDependencies:
+      - '@parcel/core'
+      - napi-wasm
+
+  '@parcel/transformer-jsonld@2.16.4(@parcel/core@2.16.4(@swc/helpers@0.5.23))':
+    dependencies:
+      '@parcel/plugin': 2.16.4(@parcel/core@2.16.4(@swc/helpers@0.5.23))
+      '@parcel/types': 2.16.4(@parcel/core@2.16.4(@swc/helpers@0.5.23))
       json5: 2.2.3
     transitivePeerDependencies:
       - '@parcel/core'

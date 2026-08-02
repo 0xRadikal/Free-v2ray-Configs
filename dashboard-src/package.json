@@ -8,7 +8,7 @@
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "preview": "vite preview",
-    "bundle": "parcel build index.html --dist-dir dist --no-source-maps && html-inline dist/index.html > bundle.html",
+    "bundle": "parcel build index.html --dist-dir dist --no-source-maps && html-inline --ignore-links=true dist/index.html > bundle.html",
     "typecheck": "tsc --noEmit -p tsconfig.app.json"
   },
   "dependencies": {
@@ -58,6 +58,8 @@
   },
   "devDependencies": {
     "@parcel/config-default": "^2.16.4",
+    "@parcel/packager-raw-url": "2.16.4",
+    "@parcel/transformer-jsonld": "2.16.4",
     "@types/node": "^24.13.3",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",

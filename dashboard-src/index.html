@@ -9,15 +9,290 @@
       content="Live status dashboard for the Free V2Ray Configs aggregator: freshness, per-category counts, protocol breakdown, conversion losses, server locations, source health, and the measured verification cascade."
     />
     <meta name="color-scheme" content="dark" />
+    <link rel="canonical" href="https://0xradikal.github.io/Free-v2ray-Configs/" />
+
+    <!-- Social / link-preview cards. These also give crawlers that never run
+         JavaScript a title and summary to work with. -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Free V2Ray Configs" />
+    <meta property="og:url" content="https://0xradikal.github.io/Free-v2ray-Configs/" />
+    <meta property="og:title" content="Free V2Ray Configs — live status" />
+    <meta
+      property="og:description"
+      content="A free V2Ray / Xray subscription rebuilt every 15 minutes from public sources, deduplicated and checked against real clients. This dashboard reports what actually works, including the failures."
+    />
+    <meta
+      property="og:image"
+      content="https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/assets/hero.svg"
+    />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Free V2Ray Configs — live status" />
+    <meta
+      name="twitter:description"
+      content="A free V2Ray / Xray subscription rebuilt every 15 minutes, deduplicated and verified against real clients."
+    />
+
     <!-- Inline SVG favicon: avoids an unavoidable 404 for /favicon.ico without
          adding a binary asset to the repository. -->
     <link
       rel="icon"
       href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d1117'/%3E%3Cpath d='M6 9h6l4 12 4-12h6L18.5 26h-5z' fill='%2358a6ff'/%3E%3C/svg%3E"
     />
+
+    <!-- Structured data. Deliberately states only things that are true for
+         every release: the update interval, the licence, the distribution
+         URLs. No counts are asserted here, because a number baked into a
+         static file becomes a false claim within fifteen minutes. -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "Dataset",
+        "name": "Free V2Ray Configs",
+        "alternateName": "Free V2Ray / Xray subscription list",
+        "description": "A continuously rebuilt collection of free, publicly posted V2Ray / Xray proxy configurations. Sources are fetched, parsed, deduplicated by a content-derived key, converted to Clash and sing-box formats, and validated with the real client binaries before publication. Published every 15 minutes.",
+        "url": "https://0xradikal.github.io/Free-v2ray-Configs/",
+        "sameAs": "https://github.com/0xRadikal/Free-v2ray-Configs",
+        "license": "https://opensource.org/licenses/MIT",
+        "isAccessibleForFree": true,
+        "keywords": [
+          "v2ray",
+          "xray",
+          "vless",
+          "vmess",
+          "trojan",
+          "shadowsocks",
+          "hysteria2",
+          "tuic",
+          "reality",
+          "free proxy",
+          "subscription link",
+          "bypass censorship"
+        ],
+        "creator": {
+          "@type": "Person",
+          "name": "0xRadikal",
+          "url": "https://github.com/0xRadikal"
+        },
+        "distribution": [
+          {
+            "@type": "DataDownload",
+            "name": "All configs (plain text)",
+            "encodingFormat": "text/plain",
+            "contentUrl": "https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/all/configs.txt"
+          },
+          {
+            "@type": "DataDownload",
+            "name": "All configs (base64 subscription)",
+            "encodingFormat": "text/plain",
+            "contentUrl": "https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/all/configs_base64.txt"
+          },
+          {
+            "@type": "DataDownload",
+            "name": "Clash / Clash Meta profile",
+            "encodingFormat": "application/yaml",
+            "contentUrl": "https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/all/clash.yaml"
+          },
+          {
+            "@type": "DataDownload",
+            "name": "sing-box profile",
+            "encodingFormat": "application/json",
+            "contentUrl": "https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/all/singbox.json"
+          },
+          {
+            "@type": "DataDownload",
+            "name": "Machine-readable index",
+            "encodingFormat": "application/json",
+            "contentUrl": "https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/index.json"
+          }
+        ]
+      }
+    </script>
   </head>
   <body>
-    <div id="root"></div>
+    <!--
+      The markup inside #root is a static fallback, not decoration.
+
+      React's createRoot() replaces the host element's children on its first
+      render, so a visitor with JavaScript never sees this. A client that does
+      NOT run JavaScript sees it and nothing else — and that group is larger
+      than it looks: independent measurements of the major AI crawlers
+      (GPTBot, ClaudeBot, PerplexityBot, OAI-SearchBot) find that they fetch
+      JavaScript but do not execute it. Before this block existed, every one
+      of them saw an empty <div> and had literally nothing to quote.
+
+      Rule for editing: state only what is true of EVERY release. No counts,
+      no dates, no "N sources" — a number frozen into this file becomes a lie
+      fifteen minutes after it is written, and the whole point of this project
+      is that the advertised thing is the delivered thing.
+    -->
+    <div id="root">
+      <main>
+        <h1>Free V2Ray Configs — live status</h1>
+        <p>
+          A free V2Ray / Xray subscription that is rebuilt every 15 minutes from
+          publicly posted sources. Configurations are fetched, parsed,
+          deduplicated by a content-derived key, converted for each client
+          format, and validated with the real client binaries before anything is
+          published. This page reports what the last run actually produced —
+          including what it threw away and why.
+        </p>
+        <p>
+          If JavaScript is disabled you are seeing the static summary. The live
+          figures are rendered client-side from
+          <a
+            href="https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/index.json"
+            >index.json</a
+          >
+          and
+          <a
+            href="https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/health.json"
+            >health.json</a
+          >, both of which are plain files you can read directly.
+        </p>
+
+        <h2>Subscription links</h2>
+        <p>Paste one of these into your client; it re-fetches on its own schedule.</p>
+        <ul>
+          <li>
+            <a
+              href="https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/all/configs.txt"
+              >All configs — plain text</a
+            >
+          </li>
+          <li>
+            <a
+              href="https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/all/configs_base64.txt"
+              >All configs — base64 subscription</a
+            >
+          </li>
+          <li>
+            <a
+              href="https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/all/clash.yaml"
+              >Clash / Clash Meta profile</a
+            >
+          </li>
+          <li>
+            <a
+              href="https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/all/singbox.json"
+              >sing-box profile</a
+            >
+          </li>
+          <li>
+            <a
+              href="https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/top100.txt"
+              >Top 100 — the fastest that answered on the last run</a
+            >
+          </li>
+          <li>
+            <a
+              href="https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/verified/configs.txt"
+              >Verified only — survived the full check cascade</a
+            >
+          </li>
+        </ul>
+
+        <h2>Per-protocol lists</h2>
+        <p>
+          One file per protocol the pipeline can convert honestly. A protocol
+          that cannot be converted without inventing missing fields is excluded
+          on purpose rather than shipped broken.
+        </p>
+        <ul>
+          <li>
+            <a
+              href="https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/protocols/vless.txt"
+              >VLESS</a
+            >
+          </li>
+          <li>
+            <a
+              href="https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/protocols/vmess.txt"
+              >VMess</a
+            >
+          </li>
+          <li>
+            <a
+              href="https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/protocols/trojan.txt"
+              >Trojan</a
+            >
+          </li>
+          <li>
+            <a
+              href="https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/protocols/shadowsocks.txt"
+              >Shadowsocks</a
+            >
+          </li>
+          <li>
+            <a
+              href="https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/protocols/shadowsocksr.txt"
+              >ShadowsocksR</a
+            >
+          </li>
+          <li>
+            <a
+              href="https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/protocols/hysteria2.txt"
+              >Hysteria2</a
+            >
+          </li>
+          <li>
+            <a
+              href="https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/protocols/tuic.txt"
+              >TUIC</a
+            >
+          </li>
+          <li>
+            <a
+              href="https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/protocols/socks.txt"
+              >SOCKS</a
+            >
+          </li>
+        </ul>
+
+        <h2>Compatible clients</h2>
+        <p>
+          v2rayNG, Hiddify, NekoBox, NekoRay, v2rayN, Clash Meta, sing-box and
+          Shadowrocket. The Clash and sing-box profiles are checked with
+          <code>mihomo -t</code> and <code>sing-box check</code> before release;
+          if either rejects the file, the run aborts and the previous good
+          release stays up.
+        </p>
+
+        <h2>What this dashboard shows</h2>
+        <ul>
+          <li>How long ago the last successful run finished.</li>
+          <li>How many configurations survived each stage, and how many were dropped.</li>
+          <li>The protocol breakdown, and what each client format lost in conversion.</li>
+          <li>Which upstream sources answered, and which are failing.</li>
+          <li>
+            The verification cascade — parse, reachability, and a real
+            connection attempt — reported as measured numbers rather than a
+            claim that everything works.
+          </li>
+        </ul>
+
+        <h2>An honest caveat</h2>
+        <p>
+          These are free, publicly posted servers. A large share of them are
+          dead at any given moment; that is true of every list of this kind. The
+          difference here is that the failure rate is measured and published
+          instead of hidden, so you can see how much of the list is actually
+          usable before you trust it.
+        </p>
+
+        <h2>Project</h2>
+        <ul>
+          <li>
+            <a href="https://github.com/0xRadikal/Free-v2ray-Configs"
+              >Source repository on GitHub</a
+            >
+          </li>
+          <li>
+            <a href="https://t.me/Raydikalx">Telegram channel — @Raydikalx</a>
+          </li>
+        </ul>
+        <p>Published under the MIT licence.</p>
+      </main>
+    </div>
     <script type="module" src="./src/main.tsx"></script>
   </body>
 </html>

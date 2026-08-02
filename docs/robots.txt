@@ -1,0 +1,18 @@
+# https://0xradikal.github.io/Free-v2ray-Configs/
+#
+# Everything published here is meant to be read, by people and by machines
+# alike, so nothing is disallowed. This file exists for two concrete reasons:
+#
+#   1. Without it the host answers /robots.txt with a 404. That is not fatal,
+#      but a crawler then has no pointer to the sitemap and has to discover
+#      pages by luck.
+#   2. Several crawlers ask for it before anything else. Answering the first
+#      request with a 404 is a poor start.
+#
+# There is deliberately no rule aimed at AI crawlers. The content is public,
+# freely licensed, and the project benefits from being quotable.
+
+User-agent: *
+Allow: /
+
+Sitemap: https://0xradikal.github.io/Free-v2ray-Configs/sitemap.xml
