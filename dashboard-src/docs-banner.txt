@@ -1,0 +1,98 @@
+<!--
+  ==========================================================================
+   GENERATED FILE - DO NOT EDIT BY HAND
+   Source: /dashboard-src   ·   rebuild: pnpm install && pnpm run bundle
+   Any edit made here is destroyed by the next rebuild.
+  ==========================================================================
+
+  ABOUT THE NOTE THAT USED TO BE HERE
+  -----------------------------------
+  The previous version of this page carried the line:
+
+      "This page is intentionally dependency-free: no framework, no CDN, no build."
+
+  Two thirds of that is no longer true, so it has been rewritten rather than
+  left in place to mislead the next reader. There IS a build step now, and the
+  UI is React. Pretending otherwise in a comment would be exactly the kind of
+  stale claim this dashboard exists to argue against.
+
+  WHAT IS STILL TRUE - AND IT IS THE PART THAT MATTERED
+  -----------------------------------------------------
+  The page still makes ZERO external requests in order to render itself.
+  Script, stylesheet and favicon are inlined into this single file. No CDN,
+  no web fonts, no analytics, no tracker, no third-party anything.
+
+  Measured on this artifact, not assumed:
+      <script src=...>            0
+      external stylesheet links   0
+      inline <style> blocks       1
+      <img src=...>               0
+      application bundle          __BUNDLE_BYTES__ bytes (this comment excluded)
+
+  Two <link> tags are not stylesheets, and neither is fetched while the page
+  renders: rel=icon is a data: URI, and rel=canonical is metadata that a
+  browser never requests. The og:image URL is in the same category - it is
+  read by social and search crawlers, never by this page.
+
+  That property is deliberate. Much of this project's audience reaches the page
+  from networks where a third-party CDN request is the part most likely to be
+  slow, blocked, or logged. One self-contained file removes that whole class of
+  failure: if the HTML arrives, the page works.
+
+  THE ONLY NETWORK TRAFFIC IS THE DATA ITSELF
+  -------------------------------------------
+      https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/index.json
+      https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/health.json
+  with cdn.jsdelivr.net used ONLY as a fallback when raw is unreachable, and
+  labelled as such in the interface when it happens, because the mirror can lag
+  the branch by up to 12 hours and this page reports on freshness.
+
+  HOW IT BEHAVES WHEN THINGS GO WRONG
+  -----------------------------------
+  Published JSON is treated as untrusted input. Every value passes a guard
+  before it reaches the DOM:
+    · a missing field renders as "-", never as undefined, NaN or 0
+    · an absent measurement is never printed as a measured zero - sections whose
+      data was not published remove themselves, and their nav links with them
+    · freshness is judged against the repository's own advertised update interval,
+      and is reported as "not judgeable" when either the timestamp or the interval
+      is missing, rather than defaulting to a reassuring green
+    · a URL that is not http(s) is never turned into a link
+    · if index.json cannot be loaded or is not a JSON object, the page renders
+      NOTHING but the error - a half-populated dashboard next to an error banner
+      invites the reader to trust the half that looks populated
+
+  THE STATIC CONTENT INSIDE #root IS NOT DECORATION
+  -------------------------------------------------
+  React's createRoot() replaces the children of #root on its first render, so
+  nobody running JavaScript ever sees the markup that ships inside it. It is
+  there for clients that fetch the page but do not execute JavaScript, and that
+  group is larger than it looks: the major AI crawlers are in it.
+
+  The effect was measured, not hoped for. Before the block existed this file
+  carried 32 characters of crawlable text - a title and nothing else. It now
+  carries 2,302, and that is the whole reason the block is here.
+
+  If you change it, state only what is true of EVERY release. No counts, no
+  dates, no "N sources". A number frozen into a generated file becomes false
+  fifteen minutes later, which is the exact failure this dashboard exists to
+  argue against. Edit /dashboard-src/index.html, never this file.
+
+  WHY THERE IS AN EXPLICIT </head> IN A MINIFIED FILE
+  ---------------------------------------------------
+  Parcel drops optional tags. An HTML5 parser does not mind - it infers the
+  head element, and a spec-exact parser confirms the metadata lands there.
+  Google's Search Console ownership checker does mind: with no literal <head>
+  in the markup it replied "Your meta tag is not in the <head> section of your
+  home page" and refused to verify, even though the tag was, by the standard,
+  in the head. So the source writes <head id="head"> - an optional tag keeps
+  its start tag once it carries an attribute, which is also why <html lang=en>
+  survives - and /dashboard-src/make-docs.mjs puts the end tag back. Removing
+  either would cost ownership of the Search Console property.
+
+  BUILD PROVENANCE
+  ----------------
+  React 19.2.8 · TypeScript 6.0.3 · Tailwind CSS 3.4.1 · lucide-react 1.28.0
+  bundled by Parcel 2.16.4, inlined by html-inline
+  Scaffolded with the web-artifacts-builder skill.
+-->

@@ -8,7 +8,7 @@
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "preview": "vite preview",
-    "bundle": "parcel build index.html --dist-dir dist --no-source-maps && html-inline --ignore-links=true dist/index.html > bundle.html",
+    "bundle": "parcel build index.html --dist-dir dist --no-source-maps && html-inline --ignore-links=true dist/index.html > bundle.html && node make-docs.mjs",
     "typecheck": "tsc --noEmit -p tsconfig.app.json"
   },
   "dependencies": {
