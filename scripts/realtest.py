@@ -503,7 +503,22 @@ def run_test(in_path: str, *,
 
     resolved = resolve_binary(binary)
 
-    if out_path is None:
+    # مالکیتِ فایلِ خروجی (F-3)
+    # ─────────────────────────
+    # اگر فراخوان مسیر داده باشد، فایل **مالِ اوست** و ما حق نداریم پاکش
+    # کنیم؛ اگر ما خودمان با `mkstemp` ساختیم، مالِ ماست و باید در هر مسیرِ
+    # خروج — موفق یا استثنا — پاکش کنیم. تفکیکِ این دو حالت با همین پرچم
+    # انجام می‌شود، نه با حدس‌زدن از رویِ نامِ فایل.
+    #
+    # اندازه‌گیریِ نشت (پیش از درمان، با باینریِ شبیه‌سازِ xray-knife):
+    #   • هر `test_lines`/`run_test` بی‌`out_path`  → ۱ فایلِ `l3_*.csv` جا می‌ماند
+    #   • `pipeline.run_l3_round` با L3_ROUNDS=3   → ۳ فایل در هر دور
+    #   • مسیرهای استثنا هم نشت داشتند: rc≠۰ و CSVِ بدشکل هرکدام ۱ فایل
+    #     (مسیرهای «فایل نوشته نشد» و «مهلت» و «باینریِ غایب» و «ورودیِ تهی»
+    #      طبعاً چیزی جا نمی‌گذاشتند، ولی حالا همه یکسان پوشش دارند)
+    # چون هر اجرایِ CI یک دورِ L3 دارد، این نشت خاموش و انباشتی بود.
+    owned = out_path is None
+    if owned:
         handle, out_path = tempfile.mkstemp(prefix="l3_", suffix=".csv")
         os.close(handle)
     parent = os.path.dirname(os.path.abspath(out_path))
@@ -511,56 +526,71 @@ def run_test(in_path: str, *,
     if os.path.exists(out_path):
         os.remove(out_path)
 
-    argv = build_argv(in_path, out_path, binary=resolved, test_url=test_url,
-                      threads=threads, mdelay_ms=mdelay_ms,
-                      timeout_ms=timeout_ms, max_passed=max_passed,
-                      retries=retries)
-    limit = int(hard_timeout if hard_timeout is not None else HARD_TIMEOUT)
-
-    started = time.time()
     try:
-        proc = subprocess.run(
-            argv,
-            stdin=subprocess.DEVNULL,       # لایهٔ دومِ دفاع در برابرِ قفل
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            timeout=limit,
-            check=False,
-        )
-    except subprocess.TimeoutExpired as exc:
-        raise XrayKnifeFailed(
-            f"xray-knife did not finish within {limit}s. The measured full "
-            f"census of 3,845 configs took 43s, so this is not slowness — it "
-            f"is a stuck run."
-        ) from exc
-    elapsed = round(time.time() - started, 2)
-    output = (proc.stdout or b"").decode("utf-8", errors="replace")
+        argv = build_argv(in_path, out_path, binary=resolved,
+                          test_url=test_url, threads=threads,
+                          mdelay_ms=mdelay_ms, timeout_ms=timeout_ms,
+                          max_passed=max_passed, retries=retries)
+        limit = int(hard_timeout if hard_timeout is not None else HARD_TIMEOUT)
 
-    if proc.returncode != 0:
-        raise XrayKnifeFailed(
-            f"xray-knife exited {proc.returncode}.\n"
-            f"--- last output ---\n{output[-2000:]}")
+        started = time.time()
+        try:
+            proc = subprocess.run(
+                argv,
+                stdin=subprocess.DEVNULL,   # لایهٔ دومِ دفاع در برابرِ قفل
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                timeout=limit,
+                check=False,
+            )
+        except subprocess.TimeoutExpired as exc:
+            raise XrayKnifeFailed(
+                f"xray-knife did not finish within {limit}s. The measured full "
+                f"census of 3,845 configs took 43s, so this is not slowness — "
+                f"it is a stuck run."
+            ) from exc
+        elapsed = round(time.time() - started, 2)
+        output = (proc.stdout or b"").decode("utf-8", errors="replace")
 
-    if not os.path.isfile(out_path):
-        raise OutputNotWritten(
-            f"xray-knife exited 0 but wrote no file at {out_path!r}. Measured: "
-            f"with a missing parent directory it prints 'Results have been "
-            f"saved to ...' and creates nothing.\n"
-            f"--- last output ---\n{output[-2000:]}")
+        if proc.returncode != 0:
+            raise XrayKnifeFailed(
+                f"xray-knife exited {proc.returncode}.\n"
+                f"--- last output ---\n{output[-2000:]}")
 
-    with open(out_path, encoding="utf-8", errors="replace") as handle:
-        result = classify(parse_csv(handle.read()))
+        if not os.path.isfile(out_path):
+            raise OutputNotWritten(
+                f"xray-knife exited 0 but wrote no file at {out_path!r}. "
+                f"Measured: with a missing parent directory it prints 'Results "
+                f"have been saved to ...' and creates nothing.\n"
+                f"--- last output ---\n{output[-2000:]}")
 
-    unique_in = _unique_links(in_path)
-    result["partial"] = len(result["rows"]) < len(unique_in)
-    result["stats"]["elapsed_sec"] = elapsed
-    result["stats"]["lines_in"] = n_lines
-    result["stats"]["unique_in"] = len(unique_in)
-    result["stats"]["test_url"] = test_url if test_url is not None else TEST_URL
-    result["stats"]["threads"] = int(
-        threads if threads is not None else THREADS)
-    result["out_path"] = out_path
-    return result
+        with open(out_path, encoding="utf-8", errors="replace") as handle:
+            result = classify(parse_csv(handle.read()))
+
+        unique_in = _unique_links(in_path)
+        result["partial"] = len(result["rows"]) < len(unique_in)
+        result["stats"]["elapsed_sec"] = elapsed
+        result["stats"]["lines_in"] = n_lines
+        result["stats"]["unique_in"] = len(unique_in)
+        result["stats"]["test_url"] = (
+            test_url if test_url is not None else TEST_URL)
+        result["stats"]["threads"] = int(
+            threads if threads is not None else THREADS)
+        # `out_path` هم‌چنان گزارش می‌شود تا قرارداد نشکند، ولی اگر مالِ ما
+        # بوده باشد دیگر روی دیسک نیست. هیچ مصرف‌کننده‌ای در پروژه این کلید
+        # را نمی‌خواند (شمرده شد: ۰ مورد بیرونِ همین ماژول)، پس حذفِ فایل
+        # چیزی را نمی‌شکند؛ نگه‌داشتنِ کلید فقط برای سازگاری است.
+        result["out_path"] = out_path
+        return result
+    finally:
+        # `finally` عمداً بیرونِ همهٔ شاخه‌هاست: هر استثنایی هم که رد شود،
+        # فایلِ موقتِ خودمان می‌رود. `try/except OSError` لازم است چون پاک‌سازی
+        # هرگز نباید علتِ اصلیِ خطا را بپوشاند.
+        if owned:
+            try:
+                os.remove(out_path)
+            except OSError:
+                pass
 
 
 def _unique_links(path: str) -> List[str]:

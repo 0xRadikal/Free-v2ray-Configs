@@ -11032,5 +11032,258 @@ def test_zzz_f12_the_sequential_fallback_also_enforces_the_time_bound():
         f"مسیرِ پشتیبان تایم‌اوتِ سراسری را روی {leaked!r} رها کرد.")
 
 
+#: سرستونِ سنجیده‌شدهٔ CSVِ xray-knife — همان قراردادِ ۱۵ستونیِ
+#: `realtest.parse_csv`. اگر این با محصول ناهمگام شود، خودِ محصول بلند
+#: می‌شکند (`MalformedCsv`)، پس شیم نمی‌تواند بی‌صدا کهنه بماند.
+_F3_HEADER = ("link,status,reason,tls,ip,delay,code,download,upload,"
+              "location,ttfb,connect_time,success,total,endpoints")
+_F3_ROW = ("vless://f3@1.2.3.4:443?type=tcp#f3,passed,,tls,1.2.3.4,120,200,"
+           "0,0,DE,40,30,1,1,1")
+
+#: هر شیم یک‌بار ساخته می‌شود و بازاستفاده؛ ساختنِ فایل در هر فراخوانی خودش
+#: منبعِ نشت می‌شد — دقیقاً همان اشتباهی که این تست‌ها شکارش می‌کنند.
+#: بی‌حاشیه‌نویسیِ typing نوشته شده‌اند: `Dict`/`List` در سطحِ ماژولِ این
+#: سوئیت وارد نشده‌اند (سنجیده شد با AST: هیچ‌کدام در نام‌های سطحِ بالا نیست).
+_F3_BINS = {}
+_F3_INPUT = []
+
+
+def _f3_fake_xray_knife(kind: str = "good") -> str:
+    """
+    یک شیمِ اجراییِ جای xray-knife که رفتارِ سنجیده‌شدهٔ آن را بازمی‌سازد.
+
+    چرا شیم و نه ابزارِ واقعی: این تست‌ها دربارهٔ *پاک‌سازیِ فایلِ موقت*اند،
+    نه دربارهٔ شبکه. با ابزارِ واقعی، تست به نصب‌بودنِ آن و به اینترنت گره
+    می‌خورد و روی ماشینِ بی‌ابزار **پوچ** سبز می‌شد. شیم مسیرِ کاملِ کد را
+    اجرا می‌کند: آرگومانِ `-o` را می‌خواند و همان‌جا CSV می‌نویسد.
+
+    گونه‌ها: good | rcbad | nofile | malformed | hangs
+    """
+    import stat as _stat
+    import tempfile as _tf
+
+    if kind in _F3_BINS:
+        return _F3_BINS[kind]
+
+    find_out = (
+        "import sys\n"
+        "a = sys.argv[1:]\n"
+        "out = None\n"
+        "for i, v in enumerate(a):\n"
+        "    if v in ('-o', '--out') and i + 1 < len(a):\n"
+        "        out = a[i + 1]\n"
+        "if out is None:\n"
+        "    sys.exit(9)\n"
+    )
+    bodies = {
+        "good": (f"open(out, 'w', encoding='utf-8')"
+                 f".write({_F3_HEADER!r} + '\\n' + {_F3_ROW!r} + '\\n')\n"
+                 "print('Results have been saved to ' + out)\n"),
+        # rc≠۰ ولی فایل را هم نوشته: بدترین حالت برای نشت.
+        "rcbad": (f"open(out, 'w', encoding='utf-8')"
+                  f".write({_F3_HEADER!r} + '\\n')\n"
+                  "sys.exit(7)\n"),
+        "nofile": "print('Results have been saved to ' + out)\n",
+        "malformed": ("open(out, 'w', encoding='utf-8')"
+                      ".write('totally,wrong,header\\n1,2,3\\n')\n"),
+        "hangs": "import time\ntime.sleep(600)\n",
+    }
+    if kind not in bodies:
+        raise AssertionError(f"unknown f3 shim kind: {kind!r}")
+
+    path = os.path.join(_tf.mkdtemp(prefix="f3_bin_"), f"xk_{kind}")
+    with open(path, "w", encoding="utf-8") as fh:
+        fh.write("#!/usr/bin/env python3\n" + find_out + bodies[kind])
+    os.chmod(path, os.stat(path).st_mode | _stat.S_IEXEC | _stat.S_IXGRP
+             | _stat.S_IXOTH)
+
+    # سلامتِ خودِ شیم را می‌سنجیم تا تستی که روی شیمِ خراب سبز می‌شود نداشته
+    # باشیم (درسِ «آینهٔ ناوفادار» در F-12: پیش‌شرط باید *اثبات* شود).
+    if kind == "good":
+        import subprocess as _sp
+        probe = os.path.join(os.path.dirname(path), "probe.csv")
+        rc = _sp.run([path, "-o", probe], stdout=_sp.DEVNULL,
+                     stderr=_sp.DEVNULL).returncode
+        assert rc == 0 and os.path.isfile(probe), (
+            f"شیمِ f3 کار نمی‌کند (rc={rc}) ⇒ هر تستی که رویش بنا شود پوچ است")
+        os.remove(probe)
+
+    _F3_BINS[kind] = path
+    return path
+
+
+def _f3_input_file() -> str:
+    """یک فایلِ ورودیِ ناتهیِ بازاستفاده‌شدنی برای L3."""
+    import tempfile as _tf
+    if not _F3_INPUT:
+        path = os.path.join(_tf.mkdtemp(prefix="f3_in_"), "in.txt")
+        with open(path, "w", encoding="utf-8") as fh:
+            fh.write("vless://f3@1.2.3.4:443?type=tcp#f3\n")
+        _F3_INPUT.append(path)
+    return _F3_INPUT[0]
+
+
+def test_zzz_f3_an_auto_created_result_file_is_not_left_behind() -> None:
+    """
+    L3 وقتی خودش فایلِ خروجی را می‌سازد، باید خودش هم پاکش کند (F-3).
+
+    نقصِ سنجیده‌شده: `run_test` با `tempfile.mkstemp(prefix="l3_", suffix=".csv")`
+    یک CSV می‌ساخت و هیچ‌جا پاکش نمی‌کرد. اندازه‌گیریِ پیش از درمان با یک
+    باینریِ شبیه‌سازِ xray-knife:
+        هر فراخوانیِ بی‌`out_path` → ۱ فایلِ `l3_*.csv` جامانده
+    و چون `pipeline.run_l3_round` به‌طورِ پیش‌فرض ۳ دور اجرا می‌کند
+    (`L3_ROUNDS=3`)، هر اجرایِ CI سه فایل جا می‌گذاشت — خاموش و انباشتی.
+
+    این تست به **رفتار** نگاه می‌کند نه به متنِ کد: می‌شمارد که در TMPDIR
+    چند فایلِ تازهٔ `l3_*.csv` مانده است.
+    """
+    import glob as _glob
+    import tempfile as _tf
+
+    binary = _f3_fake_xray_knife()
+    tmpdir = _tf.gettempdir()
+    pattern = os.path.join(tmpdir, "l3_*.csv")
+
+    before = set(_glob.glob(pattern))
+    res = realtest.run_test(_f3_input_file(), binary=binary)
+    after = set(_glob.glob(pattern))
+    new = sorted(after - before)
+
+    assert not new, (
+        f"L3 فایلِ موقتِ خودش را جا گذاشت: {[os.path.basename(p) for p in new]}. "
+        f"پیش از درمان هر فراخوانی ۱ فایل جا می‌گذاشت و `run_l3_round` سه‌تا.")
+
+    # قرارداد نباید شکسته باشد: کلید هست، ولی فایل روی دیسک نیست.
+    assert "out_path" in res, "کلیدِ out_path باید برای سازگاری باقی بماند"
+    assert not os.path.exists(res["out_path"]), (
+        f"فایلِ خودساخته باید حذف شده باشد، ولی هست: {res['out_path']!r}")
+
+
+def test_zzz_f3_a_caller_supplied_result_file_is_never_deleted() -> None:
+    """
+    نیمهٔ دیگرِ قرارداد: اگر فراخوان مسیر بدهد، فایل **مالِ اوست**.
+
+    این تست نگهبانِ افراطِ درمان است: راهِ آسانِ رفعِ نشت این بود که همیشه
+    فایل را پاک کنیم؛ آن، دادهٔ فراخوان را نابود می‌کرد. هر شش فراخوانیِ
+    `run_test` در همین سوئیت `out_path=` می‌دهند، پس چنین اشتباهی مستقیماً
+    داده از دست می‌داد.
+    """
+    import tempfile as _tf
+
+    binary = _f3_fake_xray_knife()
+    work = _tf.mkdtemp(prefix="f3_owned_")
+    try:
+        mine = os.path.join(work, "caller_owned.csv")
+        res = realtest.run_test(_f3_input_file(), binary=binary,
+                                out_path=mine)
+        assert os.path.isfile(mine), (
+            "فایلی که فراخوان نامش را داده باید دست‌نخورده بماند؛ درمانِ F-3 "
+            "نباید به «همیشه پاک کن» تبدیل شود.")
+        assert res["out_path"] == mine, (
+            f"out_path باید همان مسیرِ فراخوان باشد، شد {res['out_path']!r}")
+    finally:
+        import shutil as _shutil
+        _shutil.rmtree(work, ignore_errors=True)
+
+
+def test_zzz_f3_every_failure_path_also_cleans_the_temp_file() -> None:
+    """
+    پاک‌سازی باید در **هر** مسیرِ خروج بیفتد، نه فقط مسیرِ خوش‌بین.
+
+    درسِ F-13: نقص در نیمهٔ کم‌ترددِ کد پنهان می‌شود. پس همهٔ شاخه‌های
+    استثنایِ `run_test` جدا سنجیده می‌شوند. اندازه‌گیریِ پیش از درمان:
+        موفق=۱ نشت، rc≠۰=۱ نشت، CSVِ بدشکل=۱ نشت،
+        «فایل نوشته نشد»=۰، مهلت=۰، باینریِ غایب=۰، ورودیِ تهی=۰
+    یعنی ۳ مسیر از ۷ نشت داشتند. پس از درمان باید هر هفت مسیر ۰ باشد،
+    **و** نوعِ استثنا هم عوض نشده باشد.
+    """
+    import glob as _glob
+    import tempfile as _tf
+
+    tmpdir = _tf.gettempdir()
+    pattern = os.path.join(tmpdir, "l3_*.csv")
+    good_in = _f3_input_file()
+
+    cases = [
+        ("rc!=0", _f3_fake_xray_knife("rcbad"), realtest.XrayKnifeFailed, {}),
+        ("no output file", _f3_fake_xray_knife("nofile"),
+         realtest.OutputNotWritten, {}),
+        ("malformed csv", _f3_fake_xray_knife("malformed"),
+         realtest.MalformedCsv, {}),
+        ("hangs", _f3_fake_xray_knife("hangs"),
+         realtest.XrayKnifeFailed, {"hard_timeout": 2}),
+        ("binary missing", "definitely_not_a_binary_f3_zz",
+         realtest.XrayKnifeMissing, {}),
+    ]
+
+    checked = 0
+    for label, binary, want_exc, extra in cases:
+        before = set(_glob.glob(pattern))
+        try:
+            realtest.run_test(good_in, binary=binary, **extra)
+        except want_exc:
+            checked += 1
+        except Exception as exc:                       # noqa: BLE001
+            raise AssertionError(
+                f"{label}: انتظار {want_exc.__name__} بود، "
+                f"{type(exc).__name__} آمد ⇒ رفتار عوض شده است") from exc
+        else:
+            raise AssertionError(
+                f"{label}: باید {want_exc.__name__} می‌داد ولی نداد")
+        new = sorted(set(_glob.glob(pattern)) - before)
+        assert not new, (
+            f"{label}: مسیرِ استثنا فایلِ موقت جا گذاشت: "
+            f"{[os.path.basename(p) for p in new]}")
+
+    assert checked == len(cases), (
+        f"فقط {checked} از {len(cases)} مسیرِ استثنا آزموده شد ⇒ این تست پوچ است")
+
+    # ورودیِ تهی: پیش از ساختِ فایلِ موقت می‌شکند، ولی باید ۰ نشت بدهد.
+    empty_dir = _tf.mkdtemp(prefix="f3_empty_")
+    try:
+        empty = os.path.join(empty_dir, "in.txt")
+        with open(empty, "w", encoding="utf-8") as fh:
+            fh.write("\n  \n")
+        before = set(_glob.glob(pattern))
+        try:
+            realtest.run_test(empty, binary=_f3_fake_xray_knife())
+        except realtest.EmptyInput:
+            pass
+        else:
+            raise AssertionError("ورودیِ تهی باید EmptyInput بدهد")
+        assert not set(_glob.glob(pattern)) - before, (
+            "مسیرِ ورودیِ تهی فایلِ موقت جا گذاشت")
+    finally:
+        import shutil as _shutil
+        _shutil.rmtree(empty_dir, ignore_errors=True)
+
+
+def test_zzz_f3_a_full_l3_round_leaves_no_temp_file_behind() -> None:
+    """
+    سنجشِ سرتاسری: همان کاری که خطِ لولهٔ واقعی می‌کند.
+
+    `pipeline.run_l3_round` به‌طورِ پیش‌فرض `L3_ROUNDS=3` بار `test_lines` را
+    صدا می‌زند. اندازه‌گیریِ پیش از درمان: **۳ فایل** جامانده در یک دور.
+    این تست همان مسیر را با باینریِ شبیه‌ساز می‌پیماید تا نشتِ انباشتیِ CI
+    دیگر برنگردد.
+    """
+    import glob as _glob
+    import tempfile as _tf
+
+    binary = _f3_fake_xray_knife()
+    pattern = os.path.join(_tf.gettempdir(), "l3_*")
+
+    before = set(_glob.glob(pattern))
+    res = pipeline.run_l3_round(
+        ["vless://f3@1.2.3.4:443?type=tcp#f3"], rounds=3, binary=binary)
+    new = sorted(set(_glob.glob(pattern)) - before)
+
+    assert res.get("rounds") == 3, (
+        f"سنجش باید سه دور باشد وگرنه پوچ است؛ شد {res.get('rounds')!r}")
+    assert not new, (
+        f"یک دورِ کاملِ L3 این‌ها را جا گذاشت: "
+        f"{[os.path.basename(p) for p in new]} (پیش از درمان: ۳ فایل)")
+
+
 if __name__ == "__main__":
     sys.exit(_run_all())
