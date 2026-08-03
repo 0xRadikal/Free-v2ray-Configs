@@ -149,7 +149,34 @@ def fetch_source(url: str) -> Tuple[str, List[str]]:
     last_err = ""
     last_code = 0
     t_start = time.time()
-    for attempt in range(1, FETCH_RETRIES + 1):
+
+    # ── چرا `max(1, …)` و چرا یک نامِ محلی (F-1) ──────────────────────────────
+    # `FETCH_RETRIES` از محیط می‌آید (سطرِ ۱۲۰) و هیچ‌جا اعتبارسنجی نمی‌شد. با
+    # `AGG_FETCH_RETRIES=0` (یا هر عددِ ≤ ۰) بدنهٔ حلقه **هرگز** اجرا نمی‌شد،
+    # پس `attempt` هیچ‌گاه مقدار نمی‌گرفت و دو سطرِ پایین‌ترِ همین تابع که آن را
+    # می‌خوانند (`"attempts": attempt` و پیامِ `log`) با
+    #     UnboundLocalError: cannot access local variable 'attempt'
+    # می‌شکستند. این با اجرا اثبات شد، نه با خواندن: `0` و `-1` هر دو خطا دادند
+    # و `1`/`3` سالم بودند.
+    #
+    # شعاعِ انفجار — چرا این «فقط یک لبهٔ نادر» نیست: `fetch_source` درونِ
+    # `ThreadPoolExecutor` اجرا می‌شود و `fetch_all` نتیجه را با
+    # `fut.result()` (سطرِ ~۲۱۹) می‌گیرد که استثنا را **بازپرتاب** می‌کند.
+    # پس یک متغیرِ محیطیِ بدتنظیم، نه یک منبع، بلکه *کلِ* دورِ تجمیع را
+    # می‌کشت. (این بازپرتاب عمداً دست‌نخورده می‌ماند — دلیلش در `fetch_all`.)
+    #
+    # چرا نامِ محلیِ `tries` و نه کلمپ در سطرِ تعریف:
+    #   ۱) هر دو مصرف‌کنندهٔ عدد (`range` و شرطِ backoff) از **یک** مقدار
+    #      می‌خوانند، پس نمی‌توانند با هم ناسازگار شوند.
+    #   ۲) `FETCH_RETRIES` دست‌نخورده می‌ماند و در زمانِ *فراخوانی* خوانده
+    #      می‌شود، پس آزمون می‌تواند آن را monkeypatch کند و همین مسیر را
+    #      واقعاً بپیماید؛ کلمپ در زمانِ import آن مسیر را غیرقابل‌آزمون می‌کرد.
+    #   ۳) همین اصطلاحِ `max(1, …)` از قبل در `geo.py:320` و
+    #      `reachability.py:186` برای `DNS_WORKERS` به‌کار رفته؛ این تغییر
+    #      سبکِ تازه‌ای نمی‌آورد، فقط تنها نقطهٔ جامانده را هم‌راستا می‌کند.
+    tries = max(1, FETCH_RETRIES)
+
+    for attempt in range(1, tries + 1):
         ua = USER_AGENTS[(attempt - 1) % len(USER_AGENTS)]
         try:
             resp = requests.get(url, timeout=FETCH_TIMEOUT, headers={"User-Agent": ua})
@@ -175,7 +202,10 @@ def fetch_source(url: str) -> Tuple[str, List[str]]:
                     break
         except Exception as e:  # noqa: BLE001
             last_err = f"{type(e).__name__}: {str(e)[:80]}"
-        if attempt < FETCH_RETRIES:
+        # `tries` (نه `FETCH_RETRIES`) تا شرطِ خواب و شرطِ حلقه هرگز از هم
+        # جدا نیفتند. با یک تلاش، هیچ خوابی نباید رخ دهد — اندازه‌گیری شد:
+        # tries=1 → sleeps=[] · tries=2 → [1.5] · tries=3 → [1.5, 3.0]
+        if attempt < tries:
             time.sleep(RETRY_BACKOFF * attempt)
     # شکستِ نهایی
     SOURCE_HEALTH[url] = {
@@ -188,9 +218,42 @@ def fetch_source(url: str) -> Tuple[str, List[str]]:
 
 
 def fetch_all(urls: List[str]) -> Dict[str, List[str]]:
-    """واکشیِ هم‌زمانِ همهٔ URLها → نگاشت url→configs."""
+    """واکشیِ هم‌زمانِ همهٔ URLها → نگاشت url→configs.
+
+    ── دو نکتهٔ عامدانه (F-1) ────────────────────────────────────────────────
+
+    ۱) `max(1, MAX_WORKERS)` — نه `MAX_WORKERS` خام.
+       `MAX_WORKERS` هم از محیط می‌آید (سطرِ ۱۱۹) و اعتبارسنجی نمی‌شد. با اجرا
+       سنجیده شد (نه با حدس): `AGG_MAX_WORKERS=0` و `=-1` هر دو پیش از هر
+       واکشی‌ای با
+           ValueError: max_workers must be greater than 0
+       کلِ تابع را می‌شکستند — یعنی هیچ منبعی واکشی نمی‌شد. `1` و `16` سالم
+       بودند. این همان اصطلاحی است که `geo.py:320` و `reachability.py:186`
+       سال‌ها برای `DNS_WORKERS` به‌کار برده‌اند؛ سطرِ زیر تنها نقطهٔ جامانده
+       در پروژه بود.
+
+    ۲) `fut.result()` عامدانه **بی‌گارد** می‌ماند.
+       وسوسه‌اش هست که دورش `try/except` بگذاریم تا «یک منبعِ خراب کلِ دور را
+       نکشد». این کار در این پروژه **زیان‌آور** است، و دلیلش ساختارِ ورک‌فلو
+       است نه سلیقه:
+
+         • `fetch_source` خودش هر خطای *شبکه‌ای* را می‌گیرد (سطرِ ۲۰۳) و
+           `(url, [])` برمی‌گرداند. پس هر استثنایی که به این‌جا برسد، خطای
+           شبکه نیست — یک **خطای برنامه‌نویسی** است (مثلاً همان
+           `UnboundLocalError`ِ بالا).
+         • گامِ «🚀 Run aggregator» در `aggregate.yml:328-330` هیچ
+           `continue-on-error` ندارد (در کلِ ورک‌فلو فقط دو گام دارند: لایهٔ
+           L3 و پاک‌سازیِ jsDelivr). پس استثنا ⇒ شکستِ بلندِ job ⇒ گامِ انتشار
+           هرگز اجرا نمی‌شود ⇒ snapshotِ سالمِ قبلی دست‌نخورده می‌ماند.
+
+       یعنی رفتارِ امروز از قبل fail-closed است. اگر گارد بگذاریم، یک خطای
+       برنامه‌نویسی به «تجمیعِ ناقصِ خاموش» تبدیل می‌شود: چند منبع غایب،
+       کانفیگ‌های کمتر، و چون سنجهٔ کمینه فقط ۱۰۰ خط است
+       (`aggregate.yml:813-816`) احتمالاً همان خروجیِ لاغرشده **منتشر**
+       می‌شود. آن، بدتر از شکستِ بلند است. پس این‌جا عمداً دست نمی‌زنیم.
+    """
     results: Dict[str, List[str]] = {}
-    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as ex:
+    with ThreadPoolExecutor(max_workers=max(1, MAX_WORKERS)) as ex:
         futs = {ex.submit(fetch_source, u): u for u in urls}
         for fut in as_completed(futs):
             url, cfgs = fut.result()

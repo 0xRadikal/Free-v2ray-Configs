@@ -9769,5 +9769,213 @@ def test_zzz_f8_gate_name_does_not_collide_with_the_control_byte_gate():
         "گاردِ بایتِ کنترلی حذف شده؟ آن‌گاه استدلالِ نام‌گذاری باید بازبینی شود"
 
 
+# ──────────────────────────────────────────────────────────────────────────────
+# F-1 — پیچ‌های محیطیِ اعتبارسنجی‌نشده در `aggregate.py`
+#
+# دو نقص، هر دو با اجرا اثبات‌شده (نه با خواندن):
+#   الف) `AGG_FETCH_RETRIES=0` ⇒ بدنهٔ حلقه اجرا نمی‌شد ⇒ `attempt` بی‌مقدار
+#        می‌ماند ⇒ `UnboundLocalError` در همان تابع.
+#   ب)  `AGG_MAX_WORKERS=0` ⇒ `ValueError: max_workers must be greater than 0`
+#        پیش از واکشیِ **هیچ** منبعی.
+#
+# هر دو کشنده بودند چون گامِ «🚀 Run aggregator» در `aggregate.yml:328-330`
+# هیچ `continue-on-error` ندارد؛ یعنی کلِ دور می‌مرد.
+# ──────────────────────────────────────────────────────────────────────────────
+
+def _f1_no_network(monkey):
+    """`requests.get` را با خطایی شبیهِ شبکه جایگزین می‌کند — بدونِ شبکهٔ واقعی.
+
+    چرا نه یک پورتِ بسته: آزمون نباید به پشتهٔ شبکهٔ سندباکس تکیه کند و نباید
+    چند صد میلی‌ثانیه صرفِ timeout کند.
+    """
+    class _Boom(Exception):
+        pass
+
+    def _fake_get(*a, **kw):
+        raise _Boom("simulated network failure")
+
+    monkey.append((aggregate.requests, "get", aggregate.requests.get))
+    aggregate.requests.get = _fake_get
+
+
+def _f1_no_sleep(monkey):
+    """`time.sleep` را می‌بلعد و مقادیرش را برمی‌گرداند (backoff واقعی نخوابد)."""
+    calls = []
+    monkey.append((aggregate.time, "sleep", aggregate.time.sleep))
+    aggregate.time.sleep = lambda s: calls.append(s)
+    return calls
+
+
+def _f1_restore(monkey):
+    for obj, attr, old in reversed(monkey):
+        setattr(obj, attr, old)
+
+
+def test_zzz_f1_fetch_source_survives_a_non_positive_retry_setting():
+    """`AGG_FETCH_RETRIES=0` نباید `UnboundLocalError` بدهد (F-1، بندِ الف).
+
+    اثباتِ نقص پیش از درمان — اجرای واقعی:
+        FETCH_RETRIES = 0 → UnboundLocalError: cannot access local variable
+                            'attempt' where it is not associated with a value
+        FETCH_RETRIES = -1 → همان
+        FETCH_RETRIES = 1/3 → سالم
+    قاعدهٔ درست: هر مقدارِ ≤ ۰ باید **دقیقاً یک** تلاش بدهد (کلمپ به ۱)،
+    سلامت را ثبت کند و لیستِ خالی برگرداند — نه استثنا.
+    """
+    monkey = []
+    old_retries = aggregate.FETCH_RETRIES
+    url = "http://f1.invalid/never"
+    try:
+        _f1_no_network(monkey)
+        sleeps = _f1_no_sleep(monkey)
+        for bad in (0, -1, -99):
+            aggregate.FETCH_RETRIES = bad
+            aggregate.SOURCE_HEALTH.pop(url, None)
+            del sleeps[:]
+            try:
+                got_url, cfgs = aggregate.fetch_source(url)
+            except BaseException as exc:  # noqa: BLE001
+                raise AssertionError(
+                    f"FETCH_RETRIES={bad} استثنا داد: "
+                    f"{type(exc).__name__}: {exc}"
+                ) from None
+            assert got_url == url, got_url
+            assert cfgs == [], f"FETCH_RETRIES={bad} کانفیگ از هوا ساخت: {cfgs}"
+            h = aggregate.SOURCE_HEALTH.get(url)
+            assert h, f"FETCH_RETRIES={bad}: سلامت ثبت نشد"
+            # کلمپ به ۱، نه ۰ و نه عددِ منفی — این عدد در health.json منتشر می‌شود
+            assert h["attempts"] == 1, \
+                f"FETCH_RETRIES={bad}: attempts={h['attempts']!r} (باید ۱ باشد)"
+            assert h["status"] == "fail", h
+            # با یک تلاش، backoff بی‌معناست و نباید ثانیه‌ای هدر شود
+            assert sleeps == [], \
+                f"FETCH_RETRIES={bad}: با یک تلاش خوابید: {sleeps}"
+    finally:
+        aggregate.FETCH_RETRIES = old_retries
+        aggregate.SOURCE_HEALTH.pop(url, None)
+        _f1_restore(monkey)
+
+
+def test_zzz_f1_positive_retry_settings_are_not_altered_by_the_clamp():
+    """ضدِ رگرسیون: کلمپ نباید رفتارِ مقادیرِ **سالم** را عوض کند (F-1).
+
+    بی این بند، یک «اصلاح» می‌توانست همه را به یک تلاش کلمپ کند و مقاومتِ
+    واقعیِ واکشی را خاموش نابود کند — دقیقاً همان نوع باگِ خاموشی که این
+    فایل برای جلوگیری از آن نوشته شده.
+    """
+    monkey = []
+    old_retries = aggregate.FETCH_RETRIES
+    url = "http://f1.invalid/never2"
+    try:
+        _f1_no_network(monkey)
+        sleeps = _f1_no_sleep(monkey)
+        # (تنظیم, تلاشِ منتظره, خواب‌های منتظره) — از اندازه‌گیریِ واقعی
+        for setting, want_attempts, want_sleeps in (
+            (1, 1, []),
+            (2, 2, [aggregate.RETRY_BACKOFF * 1]),
+            (3, 3, [aggregate.RETRY_BACKOFF * 1, aggregate.RETRY_BACKOFF * 2]),
+        ):
+            aggregate.FETCH_RETRIES = setting
+            aggregate.SOURCE_HEALTH.pop(url, None)
+            del sleeps[:]
+            aggregate.fetch_source(url)
+            h = aggregate.SOURCE_HEALTH[url]
+            assert h["attempts"] == want_attempts, \
+                f"FETCH_RETRIES={setting}: attempts={h['attempts']} " \
+                f"(منتظره {want_attempts})"
+            assert sleeps == want_sleeps, \
+                f"FETCH_RETRIES={setting}: خواب‌ها {sleeps} " \
+                f"(منتظره {want_sleeps}) — خوابِ پس از آخرین تلاش هدرِ زمان است"
+    finally:
+        aggregate.FETCH_RETRIES = old_retries
+        aggregate.SOURCE_HEALTH.pop(url, None)
+        _f1_restore(monkey)
+
+
+def test_zzz_f1_fetch_all_survives_a_non_positive_worker_setting():
+    """`AGG_MAX_WORKERS=0` نباید کلِ واکشی را پیش از شروع بکشد (F-1، بندِ ب).
+
+    اثباتِ نقص پیش از درمان — اجرای واقعی:
+        MAX_WORKERS = 0  → ValueError: max_workers must be greater than 0
+        MAX_WORKERS = -1 → همان
+    این بدتر از بندِ الف بود: نه یک منبع، بلکه **هیچ** منبعی واکشی نمی‌شد.
+    همان اصطلاحِ `max(1, …)` که `geo.py:320` و `reachability.py:186` از قبل
+    داشتند، این‌جا جا افتاده بود.
+    """
+    monkey = []
+    old_workers = aggregate.MAX_WORKERS
+    old_retries = aggregate.FETCH_RETRIES
+    urls = ["http://f1.invalid/a", "http://f1.invalid/b"]
+    try:
+        _f1_no_network(monkey)
+        _f1_no_sleep(monkey)
+        aggregate.FETCH_RETRIES = 1
+        for bad in (0, -1, -8):
+            aggregate.MAX_WORKERS = bad
+            for u in urls:
+                aggregate.SOURCE_HEALTH.pop(u, None)
+            try:
+                res = aggregate.fetch_all(urls)
+            except BaseException as exc:  # noqa: BLE001
+                raise AssertionError(
+                    f"MAX_WORKERS={bad} استثنا داد: "
+                    f"{type(exc).__name__}: {exc}"
+                ) from None
+            # هر URL باید کلید داشته باشد — «کارگرِ صفر» نباید منبعی را بخورد
+            assert sorted(res) == sorted(urls), \
+                f"MAX_WORKERS={bad}: منابع گم شدند: {sorted(res)}"
+            assert all(v == [] for v in res.values()), res
+    finally:
+        aggregate.MAX_WORKERS = old_workers
+        aggregate.FETCH_RETRIES = old_retries
+        for u in urls:
+            aggregate.SOURCE_HEALTH.pop(u, None)
+        _f1_restore(monkey)
+
+
+def test_zzz_f1_fetch_all_still_reraises_a_programming_error():
+    """`fut.result()` عمداً بی‌گارد است و باید بی‌گارد بماند (F-1، تصمیمِ ج).
+
+    چرا این آزمون وجود دارد: «اصلاحِ» طبیعی به‌نظر می‌رسید که دورِ
+    `fut.result()` یک `try/except` بگذاریم. آن کار نقص می‌سازد، نه رفع:
+
+      • `fetch_source` خودش هر خطای شبکه‌ای را می‌گیرد و `(url, [])` می‌دهد،
+        پس هر استثنایی که به `fetch_all` برسد یک **خطای برنامه‌نویسی** است.
+      • گامِ «🚀 Run aggregator» (`aggregate.yml:328-330`) `continue-on-error`
+        ندارد — در کلِ ورک‌فلو فقط دو گام دارند. پس استثنا ⇒ شکستِ بلندِ job
+        ⇒ گامِ انتشار اجرا نمی‌شود ⇒ snapshotِ سالمِ قبلی حفظ می‌شود.
+      • با گارد، خطای برنامه‌نویسی به «تجمیعِ ناقصِ خاموش» بدل می‌شد و چون
+        سنجهٔ کمینه فقط ۱۰۰ خط است، همان خروجیِ لاغر **منتشر** می‌شد.
+
+    پس این آزمون رفتارِ fail-closed را قفل می‌کند، نه یک باگ را.
+    """
+    monkey = []
+    old_workers = aggregate.MAX_WORKERS
+    try:
+        monkey.append((aggregate, "fetch_source", aggregate.fetch_source))
+
+        class _ProgrammingError(Exception):
+            pass
+
+        def _boom(url):
+            raise _ProgrammingError("simulated programming error")
+
+        aggregate.fetch_source = _boom
+        aggregate.MAX_WORKERS = 2
+        raised = None
+        try:
+            aggregate.fetch_all(["http://f1.invalid/x", "http://f1.invalid/y"])
+        except _ProgrammingError as exc:
+            raised = exc
+        assert raised is not None, (
+            "`fetch_all` خطای برنامه‌نویسی را بلعید ⇒ دور با داده‌های ناقص "
+            "ادامه می‌دهد و خروجیِ لاغرشده منتشر می‌شود (fail-open). این "
+            "رفتار باید fail-closed بماند."
+        )
+    finally:
+        aggregate.MAX_WORKERS = old_workers
+        _f1_restore(monkey)
+
+
 if __name__ == "__main__":
     sys.exit(_run_all())
