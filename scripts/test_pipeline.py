@@ -2419,57 +2419,84 @@ def test_reachability_closes_every_socket_it_opens() -> None:
         _unpatch(monkey)
 
 
-def test_reachability_raises_when_the_real_fd_count_grows() -> None:
+def test_reachability_raises_when_a_socket_is_left_open() -> None:
     """
     آزمونِ بالا شمارندهٔ *استاب* را می‌سنجد: «هرچه باز شد بسته شد». این
     خصوصیتِ فِیک است، نه خصوصیتِ ماژول. پس محافظِ واقعی — آن `raise` که
-    وقتی `fd_after > fd_before` باشد نتیجه را باطل می‌کند — بی‌آزمون
-    می‌ماند. (با mutation ثابت شد: برداشتنِ آن `raise` هیچ تستی را
-    نشکست.)
+    نتیجه را باطل می‌کند — بی‌آزمون می‌ماند. (با mutation ثابت شد:
+    برداشتنِ آن `raise` هیچ تستی را نشکست.) این‌جا خودِ محافظ سنجیده
+    می‌شود.
 
-    این‌جا خودِ محافظ سنجیده می‌شود، با جایگزینیِ `fd_count` که تنها دو
-    بار صدا زده می‌شود: یک‌بار پیش از سنجش، یک‌بار پس از آن.
+    ⚠️ چرا این آزمون بازنویسی شد — و چرا نامش هم عوض شد (F-13) ────────────
+    نسخهٔ پیشین `fd_count` را جایگزین می‌کرد و ناوردا را «رشدِ کلِ fdهای
+    فرآیند» می‌گرفت. آن ناوردا با اجرا در **هر دو جهت** خطادار ثابت شد:
 
-    سه حالت، چون یک محافظ که همیشه بیندازد هم به‌همان اندازه بی‌فایده است:
-      ۱) رشدِ fd → استثنا، با پیامی که از پیامِ EMFILE قابلِ تفکیک است.
-      ۲) fdِ ثابت → بی‌استثنا، و همان اعداد در `stats`.
-      ۳) نبودِ ‎/proc‏ (‎-1‏) → *نباید* رشدِ کاذب تلقی شود؛ ‎-1 → 4‏ عددی
+      • مثبتِ کاذب: یک `open(os.devnull)`ِ بی‌آزار در بازهٔ سنجش، اجرای
+        سالم را باطل می‌کرد («‎4 open before, 5 after‏») در حالی که هیچ
+        سوکتی نشت نکرده بود.
+      • منفیِ کاذب: بستنِ دو fdِ بی‌ربط در همان بازه، دو سوکتِ **واقعاً**
+        نشت‌کرده را پنهان می‌کرد و محافظ ساکت می‌ماند.
+
+    پس سنجه به `socket_fd_count` منتقل شد. نامِ آزمون هم از
+    `..._when_the_real_fd_count_grows` به `..._when_a_socket_is_left_open`
+    عوض شد، چون نامِ قدیمی دیگر همان چیزی را نمی‌گفت که سنجیده می‌شود؛
+    نگه‌داشتنش یک سندِ نادرست در فهرستِ آزمون‌ها باقی می‌گذاشت.
+    `fd_count` هنوز آزموده می‌شود، ولی در نقشِ درستش: عددِ **گزارشی**.
+
+    چهار حالت، چون محافظی که همیشه بیندازد هم به‌همان اندازه بی‌فایده است:
+      ۱) بازماندنِ سوکت → استثنا، با پیامی جدا از پیامِ EMFILE.
+      ۲) سوکتِ متوازن → بی‌استثنا، و اعدادِ `fd_*` همچنان در `stats`.
+      ۳) نبودِ ‎/proc‏ (‎-1‏) → *نباید* نشتِ کاذب تلقی شود؛ ‎-1 → 4‏ عددی
          بزرگ‌تر است ولی هیچ نشتی را نشان نمی‌دهد. این همان شرطِ
-         `fd_before >= 0` است.
+         `sock_before >= 0` است.
+      ۴) رشدِ کلِ fd با سوکتِ متوازن → **نباید** استثنا بدهد. این همان
+         مثبتِ کاذبِ F-13 است و بی این بند، رگرسیون بی‌صدا برمی‌گردد.
     """
-    # ۱) رشدِ واقعیِ fd
+    # ۱) سوکتِ بازمانده → استثنا
     monkey = []
     grew = iter([4, 9])
     try:
         _patch_dns(monkey, {"a.example": ("203.0.113.1",)})
         _patch_connect(monkey, lambda ip, p: None)
-        monkey.append((reachability, "fd_count", reachability.fd_count))
-        reachability.fd_count = lambda: next(grew)
+        monkey.append((reachability, "socket_fd_count",
+                       reachability.socket_fd_count))
+        reachability.socket_fd_count = lambda: next(grew)
         msg = ""
         try:
             reachability.check_endpoints([("a.example", 443)])
         except reachability.FileDescriptorExhaustion as exc:
             msg = str(exc)
-        assert msg, "رشدِ fd باید FileDescriptorExhaustion بیندازد، نه بی‌صدا بگذرد"
-        assert "leak" in msg.lower(), f"پیام باید نشت را نام ببرد: {msg!r}"
+        assert msg, "بازماندنِ سوکت باید FileDescriptorExhaustion بیندازد"
+        assert "socket leak" in msg, f"پیام باید نشتِ سوکت را نام ببرد: {msg!r}"
         assert "4" in msg and "9" in msg, f"پیام باید هر دو عدد را بدهد: {msg!r}"
+        assert "5 socket descriptor" in msg, (
+            f"پیام باید *اختلاف* را هم بدهد (9-4=5)، نه فقط دو عدد را، "
+            f"وگرنه خواننده باید خودش تفریق کند: {msg!r}")
         assert "EMFILE" not in msg, (
             f"پیامِ نشت باید از پیامِ EMFILE جدا باشد، وگرنه علتِ خرابی "
             f"اشتباه تشخیص داده می‌شود: {msg!r}")
     finally:
         _unpatch(monkey)
 
-    # ۲) کنترلِ منفی: fdِ ثابت → هیچ استثنایی
+    # ۲) کنترلِ منفی: سوکتِ متوازن → هیچ استثنایی، و اعدادِ گزارشی سرِ جا
     monkey = []
     same = iter([7, 7])
     try:
         _patch_dns(monkey, {"a.example": ("203.0.113.1",)})
         _patch_connect(monkey, lambda ip, p: None)
-        monkey.append((reachability, "fd_count", reachability.fd_count))
-        reachability.fd_count = lambda: next(same)
+        monkey.append((reachability, "socket_fd_count",
+                       reachability.socket_fd_count))
+        reachability.socket_fd_count = lambda: next(same)
         res = reachability.check_endpoints([("a.example", 443)])
-        assert res["stats"]["fd_before"] == 7, res["stats"]
-        assert res["stats"]["fd_after"] == 7, res["stats"]
+        assert res["stats"]["sock_before"] == 7, res["stats"]
+        assert res["stats"]["sock_after"] == 7, res["stats"]
+        # `fd_before`/`fd_after` حذف نشده‌اند: `pipeline.py` آن‌ها را در
+        # `cascade.layers.l2` منتشر می‌کند و `health.json`ِ زنده داردشان.
+        for k in ("fd_before", "fd_after"):
+            assert k in res["stats"], (
+                f"کلیدِ گزارشیِ «{k}» نباید با تغییرِ ناوردا حذف شود؛ "
+                f"pipeline.py آن را می‌خواند: {sorted(res['stats'])}")
+            assert isinstance(res["stats"][k], int), res["stats"][k]
     finally:
         _unpatch(monkey)
 
@@ -2479,14 +2506,135 @@ def test_reachability_raises_when_the_real_fd_count_grows() -> None:
     try:
         _patch_dns(monkey, {"a.example": ("203.0.113.1",)})
         _patch_connect(monkey, lambda ip, p: None)
-        monkey.append((reachability, "fd_count", reachability.fd_count))
-        reachability.fd_count = lambda: next(noproc)
+        monkey.append((reachability, "socket_fd_count",
+                       reachability.socket_fd_count))
+        reachability.socket_fd_count = lambda: next(noproc)
         res = reachability.check_endpoints([("a.example", 443)])
-        assert res["stats"]["fd_before"] == -1, res["stats"]
+        assert res["stats"]["sock_before"] == -1, res["stats"]
         assert ("a.example", 443) in res["open"], (
-            "بی‌اطلاعی از fd نباید سنجش را باطل کند")
+            "بی‌اطلاعی از شمارِ سوکت نباید سنجش را باطل کند")
     finally:
         _unpatch(monkey)
+
+    # ۴) ★ بندِ ضدِ رگرسیونِ F-13 ★
+    #    کلِ fd رشد کرده (‎4 → 99‏) ولی سوکت‌ها متوازن‌اند. این حالتِ
+    #    «یک fdِ بی‌ربطِ باز در بازهٔ سنجش» است و **نباید** اجرای سالم را
+    #    باطل کند. اگر روزی کسی ناوردا را به `fd_*` برگرداند، همین بند
+    #    می‌شکند — که تمامِ هدفِ این بند است.
+    monkey = []
+    fd_grew = iter([4, 99])
+    sock_flat = iter([2, 2])
+    try:
+        _patch_dns(monkey, {"a.example": ("203.0.113.1",)})
+        _patch_connect(monkey, lambda ip, p: None)
+        monkey.append((reachability, "fd_count", reachability.fd_count))
+        monkey.append((reachability, "socket_fd_count",
+                       reachability.socket_fd_count))
+        reachability.fd_count = lambda: next(fd_grew)
+        reachability.socket_fd_count = lambda: next(sock_flat)
+        raised = ""
+        try:
+            res = reachability.check_endpoints([("a.example", 443)])
+        except reachability.FileDescriptorExhaustion as exc:
+            raised = str(exc)
+        assert not raised, (
+            f"رشدِ کلِ fd با سوکتِ متوازن «نشت» نیست و نباید سنجش را باطل "
+            f"کند؛ این همان مثبتِ کاذبِ F-13 است: {raised!r}")
+        assert res["stats"]["fd_before"] == 4, res["stats"]
+        assert res["stats"]["fd_after"] == 99, res["stats"]
+        assert ("a.example", 443) in res["open"], res["open"]
+    finally:
+        _unpatch(monkey)
+
+
+def test_reachability_socket_leak_is_seen_even_when_total_fds_are_flat() -> None:
+    """
+    نیمهٔ دومِ F-13 — **منفیِ کاذب**.
+
+    اختلافِ کلِ fd الکی دوسویه است: اگر در همان بازه یک fdِ بی‌ربط بسته
+    شود، یک سوکتِ واقعاً نشت‌کرده اختلاف را صفر می‌کند و از کنارِ گارد
+    می‌گذرد. با اجرا سنجیده شد: ۲ سوکتِ نشت‌کرده در برابرِ ۲ fdِ بسته‌شده
+    ⇒ `fd 6 → 6`، و محافظِ قدیمی **ساکت** ماند.
+
+    این‌جا همان سناریو با استاب بازسازی می‌شود: کلِ fd ثابت، سوکت‌ها
+    افزایشی. ناوردای درست باید بگیردش.
+
+    چرا این آزمون جدا از آزمونِ بالاست: بندِ (۴) آن‌جا ثابت می‌کند «کلِ
+    بالا، سوکتِ ثابت ⇒ سکوت». این آزمون قرینه‌اش را ثابت می‌کند: «کلِ
+    ثابت، سوکتِ بالا ⇒ فریاد». دو جهتِ مستقل، و هیچ‌یک دیگری را پوشش
+    نمی‌دهد.
+    """
+    monkey = []
+    fd_flat = iter([6, 6])
+    sock_grew = iter([0, 2])
+    try:
+        _patch_dns(monkey, {"a.example": ("203.0.113.1",)})
+        _patch_connect(monkey, lambda ip, p: None)
+        monkey.append((reachability, "fd_count", reachability.fd_count))
+        monkey.append((reachability, "socket_fd_count",
+                       reachability.socket_fd_count))
+        reachability.fd_count = lambda: next(fd_flat)
+        reachability.socket_fd_count = lambda: next(sock_grew)
+        msg = ""
+        try:
+            reachability.check_endpoints([("a.example", 443)])
+        except reachability.FileDescriptorExhaustion as exc:
+            msg = str(exc)
+        assert msg, (
+            "نشتِ سوکت با کلِ fdِ ثابت باید دیده شود؛ سکوت در این حالت "
+            "همان منفیِ کاذبِ F-13 است")
+        assert "socket leak" in msg, msg
+        assert "2 socket descriptor" in msg, (
+            f"پیام باید اختلافِ سوکت (۲) را بگوید: {msg!r}")
+        assert "6" in msg, (
+            f"پیام باید عددِ کلِ fd را هم نشان بدهد تا خواننده ببیند چرا "
+            f"سنجهٔ کل کور بود: {msg!r}")
+    finally:
+        _unpatch(monkey)
+
+
+def test_reachability_socket_counter_ignores_non_socket_descriptors() -> None:
+    """
+    درستیِ خودِ `socket_fd_count` — بی این، دو آزمونِ بالا فقط استاب را
+    می‌سنجند و نه واقعیت را.
+
+    با fdهای **واقعی** سنجیده می‌شود، نه با استاب:
+      • باز کردنِ ۳ پروندهٔ معمولی باید شمارِ سوکت را **دست‌نخورده** بگذارد
+        (و شمارِ کل را بالا ببرد — پس آزمون تهی نیست).
+      • باز کردنِ ۵ سوکت باید شمار را دقیقاً ۵ بالا ببرد.
+      • بستنِ همه باید به خطِ پایه برگردد.
+    """
+    import socket as _s
+
+    base_sock = reachability.socket_fd_count()
+    base_all = reachability.fd_count()
+    if base_sock < 0:
+        return                      # ‎/proc‏ نیست؛ این آزمون بی‌معنا می‌شود
+
+    regs = [open(os.devnull, "rb") for _ in range(3)]
+    try:
+        assert reachability.socket_fd_count() == base_sock, (
+            "پروندهٔ معمولی نباید شمارِ سوکت را تغییر بدهد — دقیقاً همین "
+            "خطا مثبتِ کاذبِ F-13 را می‌ساخت")
+        assert reachability.fd_count() > base_all, (
+            "شمارِ کل باید بالا رفته باشد، وگرنه این آزمون چیزی را "
+            "نمی‌سنجد (کنترلِ تهی‌نبودن)")
+        socks = [_s.socket(_s.AF_INET, _s.SOCK_STREAM) for _ in range(5)]
+        try:
+            assert reachability.socket_fd_count() == base_sock + 5, (
+                f"۵ سوکت باید شمار را ۵ بالا ببرد: "
+                f"{reachability.socket_fd_count()} در برابرِ {base_sock}+5")
+        finally:
+            for s in socks:
+                s.close()
+        assert reachability.socket_fd_count() == base_sock, (
+            "پس از بستنِ سوکت‌ها باید به خطِ پایه برگردد")
+    finally:
+        for f in regs:
+            f.close()
+    assert reachability.socket_fd_count() == base_sock, (
+        f"پس از بستنِ همهٔ پرونده‌ها هم باید خطِ پایه باشد: "
+        f"{reachability.socket_fd_count()} در برابرِ {base_sock}")
 
 
 def test_reachability_probes_up_to_the_address_cap_not_just_the_first() -> None:

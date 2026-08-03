@@ -43,6 +43,11 @@ L2 برای این هست که L3 گران است. هر آزمونِ واقعی�
    «۹۹٪ سرورها خراب‌اند» ظاهر می‌شود و کسی نمی‌فهمد ابزار خراب بوده.
    این‌جا هر EMFILE باعثِ استثنا در پایانِ اجرا می‌شود، نه یک خطِ لاگ.
 
+   و ناوردای دومی هم هست: «هیچ سوکتی پس از سنجش باز نماند». این یکی با
+   شمارشِ **سوکت‌ها** داوری می‌شود، نه با اختلافِ کلِ fdهای فرآیند — چون
+   سنجهٔ کل با اجرا در هر دو جهت خطادار ثابت شد (F-13؛ شرح در
+   `socket_fd_count`).
+
 ۴) تا سه نشانیِ هر میزبان آزموده می‌شود، نه فقط نشانیِ اول.
    سنجشِ واقعی روی همان مجموعه: ۴۳۹ میزبان بیش از یک نشانی دارند
    (۵۶۴ نقطهٔ پایانی، ۷۶۶ کانفیگ). روی همین زیرمجموعه:
@@ -198,6 +203,70 @@ def fd_count() -> int:
         return -1
 
 
+def socket_fd_count() -> int:
+    """
+    شمارِ fdهایی که **سوکت** اند؛ ‎-1 اگر ‎/proc‏ نبود (همان قراردادِ
+    `fd_count`).
+
+    ── چرا این تابع لازم شد (F-13) ──────────────────────────────────────────
+    ناوردای «نشتِ سوکت» پیش‌تر با *اختلافِ کلِ* fdهای فرآیند سنجیده می‌شد:
+
+        if fd_before >= 0 and fd_after > fd_before:  raise ...
+
+    آن سنجه، سنجهٔ چیزی نبود که ادعا می‌کرد. با اجرا (نه با حدس) هر دو
+    جهتِ خطا ثابت شد:
+
+    ۱) **مثبتِ کاذب** — یک `open(os.devnull)` بی‌آزار که در بازهٔ سنجش
+       (سطرهای ۲۸۹..۳۰۱) باز شود و زنده بماند، اجرایی کاملاً سالم را باطل
+       می‌کرد: «‎4 open before, 5 after‏». هیچ سوکتی نشت نکرده بود.
+       بازهٔ سنجش شاملِ `resolve_hosts` و `asyncio.run` است، پس هر منبعِ
+       تنبلِ درونِ آن — پروندهٔ نهانگاه، importِ درون‌تابعی، دستهٔ لاگ —
+       همین را می‌ساخت.
+
+    ۲) **منفیِ کاذب** (این نیمه در گزارشِ اولیه دیده نشده بود) — اختلافِ
+       کل، الکی **دوسویه** است. با نشت دادنِ عمدیِ ۲ سوکتِ واقعی و بستنِ
+       ۲ fdِ بی‌ربط در همان بازه، اختلاف صفر شد و محافظ **ساکت** ماند:
+       یک نشتِ واقعی از کنارِ گاردی که برای دیدنش ساخته شده بود گذشت.
+
+    ۳) و متنِ استثنا در حالتِ (۱) می‌گفت «Every probed socket must be
+       closed» — یعنی تشخیص را به سمتِ کدی می‌بُرد که هیچ ایرادی نداشت.
+
+    ── چرا `socket:` و چرا این سنجه دقیق است ────────────────────────────────
+    `/proc/self/fd/N` یک پیوندِ نمادین است که برای سوکت‌ها با `socket:[…]`
+    آغاز می‌شود (سنجیده شد: fd سوکتی از fdِ پرونده و از `pipe:[…]`ِ
+    self-pipeِ حلقهٔ رویداد قابلِ تفکیک است). پس «سوکتِ بازمانده» را
+    می‌توان **مستقیم** شمرد، نه از راهِ یک عددِ کلِ نیابتی.
+
+    این سنجه هرگز *بدتر* از سنجهٔ قبلی نیست: هر سوکتِ نشت‌کرده‌ای که
+    اختلافِ کل می‌دید، اختلافِ سوکتی هم می‌بیند (سوکت خودش جزوِ کل است).
+    تنها چیزی که از دست می‌رود، همان دو دسته خطاست.
+
+    ── سنجشِ درستیِ خودِ بازه ────────────────────────────────────────────────
+    اجرای واقعی (DNS واقعی + TCP واقعی) ۲۵ بار تکرار شد:
+        `resolve_hosts` (استخرِ رشته + getaddrinfo) → رانشِ سوکت ۰/۱۰
+        `asyncio.run` + حلقهٔ رویداد                → رانشِ سوکت ۰/۱۰
+        `check_endpoints` کامل                      → رانشِ سوکت ۰/۵
+    یعنی «صفر سوکتِ بازمانده» ناوردای درست و دست‌یافتنیِ این ماژول است و
+    سخت‌گیریِ `> 0` بی‌جا نیست — تنها موضوعش باید سوکت باشد، نه هر fd.
+
+    نکتهٔ پیاده‌سازی: اگر fd بینِ `listdir` و `readlink` بسته شود، خطا
+    نادیده گرفته می‌شود. چنین fdی *باز نمانده*، پس شمردنش دقیقاً همان
+    «نشتِ کاذبی» بود که این تابع برای حذفش نوشته شده.
+    """
+    try:
+        names = os.listdir("/proc/self/fd")
+    except OSError:
+        return -1
+    n = 0
+    for name in names:
+        try:
+            if os.readlink(f"/proc/self/fd/{name}").startswith("socket:"):
+                n += 1
+        except OSError:
+            continue
+    return n
+
+
 async def _probe(ip: str, port: int, sem: asyncio.Semaphore,
                  timeout: float, tally: Dict[str, int]) -> Optional[int]:
     """
@@ -279,14 +348,23 @@ def check_endpoints(endpoints: Sequence[Tuple[str, int]],
         errors      : {دلیل: تعداد} — همهٔ دلیل‌ها حاضرند، حتی صفرها
         stats       : شمارش‌ها و زمان‌ها
 
-    استثنا: `FileDescriptorExhaustion` اگر حتی یک EMFILE رخ دهد. نتیجهٔ
-    آلوده به کمبودِ fd بی‌معناست و نباید منتشر شود.
+    استثنا: `FileDescriptorExhaustion` در دو حالت — (۱) حتی یک EMFILE، و
+    (۲) بازماندنِ سوکت پس از سنجش. نتیجهٔ آلوده به کمبودِ fd بی‌معناست و
+    نباید منتشر شود.
+
+    `stats` چهار عددِ fd دارد: `fd_before`/`fd_after` (کلِ fdها، تنها برای
+    گزارش و رصد) و `sock_before`/`sock_after` (تنها سوکت‌ها — سنجهٔ واقعیِ
+    ناوردای نشت). چرا این تفکیک لازم بود، در `socket_fd_count` آمده.
     """
     conc = int(concurrency or CONCURRENCY)
     tmo = float(timeout or TCP_TIMEOUT)
 
     eps = [(str(h).strip().strip("[]"), int(p)) for h, p in endpoints]
     fd_before = fd_count()
+    # ناوردای دقیق: تنها سوکت‌ها. `fd_before/fd_after` برای *گزارش* می‌مانند
+    # (`pipeline.py` آن دو را در `cascade.layers.l2` منتشر می‌کند) ولی دیگر
+    # پایهٔ داوریِ «نشت» نیستند — دلیلش در سندِ `socket_fd_count` آمده.
+    sock_before = socket_fd_count()
 
     addrs, dns_s = resolve_hosts({h for h, _ in eps})
 
@@ -299,6 +377,7 @@ def check_endpoints(endpoints: Sequence[Tuple[str, int]],
     delays = asyncio.run(_run_tcp(resolvable, conc, tmo, tally))
     tcp_s = time.monotonic() - t0
     fd_after = fd_count()
+    sock_after = socket_fd_count()
 
     open_map: Dict[Tuple[str, int], int] = {}
     for (ep, _a), d in zip(resolvable, delays):
@@ -327,6 +406,11 @@ def check_endpoints(endpoints: Sequence[Tuple[str, int]],
             "tcp_s": round(tcp_s, 2),
             "fd_before": fd_before,
             "fd_after": fd_after,
+            # افزودنی و سازگارِ رو‌به‌عقب: کلیدهای بالا حذف نشده‌اند، چون
+            # `pipeline.py:714-715` و `health.json`ِ منتشرشده آن‌ها را
+            # می‌خوانند. این دو کلیدِ نو، سنجهٔ *واقعیِ* ناوردا هستند.
+            "sock_before": sock_before,
+            "sock_after": sock_after,
         },
     }
 
@@ -339,10 +423,26 @@ def check_endpoints(endpoints: Sequence[Tuple[str, int]],
             f"{_soft_nofile()}). In a past run this exact condition "
             f"reported 1.1% instead of the true 48.0% — with exit code 0."
         )
-    if fd_before >= 0 and fd_after > fd_before:
+    # ناوردای دوم — نشتِ **سوکت**، و فقط سوکت (F-13).
+    #
+    # سنجهٔ پیشین `fd_after > fd_before` بود؛ یعنی اختلافِ کلِ fdهای فرآیند
+    # روی بازه‌ای که خیلی بیش از سوکت‌های کاوش در آن می‌گذرد. با اجرا ثابت
+    # شد که آن سنجه در هر دو جهت خطا می‌داد: یک `open(os.devnull)`ِ بی‌آزار
+    # اجرای سالم را باطل می‌کرد، و برعکس، بسته‌شدنِ ۲ fdِ بی‌ربط ۲ سوکتِ
+    # واقعاً نشت‌کرده را **پنهان** می‌کرد. شرحِ کامل در `socket_fd_count`.
+    #
+    # چرا `sock_before >= 0` (و نه `sock_after >= 0`): همان قراردادِ قبلی —
+    # `-1` یعنی «‎/proc‏ نبود، نمی‌دانم»، و بی‌اطلاعی نباید سنجش را باطل کند.
+    # ‎-1 → 4‏ عددی بزرگ‌تر است ولی هیچ نشتی را نشان نمی‌دهد.
+    if sock_before >= 0 and sock_after > sock_before:
         raise FileDescriptorExhaustion(
-            f"file-descriptor leak: {fd_before} open before, {fd_after} after. "
-            f"Every probed socket must be closed before returning."
+            f"socket leak: {sock_after - sock_before} socket descriptor(s) "
+            f"still open after the measurement ({sock_before} before, "
+            f"{sock_after} after). Every socket opened by a probe must be "
+            f"closed before returning. (Total file descriptors went "
+            f"{fd_before} → {fd_after}; only the socket count is judged, "
+            f"because an unrelated non-socket descriptor opened during the "
+            f"measurement is not a leak of this module.)"
         )
     return res
 
