@@ -67,6 +67,7 @@ DB-IP Country Lite با پروانهٔ CC-BY-4.0، ماهانه به‌روز، 
 from __future__ import annotations
 
 import collections
+import contextlib
 import os
 import socket
 import threading
@@ -216,6 +217,43 @@ def country_of_ip(ip: str) -> Optional[str]:
 # DNS
 # ──────────────────────────────────────────────────────────────────────────────
 
+@contextlib.contextmanager
+def _dns_timeout():
+    """
+    `DNS_TIMEOUT` را فقط برای همین بازه اعمال می‌کند و بعد **برمی‌گرداند**.
+
+    چرا لازم است (F-12)
+    ───────────────────
+    `socket.getaddrinfo` پارامترِ `timeout` ندارد — با اجرا بررسی شد:
+        socket.getaddrinfo(host, port, family=0, type=0, proto=0, flags=0)
+    پس تنها راهِ مهارِ زمانِ آن، همان `setdefaulttimeout`ِ سراسری است. ولی
+    این تنظیم *سراسریِ کلِ فرآیند* است، نه رشته‌ای (سنجیده شد: مقدارِ
+    تنظیم‌شده در رشتهٔ اصلی را هر سه رشتهٔ دیگر هم می‌دیدند). پیش‌تر
+    `resolve_all` آن را می‌گذاشت و هرگز برنمی‌گرداند، پس هر سوکتی که پس از
+    نخستین جست‌وجوی DNS در همین فرآیند ساخته می‌شد تایم‌اوتِ ما را ارث
+    می‌برد (اندازه‌گیری‌شده: `None` → `4.0`).
+
+    چرا این‌جا و نه داخلِ `resolve_all`
+    ───────────────────────────────────
+    وسوسهٔ طبیعی این است که همین prev/finally را داخلِ خودِ `resolve_all`
+    بگذاریم. آن **غلط** است و با اجرا رد شد: `resolve_all` از داخلِ
+    `ThreadPoolExecutor` صدا زده می‌شود، و چون همهٔ کارگرها *همان* مقدار را
+    می‌گذارند، `prev`ِ خوانده‌شده توسط یک کارگر می‌تواند مقدارِ کارگرِ دیگر
+    باشد و همان بازگردانده شود. سنجش: الگویِ سادهٔ درون‌کارگری در ۶ آزمایشِ
+    ۲۴کاره با ۸ رشته **۶ بار از ۶** نشت داد؛ همین الگو دورِ استخر **۰ بار
+    از ۶**. پس مرزِ درست بیرونِ استخر است.
+
+    این همان کاری است که `reachability.resolve_hosts` از قبل می‌کند
+    (prev/finally دورِ استخر، نه داخلِ کارگر)؛ اکنون دو ماژول هم‌رفتار شدند.
+    """
+    prev = socket.getdefaulttimeout()
+    socket.setdefaulttimeout(DNS_TIMEOUT)
+    try:
+        yield
+    finally:
+        socket.setdefaulttimeout(prev)
+
+
 def is_ip_literal(host: str) -> bool:
     """آیا میزبان خودش IP است؟ (IPv4 یا IPv6)"""
     h = (host or "").strip()
@@ -246,8 +284,11 @@ def resolve_all(host: str) -> Tuple[str, ...]:
     if is_ip_literal(h):
         _HOST_ADDRS[h] = (h,)
         return (h,)
+    # عمداً این‌جا `setdefaulttimeout` صدا زده نمی‌شود: این تابع از داخلِ
+    # `ThreadPoolExecutor` هم فراخوانی می‌شود و دست‌کاریِ وضعیتِ سراسری از
+    # داخلِ کارگر مسابقه‌دار است (F-12 — شرحش در `_dns_timeout`). مهارِ زمان
+    # مسئولیتِ فراخوان است، با `with _dns_timeout():`.
     try:
-        socket.setdefaulttimeout(DNS_TIMEOUT)
         infos = socket.getaddrinfo(h, None, socket.AF_INET, socket.SOCK_STREAM)
         addrs = tuple(sorted({i[4][0] for i in infos}))
     except Exception:
@@ -317,10 +358,12 @@ def warm_up(hosts: Iterable[str]) -> Dict[str, int]:
     # میزبان‌های نامی: DNS همروند
     if named and _get_reader() is not None:
         try:
-            with ThreadPoolExecutor(max_workers=max(1, DNS_WORKERS)) as ex:
-                results = list(ex.map(resolve_all, named))
+            with _dns_timeout():
+                with ThreadPoolExecutor(max_workers=max(1, DNS_WORKERS)) as ex:
+                    results = list(ex.map(resolve_all, named))
         except Exception:
-            results = [resolve_all(h) for h in named]
+            with _dns_timeout():
+                results = [resolve_all(h) for h in named]
         for h, addrs in zip(named, results):
             if not addrs:
                 _HOST_FAILED.add(h)
@@ -367,7 +410,8 @@ def country_for_host(host: str) -> Optional[Tuple[str, str]]:
         _stats["skipped_no_db"] += 1
         return None
     literal = is_ip_literal(h)
-    addrs = resolve_all(h)
+    with _dns_timeout():
+        addrs = resolve_all(h)
     if not addrs:
         _HOST_FAILED.add(h)
         _stats["dns_failed"] += 1

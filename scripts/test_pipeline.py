@@ -10516,36 +10516,520 @@ def test_zzz_f7_the_whole_gate_chain_agrees_with_a_real_index_json():
                 v = re.findall(r"should_run=(\w+)", f.read())
         return (v[-1] if v else None, p.returncode, p.stdout + p.stderr)
 
-    now = int(time.time())
+    # مُهرِ زمان **به‌ازای هر مورد** و در لحظهٔ مصرف ساخته می‌شود، نه یک بار
+    # برای همه. چرا: نسخهٔ نخستِ این تست `now` را یک بار می‌گرفت و بعد ۱۰
+    # زیرفرآیند (bash + python) اجرا می‌کرد؛ تا رسیدن به موردِ «لبه ۷۷۹» چند
+    # ثانیهٔ واقعی گذشته بود، پس سنِ محاسبه‌شده ۷۸۰ می‌شد و دروازه —
+    # به‌درستی — `true` می‌داد، ولی تست انتظارِ `false` داشت. این را در
+    # عمل دیدم: `age: 780s | gate: 780s` در حالی که لبهٔ ۷۷۹ سنجیده می‌شد.
+    # محصول سالم بود؛ **تست** شکننده بود. اندازه‌گیری: در ماشینِ بی‌بار رانش
+    # ۰ ثانیه است (پس سبز می‌ماند و شکنندگی پنهان می‌شود) و زیرِ بار از یک
+    # ثانیه می‌گذرد. لبهٔ ۷۷۹ تنها یک ثانیه از آستانه فاصله دارد، پس هیچ
+    # حاشیه‌ای برای رانش ندارد. تستِ شکننده در CI از نبودِ تست بدتر است.
+    def _stamp(delta):
+        """مُهرِ نسبی، در همین لحظه ⇒ بی‌رانش."""
+        return json.dumps({"updated_at_unix": int(time.time()) + delta})
+
+    # `want=None` یعنی «انتظارِ ثابت نداریم؛ تصمیم باید با همان سنی که خودِ
+    # زنجیره محاسبه کرده سازگار باشد». این برای لبه‌های یک‌ثانیه‌ای لازم است:
+    # هر انتظارِ ثابتی آن‌جا به ساعتِ دیوار گره می‌خورد و شکننده می‌شود، ولی
+    # سنجشِ *سازگاری* (`decision == (age >= gate)`) قطعی است و همان چیزی را
+    # می‌گیرد که F-7 درباره‌اش بود: نجنگیدنِ لایهٔ پایتون با لایهٔ شل.
+    # لبهٔ دقیقِ ۷۷۹/۷۸۰ جای دیگری به‌صورت قطعی قفل شده است — در
+    # `test_zzz_f7_a_healthy_age_is_judged_exactly_as_before` که `$AGE` را
+    # مستقیم تزریق می‌کند و هیچ ساعتی در آن دخیل نیست.
     cases = [
-        # (برچسب، محتوا، مفسر، انتظار)
-        ("تازه (۶۰ ثانیه)", json.dumps({"updated_at_unix": now - 60}),
-         "python3", "false"),
-        ("کهنه (۲۰ دقیقه)", json.dumps({"updated_at_unix": now - 1200}),
+        # (برچسب، سازندهٔ محتوا، مفسر، انتظار)
+        ("تازه (۶۰ ثانیه)", lambda: _stamp(-60), "python3", "false"),
+        ("کهنه (۲۰ دقیقه)", lambda: _stamp(-1200), "python3", "true"),
+        ("لبه ۷۸۰", lambda: _stamp(-780), "python3", None),
+        ("لبه ۷۷۹", lambda: _stamp(-779), "python3", None),
+        ("ISO fallback",
+         lambda: json.dumps({"updated_at": "2020-01-01T00:00:00+00:00"}),
          "python3", "true"),
-        ("لبه ۷۸۰", json.dumps({"updated_at_unix": now - 780}),
+        ("JSONِ خراب", lambda: "{not json", "python3", "true"),
+        ("JSONِ تهی", lambda: "{}", "python3", "true"),
+        ("مُهرِ آینده (۳۰ روز)", lambda: _stamp(86400 * 30), "python3", "true"),
+        ("مُهرِ 1e300", lambda: json.dumps({"updated_at_unix": 1e300}),
          "python3", "true"),
-        ("لبه ۷۷۹", json.dumps({"updated_at_unix": now - 779}),
-         "python3", "false"),
-        ("ISO fallback", json.dumps({"updated_at": "2020-01-01T00:00:00+00:00"}),
-         "python3", "true"),
-        ("JSONِ خراب", "{not json", "python3", "true"),
-        ("JSONِ تهی", "{}", "python3", "true"),
-        ("مُهرِ آینده (۳۰ روز)",
-         json.dumps({"updated_at_unix": now + 86400 * 30}), "python3", "true"),
-        ("مُهرِ 1e300", json.dumps({"updated_at_unix": 1e300}),
-         "python3", "true"),
-        ("مفسرِ python غایب", json.dumps({"updated_at_unix": now - 60}),
+        ("مفسرِ python غایب", lambda: _stamp(-60),
          "definitely_not_a_python_zz", "true"),
     ]
-    for label, content, py, want in cases:
-        got, rc, log = _chain(content, py)
+    for label, make, py, want in cases:
+        got, rc, log = _chain(make(), py)
         assert rc == 0, (
             f"{label}: زنجیره با rc={rc} شکست — دروازه هرگز نباید گام را "
             f"بکشد. log={log[-400:]!r}")
-        assert got == want, (
-            f"{label}: should_run={got!r} ولی انتظار {want!r} بود. "
-            f"log={log[-400:]!r}")
+        m = re.search(r"age: (\d+)s \| gate: (\d+)s", log)
+        if want is None:
+            assert m, (
+                f"{label}: سنِ محاسبه‌شده در لاگ نبود، پس سازگاری را "
+                f"نمی‌توان سنجید. log={log[-400:]!r}")
+            age, gate_sec = int(m.group(1)), int(m.group(2))
+            want = "true" if age >= gate_sec else "false"
+            assert got == want, (
+                f"{label}: زنجیره سن را {age}s و آستانه را {gate_sec}s "
+                f"محاسبه کرد ولی تصمیمش {got!r} بود؛ با همین اعدادِ خودش "
+                f"باید {want!r} می‌بود ⇒ لایهٔ پایتون و لایهٔ شل ناسازگارند "
+                f"(همان چیزی که F-7 بود). log={log[-400:]!r}")
+            # و لبه باید همان‌جایی باشد که سن نشان می‌دهد، نه یکی آن‌سوتر.
+            assert (age >= gate_sec) == (got == "true"), f"{label}: ناسازگاری"
+        else:
+            assert got == want, (
+                f"{label}: should_run={got!r} ولی انتظار {want!r} بود "
+                f"(سنِ محاسبه‌شده={m.group(1) if m else '?'}). "
+                f"log={log[-400:]!r}")
+
+# ══════════════════════════════════════════════════════════════════════════
+# F-12 — جست‌وجوی DNS نباید تایم‌اوتِ سراسریِ سوکت را نشت بدهد
+#
+# `socket.setdefaulttimeout` سراسریِ *کلِ فرآیند* است، نه رشته‌ای (سنجیده شد:
+# مقدارِ تنظیم‌شده در رشتهٔ اصلی را هر سه رشتهٔ دیگر هم می‌دیدند). پیش‌تر
+# `geo.resolve_all` آن را می‌گذاشت و هرگز برنمی‌گرداند، پس هر سوکتی که پس از
+# نخستین جست‌وجوی DNS ساخته می‌شد تایم‌اوتِ ما را ارث می‌برد.
+# ══════════════════════════════════════════════════════════════════════════
+
+def test_zzz_f12_a_dns_lookup_does_not_leak_the_global_socket_timeout():
+    """پس از هر مسیرِ DNSِ `geo`، تایم‌اوتِ سراسری باید دست‌نخورده بماند.
+
+    اندازه‌گیریِ پیش از درمان: `None` → `4.0`، و از آن پس هر سوکتِ تازه‌ای
+    در همین فرآیند تایم‌اوت‌دار متولد می‌شد. امروز هیچ فراخوانیِ شبکه‌ایِ
+    این مخزن از این نشت آسیب نمی‌دید چون همه `timeout=` صریح دارند — این
+    را بزرگ‌نمایی نمی‌کنیم — ولی نتیجهٔ اجرا **وابسته به ترتیب** می‌شد و
+    وضعیتِ مشترکِ مفسر از داخلِ استخرِ رشته دست‌کاری می‌شد.
+    """
+    import socket
+
+    try:
+        import geo
+    except Exception:
+        return
+
+    prev = socket.getdefaulttimeout()
+    try:
+        for label, fn in [
+            ("resolve_all", lambda: geo.resolve_all("f12-t1-zz.invalid")),
+            ("country_for_host",
+             lambda: geo.country_for_host("f12-t2-zz.invalid")),
+            ("warm_up", lambda: geo.warm_up(["f12-t3-zz.invalid", "8.8.8.8"])),
+        ]:
+            socket.setdefaulttimeout(None)
+            fn()
+            got = socket.getdefaulttimeout()
+            assert got is None, (
+                f"{label} تایم‌اوتِ سراسری را روی {got!r} رها کرد؛ از این پس "
+                f"هر سوکتِ تازه‌ای در این فرآیند همین را ارث می‌برد.")
+    finally:
+        socket.setdefaulttimeout(prev)
+
+
+def test_zzz_f12_resolve_all_itself_never_touches_the_global_timeout():
+    """`resolve_all` — که کارگرِ استخر است — نباید وضعیتِ سراسری را دست بزند.
+
+    این تست پیش‌تر عنوانِ «بازگردانیِ مقدارِ فراخوان» را داشت و ادعا می‌کرد
+    قراردادِ set/restore را می‌سنجد. جهش‌آزمایی نشان داد آن ادعا **نادرست**
+    بود: پس از درمانِ F-12، `resolve_all` هیچ‌گاه وارد بازهٔ تایم‌اوت نمی‌شود
+    (اندازه‌گیری‌شده: ۰ بار ورود)، پس مقدارِ سراسری «به هر حال» دست‌نخورده
+    می‌ماند و جهشِ خراب‌کردنِ `finally` از این تست جانِ سالم می‌بُرد.
+    سنجشِ قراردادِ بازگردانی به
+    `test_zzz_f12_the_scoped_helper_restores_the_exact_previous_value`
+    منتقل شد، که مستقیماً خودِ مدیرِ زمینه را می‌آزماید.
+
+    آن‌چه این تست *واقعاً* و به‌درستی پاس می‌دارد، همان بی‌اثریِ کارگر است:
+    `resolve_all` از داخلِ `ThreadPoolExecutor` صدا زده می‌شود، پس هر نوشتنی
+    روی وضعیتِ مشترکِ مفسر از این‌جا مسابقه‌دار است.
+    """
+    import socket
+
+    try:
+        import geo
+    except Exception:
+        return
+
+    prev = socket.getdefaulttimeout()
+    try:
+        for value in (11.5, 0.25, None):
+            socket.setdefaulttimeout(value)
+            geo._HOST_ADDRS.clear()
+            geo.resolve_all("f12-restore-zz.invalid")
+            got = socket.getdefaulttimeout()
+            assert got == value, (
+                f"`resolve_all` تایم‌اوتِ سراسری را از {value!r} به {got!r} "
+                f"تغییر داد؛ این تابع کارگرِ استخر است و نباید وضعیتِ مشترکِ "
+                f"مفسر را بنویسد (مهارِ زمان کارِ `_dns_timeout` است).")
+    finally:
+        socket.setdefaulttimeout(prev)
+
+
+def test_zzz_f12_the_timeout_is_still_actually_enforced_during_lookup():
+    """درمانِ نشت نباید مهارِ زمان را بردارد.
+
+    چرا این تست لازم است: آسان‌ترین راهِ «رفعِ» نشت این است که
+    `setdefaulttimeout` را کاملاً حذف کنیم — و آن‌وقت یک DNSِ کند می‌تواند
+    دورِ تجمیع را بی‌نهایت معطل کند. `socket.getaddrinfo` پارامترِ
+    `timeout` ندارد (با اجرا بررسی شد)، پس تنها مهارِ ممکن همین تنظیمِ
+    سراسری در بازهٔ محدود است. این‌جا می‌سنجیم که کارگرهای استخر واقعاً
+    آن مقدار را می‌بینند.
+    """
+    import socket
+
+    try:
+        import geo
+    except Exception:
+        return
+
+    prev = socket.getdefaulttimeout()
+    seen = []
+    original = geo.resolve_all
+
+    def _spy(h):
+        seen.append(socket.getdefaulttimeout())
+        return original(h)
+
+    try:
+        # داخلِ بازه باید برقرار باشد
+        socket.setdefaulttimeout(None)
+        with geo._dns_timeout():
+            assert socket.getdefaulttimeout() == geo.DNS_TIMEOUT, (
+                "داخلِ `_dns_timeout` تایم‌اوت برقرار نیست ⇒ مهارِ زمان "
+                "برداشته شده و یک DNSِ کند می‌تواند دور را معطل کند")
+        assert socket.getdefaulttimeout() is None, "بعد از بازه بازنگشت"
+
+        # و در مسیرِ واقعیِ استخر
+        geo.resolve_all = _spy
+        socket.setdefaulttimeout(None)
+        geo._HOST_CC.clear()
+        geo._HOST_FAILED.clear()
+        geo._HOST_ADDRS.clear()
+        geo.warm_up(["f12-spy-1-zz.invalid", "f12-spy-2-zz.invalid"])
+    finally:
+        geo.resolve_all = original
+        socket.setdefaulttimeout(prev)
+
+    if seen:                    # استخر فقط با پایگاهِ داده اجرا می‌شود
+        assert all(v == geo.DNS_TIMEOUT for v in seen), (
+            f"کارگرهای DNS تایم‌اوت را ندیدند: {seen!r}")
+
+
+def test_zzz_f12_the_pool_path_does_not_leak_under_concurrency():
+    """مرزِ set/restore باید *بیرونِ* استخر باشد، نه داخلِ کارگر.
+
+    وسوسهٔ طبیعی، گذاشتنِ prev/finally داخلِ خودِ `resolve_all` است. آن
+    **غلط** است و با اجرا رد شد: چون همهٔ کارگرها همان مقدار را می‌گذارند،
+    `prev`ِ خوانده‌شده توسط یک کارگر می‌تواند مقدارِ کارگرِ دیگر باشد و همان
+    بازگردانده شود. سنجش: الگویِ درون‌کارگری در ۶ آزمایشِ ۲۴کاره با ۸ رشته
+    **۶ از ۶** نشت داد؛ همان الگو دورِ استخر **۰ از ۶**. این تست همان فشار
+    را بازتولید می‌کند تا کسی درمان را به داخلِ کارگر برنگرداند.
+    """
+    import socket
+
+    try:
+        import geo
+    except Exception:
+        return
+
+    prev = socket.getdefaulttimeout()
+    leaks = []
+    try:
+        for _ in range(6):
+            socket.setdefaulttimeout(None)
+            geo._HOST_CC.clear()
+            geo._HOST_FAILED.clear()
+            geo._HOST_ADDRS.clear()
+            geo.warm_up([f"f12-stress-{i}-zz.invalid" for i in range(24)])
+            if socket.getdefaulttimeout() is not None:
+                leaks.append(socket.getdefaulttimeout())
+    finally:
+        socket.setdefaulttimeout(prev)
+    assert not leaks, (
+        f"زیرِ همروندی نشت کرد ({len(leaks)} از ۶): {leaks!r} — نشانهٔ آن‌که "
+        f"set/restore به داخلِ کارگر برگشته است.")
+
+
+def test_zzz_f12_geo_and_reachability_agree_about_global_state():
+    """دو تابعِ هم‌کار باید یک رفتار با وضعیتِ سراسری داشته باشند.
+
+    `reachability.resolve_hosts` از قبل prev/finally را دورِ استخر داشت و
+    `geo.resolve_all` نداشت. این ناهمگونی خودش نقص است: خواننده حق دارد
+    فرض کند دو تابعِ هم‌نقش یک قرارداد دارند.
+    """
+    import socket
+
+    try:
+        import geo
+    except Exception:
+        return
+
+    prev = socket.getdefaulttimeout()
+    try:
+        socket.setdefaulttimeout(None)
+        reachability.resolve_hosts(["f12-cmp-a-zz.invalid"])
+        r = socket.getdefaulttimeout()
+        socket.setdefaulttimeout(None)
+        geo.resolve_all("f12-cmp-b-zz.invalid")
+        g = socket.getdefaulttimeout()
+    finally:
+        socket.setdefaulttimeout(prev)
+    assert r == g is None, (
+        f"ناهمگونی: reachability → {r!r} ولی geo → {g!r}؛ هر دو باید وضعیتِ "
+        f"سراسری را دست‌نخورده بگذارند.")
+
+
+def test_zzz_f12_resolve_all_still_returns_exactly_what_it_used_to():
+    """ضدِّ رگرسیون: درمان نباید خروجیِ تابع را عوض کند."""
+    import socket
+
+    try:
+        import geo
+    except Exception:
+        return
+
+    prev = socket.getdefaulttimeout()
+    try:
+        socket.setdefaulttimeout(None)
+        assert geo.resolve_all("8.8.8.8") == ("8.8.8.8",), \
+            "IPِ خام باید بی‌شبکه و بی‌تغییر برگردد"
+        assert geo.resolve_all("") == (), "رشتهٔ تهی باید تاپلِ تهی بدهد"
+        assert geo.resolve_all("   ") == (), "فقط فاصله هم باید تهی بدهد"
+        assert geo.resolve_all("f12-nx-zz.invalid") == (), \
+            "میزبانِ ناموجود باید تاپلِ تهی بدهد، نه استثنا"
+        st = geo.stats()
+        assert isinstance(st, dict) and "dns_failed" in st, \
+            f"شکلِ stats() عوض شده: {sorted(st)}"
+    finally:
+        socket.setdefaulttimeout(prev)
+
+
+def test_zzz_f12_the_scoped_helper_restores_the_exact_previous_value():
+    """`_dns_timeout` باید *مقدارِ پیشین* را برگرداند، نه `None` را.
+
+    چرا این تست جدا از تستِ مسیرها لازم است (درسِ جهش‌آزمایی)
+    ────────────────────────────────────────────────────────────
+    نسخهٔ نخستِ این تست، `geo.resolve_all` را صدا می‌زد تا بازگردانی را
+    بسنجد. آن **پوچ** بود: پس از درمانِ F-12، خودِ `resolve_all` هرگز وارد
+    بازهٔ تایم‌اوت نمی‌شود (اندازه‌گیری‌شده: ۰ بار ورود)، پس مقدارِ سراسری
+    «به هر حال» دست‌نخورده می‌ماند — حتی اگر `finally` را به
+    `setdefaulttimeout(None)` خراب کنیم. جهشِ M2 دقیقاً از همین شکاف زنده
+    ماند (سنجش: با M2 هم `resolve_all` مقدارِ ۱۱٫۵ را حفظ می‌کرد).
+
+    درمان: قرارداد را روی *خودِ* مدیرِ زمینه بسنج، که تنها جایی است که
+    بازگردانی در آن رخ می‌دهد.
+    """
+    import socket
+
+    try:
+        import geo
+    except Exception:
+        return
+
+    prev = socket.getdefaulttimeout()
+    try:
+        for value in (11.5, 0.25, 4.0, None):
+            socket.setdefaulttimeout(value)
+            with geo._dns_timeout():
+                pass
+            got = socket.getdefaulttimeout()
+            assert got == value, (
+                f"`_dns_timeout` مقدارِ فراخوان {value!r} را به {got!r} "
+                f"تبدیل کرد؛ بازگردانی باید عیناً مقدارِ پیشین باشد، نه صفر "
+                f"شدن یا مقدارِ ثابت.")
+
+        # و اگر داخلِ بازه استثنا رخ دهد هم باید برگردد.
+        socket.setdefaulttimeout(7.25)
+        try:
+            with geo._dns_timeout():
+                raise RuntimeError("f12-boom")
+        except RuntimeError:
+            pass
+        got = socket.getdefaulttimeout()
+        assert got == 7.25, (
+            f"پس از استثنا مقدار {got!r} شد، نه ۷٫۲۵ ⇒ بازگردانی در مسیرِ "
+            f"خطا انجام نمی‌شود.")
+    finally:
+        socket.setdefaulttimeout(prev)
+
+
+def test_zzz_f12_no_worker_thread_ever_writes_the_global_timeout():
+    """هیچ رشتهٔ کارگری نباید `setdefaulttimeout` را صدا بزند.
+
+    چرا این آشکارساز، و نه سنجشِ نشت (درسِ جهش‌آزمایی)
+    ────────────────────────────────────────────────────
+    جهشِ M3 — بردنِ set/restore به داخلِ `resolve_all`، یعنی داخلِ کارگرِ
+    استخر — یک *مسابقه* است، پس سنجشِ «آیا مقدار نشت کرد؟» احتمالی است و
+    می‌تواند سبز بماند. اندازه‌گیریِ مستقیم:
+        نشتِ پس از warm_up : درمان‌شده ۰/۳۰ ، M3 ۲۹/۳۰   ← احتمالی
+        رشتهٔ کارگرِ نویسنده: درمان‌شده [۰×۵] ، M3 [۸×۵]  ← قطعی
+    پس این‌جا به‌جای *پیامدِ* مسابقه، خودِ *علت* را می‌سنجیم: نوشتنِ وضعیتِ
+    مشترکِ مفسر از داخلِ استخرِ رشته. این سنجش جبری است، نه بختی.
+    """
+    import socket
+    import threading
+
+    try:
+        import geo
+    except Exception:
+        return
+
+    if geo._get_reader() is None:
+        return                  # مسیرِ استخر بی‌پایگاهِ داده اجرا نمی‌شود
+
+    prev = socket.getdefaulttimeout()
+    real_set = socket.setdefaulttimeout
+    main = threading.current_thread()
+    offenders = set()
+
+    def _spy(v):
+        if threading.current_thread() is not main:
+            offenders.add(threading.current_thread().name)
+        return real_set(v)
+
+    try:
+        socket.setdefaulttimeout = _spy
+        try:
+            geo._HOST_CC.clear()
+            geo._HOST_FAILED.clear()
+            geo._HOST_ADDRS.clear()
+            geo.warm_up([f"f12-wt-{i}-zz.invalid" for i in range(16)])
+        finally:
+            socket.setdefaulttimeout = real_set
+    finally:
+        socket.setdefaulttimeout(prev)
+
+    assert not offenders, (
+        f"{len(offenders)} رشتهٔ کارگر تایم‌اوتِ سراسری را نوشتند "
+        f"({sorted(offenders)[:4]}…) — یعنی مهارِ زمان به داخلِ کارگر "
+        f"برگشته است. آن الگو مسابقه‌دار است: `prev`ِ یک کارگر می‌تواند "
+        f"مقدارِ کارگرِ دیگر باشد. مرزِ درست بیرونِ استخر است "
+        f"(`with _dns_timeout():` دورِ `ThreadPoolExecutor`).")
+
+
+def test_zzz_f12_every_dns_entry_point_enforces_the_time_bound():
+    """هر سه ورودیِ DNS باید جست‌وجو را زیرِ مهارِ زمان انجام دهند.
+
+    چرا (درسِ جهش‌آزمایی): جهشِ M5 — برداشتنِ `with _dns_timeout()` از
+    `country_for_host` — هیچ نشتی ایجاد نمی‌کند، پس همهٔ تست‌های «نشت»
+    سبز می‌مانند؛ ولی مهارِ زمان را بی‌صدا برمی‌دارد و یک DNSِ کند می‌تواند
+    دور را معطل کند. اندازه‌گیری هنگامِ جست‌وجو:
+        درمان‌شده → [4.0]   ،   M5 → [None]
+    پس به‌جای نشت، *برقرار بودنِ مهار در لحظهٔ جست‌وجو* را می‌سنجیم — و
+    برای هر مسیر جداگانه، تا برداشتنِ مهار از یکی، از چشمِ تست دور نماند.
+    """
+    import socket
+
+    try:
+        import geo
+    except Exception:
+        return
+
+    if geo._get_reader() is None:
+        return
+
+    prev = socket.getdefaulttimeout()
+    original = geo.resolve_all
+
+    def _probe(fn):
+        """تایم‌اوتی که *در لحظهٔ* getaddrinfo برقرار است."""
+        seen = []
+
+        def _spy(h):
+            seen.append(socket.getdefaulttimeout())
+            return original(h)
+
+        geo.resolve_all = _spy
+        try:
+            geo._HOST_CC.clear()
+            geo._HOST_FAILED.clear()
+            geo._HOST_ADDRS.clear()
+            socket.setdefaulttimeout(None)
+            fn()
+        finally:
+            geo.resolve_all = original
+        return seen
+
+    try:
+        for label, fn in [
+            ("country_for_host",
+             lambda: geo.country_for_host("f12-eb-a-zz.invalid")),
+            ("warm_up",
+             lambda: geo.warm_up(["f12-eb-b-zz.invalid",
+                                  "f12-eb-c-zz.invalid"])),
+        ]:
+            seen = _probe(fn)
+            assert seen, (
+                f"{label} هیچ‌گاه به جست‌وجو نرسید ⇒ این تست پوچ شده است؛ "
+                f"آشکارساز را درست کن، نه این‌که سبز بمانی.")
+            assert all(v == geo.DNS_TIMEOUT for v in seen), (
+                f"{label} جست‌وجو را با تایم‌اوتِ {seen!r} انجام داد، نه "
+                f"{geo.DNS_TIMEOUT!r}. `socket.getaddrinfo` پارامترِ "
+                f"`timeout` ندارد، پس تنها مهارِ ممکن همین است؛ برداشتنش "
+                f"یعنی یک DNSِ کند می‌تواند دورِ تجمیع را معطل کند.")
+    finally:
+        socket.setdefaulttimeout(prev)
+
+
+def test_zzz_f12_the_sequential_fallback_also_enforces_the_time_bound():
+    """مسیرِ *پشتیبانِ* `warm_up` هم باید زیرِ مهارِ زمان باشد.
+
+    چرا این تست جدا لازم است
+    ────────────────────────
+    `warm_up` دو مسیر دارد: استخرِ رشته، و اگر استخر بترکد، اجرای ترتیبی در
+    `except Exception:`. یک نقصِ نیمه‌پنهان می‌تواند فقط در همان نیمهٔ کم‌رفت
+    بنشیند و از چشمِ همهٔ تست‌های مسیرِ اصلی دور بماند — همان درسی که در
+    F-13 گرفتم (نقص دو نیمه داشت و نیمهٔ دوم فقط با آزمونِ مستقیم پیدا شد).
+
+    اندازه‌گیری (با ترکاندنِ عمدیِ استخر):
+        درمان‌شده → تایم‌اوتِ هنگامِ جست‌وجو [4.0, 4.0]
+        بی‌مهار   → [None, None]
+    پس تفاوت قطعی و دیدنی است؛ این تست بختی نیست.
+    """
+    import socket
+
+    try:
+        import geo
+    except Exception:
+        return
+
+    if geo._get_reader() is None:
+        return                  # مسیرِ نامی بی‌پایگاهِ داده اجرا نمی‌شود
+
+    prev = socket.getdefaulttimeout()
+    seen = []
+    orig_resolve = geo.resolve_all
+    real_pool = geo.ThreadPoolExecutor
+
+    def _spy(h):
+        seen.append(socket.getdefaulttimeout())
+        return orig_resolve(h)
+
+    class _Boom:
+        """استخر را می‌ترکاند تا مسیرِ پشتیبان اجرا شود."""
+
+        def __init__(self, *a, **k):
+            raise RuntimeError("f12-pool-boom")
+
+    try:
+        geo.ThreadPoolExecutor = _Boom
+        geo.resolve_all = _spy
+        geo._HOST_CC.clear()
+        geo._HOST_FAILED.clear()
+        geo._HOST_ADDRS.clear()
+        socket.setdefaulttimeout(None)
+        geo.warm_up(["f12-fb-a-zz.invalid", "f12-fb-b-zz.invalid"])
+    finally:
+        geo.ThreadPoolExecutor = real_pool
+        geo.resolve_all = orig_resolve
+        leaked = socket.getdefaulttimeout()
+        socket.setdefaulttimeout(prev)
+
+    assert seen, (
+        "مسیرِ پشتیبان اجرا نشد ⇒ این تست پوچ است؛ آشکارساز را درست کن، "
+        "نه این‌که سبز بمانی.")
+    assert all(v == geo.DNS_TIMEOUT for v in seen), (
+        f"مسیرِ پشتیبانِ `warm_up` جست‌وجو را با {seen!r} انجام داد، نه "
+        f"{geo.DNS_TIMEOUT!r} ⇒ مهارِ زمان فقط روی مسیرِ اصلی گذاشته شده و "
+        f"نیمهٔ دوم بی‌مهار مانده است.")
+    assert leaked is None, (
+        f"مسیرِ پشتیبان تایم‌اوتِ سراسری را روی {leaked!r} رها کرد.")
 
 
 if __name__ == "__main__":
