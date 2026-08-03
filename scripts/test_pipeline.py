@@ -9507,6 +9507,106 @@ def test_zzz_f8_both_converters_survive_a_zero_config_category():
     assert isinstance(json.loads(converters.build_singbox_json([])), dict)
 
 
+def test_zzz_f9_build_index_never_advertises_a_pruned_converter_file():
+    """F-9 — تبلیغ باید به واقعیتِ دیسک گره بخورد، نه به نماینده‌ها.
+
+    این باگ **پس از** F-8 زنده شد: تا وقتی clash/singbox «همیشه» نوشته
+    می‌شدند، تبلیغِ بی‌قید درست بود. حالا که دروازهٔ مبدل‌ها فایلِ بایات را
+    حذف می‌کند، تبلیغِ بی‌قید یعنی ۳ لینکِ ۴۰۴ (اندازه‌گیری شد) — نقضِ
+    قراردادِ خودِ مخزن که `merge_index` از قبل رعایتش می‌کند.
+    """
+    import tempfile
+    with tempfile.TemporaryDirectory() as d:
+        _fgate_seed(d)
+        aggregate.CONVERT_FAILURES.clear()
+        try:
+            results = {}
+            for cat in ("all", "heavy", "light"):
+                r = _fgate_result(["vless://u@1.2.3.4:443#x"])
+                r.broken = ["vmess://bad"]
+                results[cat] = r
+            with _FgateBoom(clash=True, singbox=False):
+                for cat, r in results.items():
+                    aggregate.write_category(d, cat, r)
+            for cat, r in results.items():
+                aggregate.write_archive(d, cat, r)
+            proto_counts = aggregate.write_protocols(d, results["all"].unique)
+
+            idx = aggregate.build_index(results, proto_counts, 1.0, d)
+            base = idx["primary_base"]
+            ghosts = []
+            for cat, blk in idx["categories"].items():
+                for key, url in blk["files"].items():
+                    if key.endswith("_mirror"):
+                        continue
+                    rel = url[len(base) + 1:]
+                    if not os.path.exists(os.path.join(d, rel)):
+                        ghosts.append(f"{cat}.{key}")
+            assert not ghosts, f"index.json لینکِ ۴۰۴ تبلیغ کرد: {ghosts}"
+            # و کلیدِ آینه هم باید همراهِ اصلی حذف شود (از همان فایل تغذیه می‌کند)
+            for cat, blk in idx["categories"].items():
+                assert "clash_yaml" not in blk["files"], cat
+                assert "clash_yaml_mirror" not in blk["files"], \
+                    f"کلیدِ آینه بی‌همراه ماند ⇒ ۴۰۴ از مسیرِ آینه ({cat})"
+                assert "singbox_json" in blk["files"], \
+                    f"فایلِ سالم به‌اشتباه حذف شد ({cat})"
+        finally:
+            aggregate.CONVERT_FAILURES.clear()
+
+
+def test_zzz_f9_build_index_is_byte_identical_on_the_healthy_path():
+    """ضدِّ رگرسیون: وقتی همه‌چیز سالم است، سند نباید **هیچ** تغییری بکند.
+
+    بی این آزمون، گاردِ F-9 می‌توانست بی‌صدا کلیدی را جا بیندازد یا ترتیب را
+    بازبچیند و هر دور یک diffِ پرنویز در تاریخِ git بسازد.
+    """
+    import tempfile
+    with tempfile.TemporaryDirectory() as d:
+        results = {}
+        for cat in ("all", "heavy", "light"):
+            r = _fgate_result(["vless://u@1.2.3.4:443#x"])
+            r.broken = ["vmess://bad"]
+            results[cat] = r
+        for cat, r in results.items():
+            aggregate.write_category(d, cat, r)
+            aggregate.write_archive(d, cat, r)
+        proto_counts = aggregate.write_protocols(d, results["all"].unique)
+
+        aware = aggregate.build_index(results, proto_counts, 1.0, d)
+        legacy = aggregate.build_index(results, proto_counts, 1.0)
+        for doc in (aware, legacy):
+            for k in ("updated_at", "updated_at_unix", "next_update_eta",
+                      "elapsed_seconds"):
+                doc[k] = "<NORM>"
+        assert json.dumps(aware, ensure_ascii=False) == \
+            json.dumps(legacy, ensure_ascii=False), \
+            "مسیرِ سالم تغییر کرد ⇒ سندِ منتشرشده بی‌دلیل عوض می‌شود"
+        # و ترتیبِ کلیدها همان «اصلی‌ها، سپس آینه‌ها» بماند
+        assert list(aware["categories"]["all"]["files"]) == [
+            "configs_txt", "configs_base64", "clash_yaml", "singbox_json",
+            "configs_txt_mirror", "configs_base64_mirror",
+            "clash_yaml_mirror", "singbox_json_mirror",
+        ], list(aware["categories"]["all"]["files"])
+
+
+def test_zzz_f9_out_dir_none_stays_backward_compatible():
+    """`out_dir=None` یعنی «از دیسک بی‌خبرم» و باید رفتارِ قبلی را نگه دارد.
+
+    عمداً به `True` تفسیر می‌شود نه `False`: حذفِ لینک بر پایهٔ بی‌خبری،
+    سندی ناقص‌تر از سندِ امروز می‌ساخت. چهار فراخوانیِ قدیمیِ همین فایل
+    (خطوطِ ۴۵۴/۴۹۲/۵۴۷/۱۲۹۶) به همین سازگاری تکیه دارند.
+    """
+    results = {}
+    for cat in ("all", "heavy", "light"):
+        r = _fgate_result(["vless://x@1.2.3.4:443#a"])
+        r.broken = ["vmess://bad"]
+        results[cat] = r
+    idx = aggregate.build_index(results, {"vless": 1}, 1.0)
+    for cat in ("all", "heavy", "light"):
+        assert len(idx["categories"][cat]["files"]) == 8, \
+            f"سازگاریِ عقب‌رو شکست ({cat}): {idx['categories'][cat]['files']}"
+
+
 def test_zzz_f8_gate_name_does_not_collide_with_the_control_byte_gate():
     """واژگانِ پروژه: «output gate» از قبل نامِ گاردِ بایتِ کنترلی است.
 

@@ -571,11 +571,62 @@ def write_protocols(out_dir: str, all_unique: List[str]) -> Dict[str, int]:
 
 
 def build_index(results: Dict[str, CategoryResult], proto_counts: Dict[str, int],
-                elapsed: float) -> dict:
+                elapsed: float, out_dir: Optional[str] = None) -> dict:
+    """سندِ `index.json` — فهرستِ ماشین‌خوانِ هر چیزی که منتشر شده.
+
+    ══════════════════════════════════════════════════════════════════════════
+    ⚠️ `out_dir` — چرا این پارامتر لازم شد (F-9)
+    ══════════════════════════════════════════════════════════════════════════
+    قراردادِ همیشگیِ این مخزن: «هیچ URLی تبلیغ نمی‌شود که فایلش نیست»
+    (`test_index_only_advertises_urls_whose_files_exist`). این تابع آن قرارداد
+    را تا امروز با **نماینده** برقرار می‌کرد، نه با واقعیتِ دیسک:
+      • `protocol_files` به `proto_counts[p] > 0` نگاه می‌کرد،
+      • `archive` به `results[cat].broken` نگاه می‌کرد،
+      • ولی `clash_yaml` و `singbox_json` **بی‌هیچ شرطی** تبلیغ می‌شدند.
+
+    آن نماینده تا پیش از F-8 کافی بود، چون این دو فایل «همیشه» نوشته می‌شدند.
+    اما دروازهٔ مبدل‌ها (F-8) حالا فایلِ بایات را **حذف** می‌کند، پس نماینده
+    دیگر با واقعیت یکی نیست. اندازه‌گیریِ اجرایی با شکستِ مبدلِ clash: هر سه
+    دسته فایل نداشتند و index.json هر سه را تبلیغ کرد ⇒ **۳ لینکِ ۴۰۴**، یعنی
+    نقضِ مستقیمِ قراردادِ خودِ مخزن.
+
+    راه‌حل — همان کاری که `pipeline.merge_index` از قبل می‌کند: وجودِ فایل روی
+    دیسک بررسی می‌شود. `out_dir=None` رفتارِ قبلی را نگه می‌دارد (سازگاریِ
+    عقب‌رو برای فراخوانی‌های بدونِ دیسک، مثل آزمون‌های واحد)؛ `main()` مقدارِ
+    واقعی می‌دهد تا تبلیغ با واقعیت گره بخورد.
+    """
     now = _dt.datetime.now(_dt.timezone.utc)
     next_run = now + _dt.timedelta(minutes=UPDATE_INTERVAL_MIN)
 
+    def _published(*parts: str) -> bool:
+        """آیا این فایل واقعاً روی دیسک هست؟
+
+        `out_dir=None` یعنی «نمی‌دانم» و عمداً به `True` تفسیر می‌شود، نه
+        `False`: در آن حالت هیچ اطلاعی از دیسک نداریم و حذفِ لینک، سندی
+        ناقص‌تر از سندِ امروز می‌ساخت. تنها وقتی چیزی را حذف می‌کنیم که
+        **مطمئن** باشیم نیست.
+        """
+        if out_dir is None:
+            return True
+        return os.path.exists(os.path.join(out_dir, *parts))
+
     def cat_block(cat: str, r: CategoryResult) -> dict:
+        # فقط فایل‌هایی که واقعاً نوشته شده‌اند تبلیغ می‌شوند. کلیدِ اصلی و
+        # کلیدِ آینه **باهم** حذف می‌شوند: آینه از همان فایل تغذیه می‌کند، پس
+        # نگه‌داشتنِ یکی بدونِ دیگری یعنی تبلیغِ ۴۰۴ از مسیرِ آینه.
+        # ترتیبِ کلیدها عمداً همان ترتیبِ قبلی است (همهٔ اصلی‌ها، بعد همهٔ
+        # آینه‌ها) نه جفت‌جفت: `index.json` منتشر می‌شود و هر بازچینشِ بی‌دلیل،
+        # یک diffِ پرنویز در تاریخِ git می‌سازد بی هیچ سودی.
+        _pairs = (("configs.txt", "configs_txt"),
+                  ("configs_base64.txt", "configs_base64"),
+                  ("clash.yaml", "clash_yaml"),
+                  ("singbox.json", "singbox_json"))
+        _live = [(f, k) for f, k in _pairs if _published(cat, f)]
+        files: Dict[str, str] = {}
+        for fname, key in _live:
+            files[key] = f"{PRIMARY_BASE}/{cat}/{fname}"
+        for fname, key in _live:
+            files[f"{key}_mirror"] = f"{MIRROR_BASE}/{cat}/{fname}"
         return {
             "unique": len(r.unique),
             "broken": len(r.broken),
@@ -587,16 +638,7 @@ def build_index(results: Dict[str, CategoryResult], proto_counts: Dict[str, int]
             #   (کشِ ۱۲ ساعته). کلیدهای قدیمی حذف نشدند تا هیچ مصرف‌کننده‌ای
             #   نشکند؛ فقط مقدارشان به raw تغییر کرد و آینه در کلیدهای
             #   جداگانهٔ *_mirror در دسترس است.
-            "files": {
-                "configs_txt": f"{PRIMARY_BASE}/{cat}/configs.txt",
-                "configs_base64": f"{PRIMARY_BASE}/{cat}/configs_base64.txt",
-                "clash_yaml": f"{PRIMARY_BASE}/{cat}/clash.yaml",
-                "singbox_json": f"{PRIMARY_BASE}/{cat}/singbox.json",
-                "configs_txt_mirror": f"{MIRROR_BASE}/{cat}/configs.txt",
-                "configs_base64_mirror": f"{MIRROR_BASE}/{cat}/configs_base64.txt",
-                "clash_yaml_mirror": f"{MIRROR_BASE}/{cat}/clash.yaml",
-                "singbox_json_mirror": f"{MIRROR_BASE}/{cat}/singbox.json",
-            },
+            "files": files,
         }
 
     return {
@@ -646,30 +688,41 @@ def build_index(results: Dict[str, CategoryResult], proto_counts: Dict[str, int]
         #   بی‌قید به تبلیغِ ۴۰۴ تبدیل می‌شد؛ پس فهرست هم شرطی شد.
         #   شمارشِ همهٔ پروتکل‌ها (شاملِ صفرها) در کلیدِ "protocols" باقی است،
         #   پس هیچ اطلاعاتی از دست نمی‌رود.
+        # شرطِ `> 0` نمایندهٔ درستی است ولی **کافی نیست**: `_write_text` می‌تواند
+        # پیش از نوشتن، با `ControlByteInOutput` شکست بخورد (گاردِ بایتِ کنترلی).
+        # در آن حالت شمارش غیرِصفر است ولی فایل روی دیسک نیست. پس شرطِ شمارش با
+        # واقعیتِ دیسک **و** می‌شود، نه جانشینِ آن.
         "protocol_files": {
             p: f"{PRIMARY_BASE}/protocols/{p}.txt"
-            for p in core.PROTOCOL_ORDER if proto_counts.get(p, 0) > 0
+            for p in core.PROTOCOL_ORDER
+            if proto_counts.get(p, 0) > 0 and _published("protocols", f"{p}.txt")
         },
         "protocol_files_base64": {
             p: f"{PRIMARY_BASE}/protocols/{p}_base64.txt"
-            for p in core.PROTOCOL_ORDER if proto_counts.get(p, 0) > 0
+            for p in core.PROTOCOL_ORDER
+            if proto_counts.get(p, 0) > 0 and _published("protocols", f"{p}_base64.txt")
         },
         "protocol_files_mirror": {
             p: f"{MIRROR_BASE}/protocols/{p}.txt"
-            for p in core.PROTOCOL_ORDER if proto_counts.get(p, 0) > 0
+            for p in core.PROTOCOL_ORDER
+            if proto_counts.get(p, 0) > 0 and _published("protocols", f"{p}.txt")
         },
         # کلیدهای *_duplicates حذف شدند چون فایل‌شان دیگر تولید نمی‌شود.
         #   نگه‌داشتنِ کلید بدونِ فایل = تبلیغِ لینکِ ۴۰۴ در index.json.
         #   کلیدهای broken هم شرطی شدند: اگر یک دسته این دور صفر کانفیگِ خراب
         #   داشته باشد، فایلش نوشته نمی‌شود، پس نباید تبلیغ شود. (در تستِ واقعی
         #   light صفر خراب داشت و index.json لینکِ ۴۰۴ تبلیغ می‌کرد.)
+        # همان استدلالِ `protocol_files`: شرطِ `results[cat].broken` نمایندهٔ
+        # درستی است ولی وجودِ فایل را تضمین نمی‌کند.
         "archive": {
             **{f"{cat}_broken": f"{PRIMARY_BASE}/archive/{cat}_broken.txt"
-               for cat in ("all", "heavy", "light") if results[cat].broken},
+               for cat in ("all", "heavy", "light")
+               if results[cat].broken and _published("archive", f"{cat}_broken.txt")},
             # فایل base64 پیش‌تر تولید می‌شد ولی هیچ‌جا فهرست نشده بود
             # (منتشرشده اما کشف‌ناپذیر). حالا فهرست می‌شود.
             **{f"{cat}_broken_base64": f"{PRIMARY_BASE}/archive/{cat}_broken_base64.txt"
-               for cat in ("all", "heavy", "light") if results[cat].broken},
+               for cat in ("all", "heavy", "light")
+               if results[cat].broken and _published("archive", f"{cat}_broken_base64.txt")},
         },
         "sources": {
             "light_count": len(LIGHT_SOURCES),
@@ -954,7 +1007,10 @@ def main() -> int:
     log(f"  • protocols: " + ", ".join(f"{k}={v}" for k, v in proto_counts.items() if v))
 
     elapsed = time.time() - t0
-    index = build_index(results, proto_counts, elapsed)
+    # `out_dir` پاس داده می‌شود تا تبلیغ به **واقعیتِ دیسک** گره بخورد، نه به
+    # نماینده‌ها (F-9). این فراخوانی پس از `write_category` و `write_protocols`
+    # است، پس هر حذفی که دروازهٔ مبدل‌ها انجام داده اینجا دیده می‌شود.
+    index = build_index(results, proto_counts, elapsed, out_dir)
     _write_text(os.path.join(out_dir, "index.json"),
                 json.dumps(index, ensure_ascii=False, indent=2))
 
