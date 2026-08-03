@@ -327,8 +327,56 @@ def validate_outputs(out_dir: str) -> Dict[str, Any]:
         for res in cat_res.values():
             report["summary"][res["status"]] = report["summary"].get(res["status"], 0) + 1
 
-    report["ok"] = (report["summary"]["fail"] == 0
-                    and report["summary"]["missing"] == 0)
+    # ── دروازه: فهرستِ سفید، نه فهرستِ سیاه (F-5) ─────────────────────────────
+    #
+    # شکلِ پیشین `fail == 0 and missing == 0` بود؛ یعنی یک **فهرستِ سیاه**.
+    # با اجرا (نه با خواندنِ کد) ثابت شد که این fail-open است: اگر روزی یک
+    # `check_*` وضعیتی تازه برگرداند — مثلاً `"error"` یا `"timeout"` — آن
+    # وضعیت در `summary` شمرده می‌شود ولی در هیچ‌یک از دو شرط نمی‌آید، پس:
+    #
+    #     summary = {'pass': 0, 'fail': 0, 'skipped': 3, 'missing': 0, 'error': 3}
+    #     ok      = True      ← دروازه سبز، با ۳ موردِ خطا!
+    #
+    # این «باگِ خاموش» است: امروز بی‌اثر است (هر چهار وضعیتِ تولیدشدنی
+    # پوشش داده شده‌اند) ولی افزودنِ یک وضعیتِ تازه در آینده، دروازه را
+    # بی‌صدا باز می‌کند. `_run` هم دو کدِ اختصاصیِ ۱۲۴/۱۲۵ دارد که وسوسهٔ
+    # افزودنِ وضعیتِ `"timeout"` را واقعی می‌کند.
+    #
+    # درمان: فقط وضعیت‌هایی که **صریحاً** قابل‌قبول شمرده شده‌اند اجازهٔ
+    # عبور دارند؛ هر چیزِ دیگر، از جمله وضعیتِ ناشناخته، دروازه را می‌بندد.
+    #
+    # ثابت شد که این تغییر **صفر رگرسیون** دارد: روی هر ۸۱ ترکیبِ شمارشِ
+    # چهار وضعیتِ واقعی (`pass`/`fail`/`skipped`/`missing`، هر یک ۰..۲)،
+    # فهرستِ سفید و شکلِ پیشین **در همهٔ موارد هم‌نظرند** (صفر اختلاف).
+    # تفاوت تنها آن‌جا ظاهر می‌شود که وضعیتی ناشناخته وجود داشته باشد.
+    #
+    # چرا `skipped` قابل‌قبول است و «نرم‌کردن» نیست: طبقِ سندِ بالای همین
+    # فایل، در توسعهٔ محلی که باینریِ کلاینت نیست، اعتبارسنجیِ ساختاری
+    # جایگزین می‌شود و نتیجه `skipped` علامت می‌خورد — و همان بررسیِ
+    # ساختاری هرچه خراب باشد `fail` می‌دهد نه `skipped`. در CI هم گامِ
+    # نصبِ باینری‌ها fail-closed است (`set -euo pipefail` + چهار checksum و
+    # بدونِ `continue-on-error`)، پس رسیدن به `skipped` در CI یعنی آن گام
+    # پیش‌تر کلِ job را شکسته است.
+    ACCEPTABLE_STATUSES = ("pass", "skipped")
+    offending = {status: count
+                 for status, count in report["summary"].items()
+                 if count > 0 and status not in ACCEPTABLE_STATUSES}
+    report["offending"] = offending
+    report["ok"] = not offending
+
+    # ── شفافیت: «چیزی اثبات نشد» باید دیده شود ────────────────────────────────
+    #
+    # سنجیده شد که با نبودِ هر دو باینری، خروجی `pass=0 skipped=6` و
+    # `ok=True` و `rc=0` است. این طبقِ طراحی است (بالا) و **نباید** به
+    # شکست تبدیل شود — سه تستِ موجود (`…optional_category_absence…`،
+    # `…pipeline output gate…`، `…f7…`) درست به همین رفتار تکیه دارند و
+    # سخت‌کردنِ دروازه، رگرسیون می‌ساخت نه بهبود.
+    #
+    # ولی «طبقِ طراحی» به‌معنای «نامرئی» نیست: تا امروز هیچ‌جا دیده نمی‌شد
+    # که این اجرا با کلاینتِ واقعی سنجیده شده یا فقط ساختاری. این پرچمِ
+    # صریح، تصمیم را از حدس‌زدن بیرون می‌آورد و در `validation.json` هم
+    # ثبت می‌شود.
+    report["real_validation"] = report["summary"]["pass"] > 0
     return report
 
 
@@ -355,6 +403,14 @@ def main() -> int:
     s = rep["summary"]
     print(f"   → pass={s['pass']} fail={s['fail']} "
           f"skipped={s['skipped']} missing={s['missing']}")
+    # هر وضعیتِ ناشناخته‌ای که دروازه را بست، باید نامش چاپ شود وگرنه
+    # عیب‌یابی کور می‌شود («چرا قرمز شد؟» بی‌پاسخ می‌ماند).
+    extra = {k: v for k, v in s.items()
+             if v > 0 and k not in ("pass", "fail", "skipped", "missing")}
+    if extra:
+        print(f"   ⚠️ unrecognised statuses (gate closed): {extra}")
+    if not rep.get("real_validation", False):
+        print("   ⚠️ structural fallback only — no real client validated this run")
 
     if args.json_path:
         os.makedirs(os.path.dirname(os.path.abspath(args.json_path)) or ".", exist_ok=True)

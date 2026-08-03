@@ -11620,5 +11620,198 @@ def test_zzz_f6_no_test_creates_an_unregistered_temp_dir() -> None:
         "اصلی باید از آن بگذرند، وگرنه درمانِ F-6 عقب‌گرد کرده است.")
 
 
+def _f5_healthy_tree(root: str) -> None:
+    """یک درختِ خروجیِ سالم و *ساختاراً معتبر* می‌سازد (سه دستهٔ اصلی).
+
+    عمداً حداقلی است: هدفِ این تست‌ها منطقِ دروازه است، نه غنای فیکسچر.
+    """
+    for cat in validate.CORE_CATEGORIES:
+        os.makedirs(os.path.join(root, cat), exist_ok=True)
+        with open(os.path.join(root, cat, "singbox.json"), "w",
+                  encoding="utf-8") as handle:
+            json.dump({"outbounds": [{"type": "direct", "tag": "d"}]}, handle)
+        with open(os.path.join(root, cat, "clash.yaml"), "w",
+                  encoding="utf-8") as handle:
+            yaml.safe_dump({"proxies": [{"name": "n", "type": "socks5",
+                                         "server": "1.2.3.4", "port": 1080}]},
+                           handle)
+
+
+def test_zzz_f5_an_unrecognised_status_closes_the_gate() -> None:
+    """
+    نقصِ سنجیده‌شده (F-5): `report["ok"]` یک **فهرستِ سیاه** بود
+    (`fail == 0 and missing == 0`). هر وضعیتِ تازه‌ای که یک `check_*`
+    برمی‌گرداند در `summary` شمرده می‌شد ولی در هیچ‌یک از دو شرط نمی‌آمد،
+    پس دروازه سبز می‌ماند. با اجرا اندازه‌گیری شد، نه با خواندنِ کد:
+
+        summary = {'pass': 0, 'fail': 0, 'skipped': 3, 'missing': 0, 'error': 3}
+        ok      = True        ← سه موردِ خطا، و دروازه باز!
+
+    این «باگِ خاموش» است: امروز بی‌اثر است چون هر چهار وضعیتِ تولیدشدنی
+    پوشش داده شده، ولی `_run` دو کدِ اختصاصیِ ۱۲۴ (timeout) و ۱۲۵
+    (استثنا) دارد و افزودنِ وضعیتِ `"timeout"` وسوسهٔ واقعی و کم‌هزینه‌ای
+    است؛ آن روز، دروازه **بی‌صدا** باز می‌شد.
+    """
+    import tempfile
+
+    with tempfile.TemporaryDirectory() as root:
+        _f5_healthy_tree(root)
+
+        original = validate.check_singbox
+        try:
+            validate.check_singbox = (
+                lambda path, binary: {"status": "error", "detail": "simulated"})
+            rep = validate.validate_outputs(root)
+        finally:
+            validate.check_singbox = original
+
+        # ضدِ-تشریفات: اگر وضعیتِ جعلی اصلاً وارد `summary` نشده باشد،
+        # سبز/قرمزِ دروازه هیچ چیزی را ثابت نمی‌کند.
+        assert rep["summary"].get("error") == 3, (
+            f"فیکسچر باید سه وضعیتِ 'error' تولید کند: {rep['summary']}")
+        assert rep["summary"]["fail"] == 0 and rep["summary"]["missing"] == 0, (
+            "شرطِ پیشین باید در این حالت *راضی* باشد، وگرنه تست چیزِ دیگری "
+            f"را می‌سنجد: {rep['summary']}")
+
+        assert rep["ok"] is False, (
+            "وضعیتِ ناشناخته باید دروازه را ببندد (fail-closed)؛ "
+            f"summary={rep['summary']}")
+        assert rep["offending"] == {"error": 3}, rep.get("offending")
+
+
+def test_zzz_f5_the_gate_is_an_allowlist_not_a_denylist() -> None:
+    """
+    شکلِ ساختاریِ درمان مهم است، نه فقط نتیجه‌اش: افزودنِ `and error == 0`
+    به شرطِ پیشین هم تستِ بالا را سبز می‌کرد ولی نقص را حل نمی‌کرد — چون
+    وضعیتِ *بعدی* باز هم جا می‌افتاد. پس این‌جا خودِ ناوردا سنجیده می‌شود:
+    «هر وضعیتی که صریحاً قابل‌قبول اعلام نشده، دروازه را می‌بندد.»
+
+    با چهار نامِ وضعیتِ ساختگیِ متفاوت آزموده می‌شود تا مطمئن شویم درمان
+    به یک نامِ خاص گره نخورده است.
+    """
+    import tempfile
+
+    for bogus in ("timeout", "crashed", "unknown", "partial"):
+        with tempfile.TemporaryDirectory() as root:
+            _f5_healthy_tree(root)
+            original = validate.check_clash
+            try:
+                validate.check_clash = (
+                    lambda path, binary, _s=bogus: {"status": _s, "detail": "x"})
+                rep = validate.validate_outputs(root)
+            finally:
+                validate.check_clash = original
+
+            assert rep["summary"].get(bogus) == 3, (
+                f"{bogus}: فیکسچر کار نکرد: {rep['summary']}")
+            assert rep["ok"] is False, (
+                f"وضعیتِ {bogus!r} باید دروازه را ببندد: {rep['summary']}")
+            assert bogus in rep["offending"], rep["offending"]
+
+
+def test_zzz_f5_the_fix_changes_no_verdict_for_real_statuses() -> None:
+    """
+    اثباتِ «صفر رگرسیون» — و این مهم‌ترین نیمهٔ کار است.
+
+    اگر درمان، دروازه را در حالت‌های *واقعی* هم سخت‌تر می‌کرد، انتشار را
+    می‌شکست. پس روی هر ترکیبِ شمارشِ چهار وضعیتِ واقعاً تولیدشدنی
+    (`pass`/`fail`/`skipped`/`missing`، هر یک ۰..۲ → ۸۱ حالت) شکلِ پیشین
+    و شکلِ کنونی مقایسه می‌شوند و باید در **همهٔ** موارد هم‌نظر باشند.
+
+    توجه: این مقایسه روی *منطق* است، نه روی متنِ کد؛ پس اگر کسی فردا
+    شکلِ شرط را عوض کند و رفتار را بشکند، همین‌جا دیده می‌شود.
+    """
+    import itertools
+
+    real = ("pass", "fail", "skipped", "missing")
+    acceptable = set(validate.ACCEPTABLE_STATUSES) if hasattr(
+        validate, "ACCEPTABLE_STATUSES") else {"pass", "skipped"}
+
+    disagreements = []
+    for counts in itertools.product(range(3), repeat=len(real)):
+        summary = dict(zip(real, counts))
+        legacy = summary["fail"] == 0 and summary["missing"] == 0
+        current = not {s for s, c in summary.items()
+                       if c > 0 and s not in acceptable}
+        if legacy != current:
+            disagreements.append((summary, legacy, current))
+
+    assert not disagreements, (
+        "درمان نباید هیچ حکمی را برای وضعیت‌های واقعی عوض کند، ولی "
+        f"{len(disagreements)} اختلاف پیدا شد؛ نمونه: {disagreements[:3]}")
+    # ضدِ-تشریفات: مطمئن شو حلقه واقعاً اجرا شده و همهٔ حالت‌ها را دیده.
+    assert len(list(itertools.product(range(3), repeat=4))) == 81
+
+
+def test_zzz_f5_skipped_still_passes_because_that_is_the_documented_design() -> None:
+    """
+    مرزِ درمان، صریح و آزموده: `skipped` **باید** از دروازه بگذرد.
+
+    وسوسهٔ «سخت‌گیریِ بیشتر» این بود که `pass > 0` هم شرط شود. سنجیده شد
+    که این یک **رگرسیون** بود نه بهبود: سه تستِ موجود در همین فایل
+    (`test_validate_optional_category_absence_does_not_break_the_gate`،
+    تستِ دروازهٔ خروجیِ pipeline، و تستِ زنجیرهٔ F-7) در همین سندباکسِ
+    بی‌باینری اجرا می‌شوند و `ok is True` را انتظار دارند. سندِ بالای
+    `validate.py` هم صریح می‌گوید در نبودِ باینری، بررسیِ ساختاری جانشین
+    می‌شود و «هرگز به‌دروغ pass گزارش نمی‌شود».
+
+    چرا این نرم‌کردن خطرناک نیست: بررسیِ ساختاری اگر ایراد ببیند `fail`
+    می‌دهد نه `skipped`؛ و در CI گامِ نصبِ باینری‌ها fail-closed است
+    (`set -euo pipefail` + چهار checksum، بدونِ `continue-on-error`)، پس
+    رسیدن به `skipped` در CI یعنی آن گام پیش‌تر کلِ job را شکسته است.
+    """
+    import tempfile
+
+    with tempfile.TemporaryDirectory() as root:
+        _f5_healthy_tree(root)
+        rep = validate.validate_outputs(root)
+
+        # ضدِ-تشریفات: این ماشین واقعاً باید بی‌باینری باشد، وگرنه حالتِ
+        # موردِ نظر (`skipped`) اصلاً ساخته نمی‌شود و تست پوچ است.
+        assert rep["summary"]["skipped"] == 6, (
+            "این تست به مسیرِ ساختاری نیاز دارد؛ اگر باینری نصب است "
+            f"معنایش عوض می‌شود: {rep['summary']}")
+        assert rep["summary"]["pass"] == 0, rep["summary"]
+        assert rep["ok"] is True, (
+            "خروجیِ سالمِ سنجیده‌شدهٔ ساختاری نباید انتشار را ببندد: "
+            f"{rep['summary']}")
+
+
+def test_zzz_f5_a_run_that_proved_nothing_is_visible_not_silent() -> None:
+    """
+    نیمهٔ شفافیت: «طبقِ طراحی» به‌معنای «نامرئی» نیست.
+
+    پیش از این، از بیرون هیچ راهی نبود که بفهمیم یک اجرا با کلاینتِ
+    واقعی سنجیده شده یا فقط ساختاری — و `validation.json` هم که در CI
+    آپلود می‌شود این را نمی‌گفت. پرچمِ `real_validation` این را صریح
+    می‌کند، بدونِ آنکه حکمِ دروازه را عوض کند.
+    """
+    import tempfile
+
+    with tempfile.TemporaryDirectory() as root:
+        _f5_healthy_tree(root)
+
+        rep = validate.validate_outputs(root)
+        assert rep["real_validation"] is False, (
+            "با نبودِ باینری، این پرچم باید False باشد: "
+            f"pass={rep['summary']['pass']}")
+        assert rep["ok"] is True, "پرچم نباید دروازه را عوض کند"
+
+        # و وقتی اعتبارسنجیِ واقعی رخ دهد، True می‌شود.
+        sb_orig, cl_orig = validate.check_singbox, validate.check_clash
+        try:
+            validate.check_singbox = (
+                lambda path, binary: {"status": "pass", "detail": "real"})
+            validate.check_clash = (
+                lambda path, binary: {"status": "pass", "detail": "real"})
+            rep2 = validate.validate_outputs(root)
+        finally:
+            validate.check_singbox, validate.check_clash = sb_orig, cl_orig
+
+        assert rep2["summary"]["pass"] == 6, rep2["summary"]
+        assert rep2["real_validation"] is True, rep2["summary"]
+        assert rep2["ok"] is True
+
+
 if __name__ == "__main__":
     sys.exit(_run_all())
