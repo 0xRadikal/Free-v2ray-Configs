@@ -10230,6 +10230,323 @@ def test_zzz_f4_the_total_wrapper_is_the_last_resort_not_the_first():
     ok, detail = boom("/nonexistent")
     assert ok is False and generic in detail and "RuntimeError" in detail, detail
 
+# ══════════════════════════════════════════════════════════════════════════
+# F-7 — دروازهٔ تازگی باید به سمتِ «اجرا» fail-open کند
+#
+# چرا این تست‌ها بلوکِ شل را **اجرا** می‌کنند و نه فقط متنش را assert می‌کنند:
+# تستِ متنی («فلان رشته در yml هست») با هر بازنویسیِ بی‌ضرر می‌شکند و — بدتر —
+# با یک بازنویسیِ *مضر* که همان رشته را نگه دارد سبز می‌ماند. پس هدفِ درست
+# رفتار است، نه بایت‌ها: بلوکِ تصمیم را از خودِ ورک‌فلو بیرون می‌کشیم و با
+# `$AGE`های واقعی در bash می‌رانیم و `should_run`ِ واقعی را می‌سنجیم.
+# ══════════════════════════════════════════════════════════════════════════
+
+def _f7_gate_step() -> dict:
+    """گامِ `id: gate` را از YAMLِ پارس‌شدهٔ ورک‌فلو برمی‌گرداند."""
+    doc = yaml.safe_load(_workflow_text())
+    job = doc["jobs"][next(iter(doc["jobs"]))]
+    steps = [s for s in job["steps"] if s.get("id") == "gate"]
+    assert len(steps) == 1, (
+        f"باید دقیقاً یک گام با `id: gate` باشد، {len(steps)} پیدا شد")
+    return steps[0]
+
+
+def _f7_decision_block() -> str:
+    """از `AGE_OK=1` تا آخرین `fi` — یعنی همان بخشی که تصمیم می‌گیرد."""
+    run = _f7_gate_step()["run"]
+    assert "AGE_OK=1" in run, (
+        "گاردِ `AGE_OK` از دروازهٔ تازگی حذف شده ⇒ نقصِ F-7 برگشته: "
+        "یک `$AGE`ِ ناخوانا باز هم کلِ دور را بی‌صدا رد می‌کند")
+    i = run.index("AGE_OK=1")
+    j = run.rindex("\nfi")
+    return run[i:j + len("\nfi")]
+
+
+def _f7_run_decision(age: str, gate_sec: str = "780",
+                     gate_min: str = "13") -> tuple:
+    """بلوکِ تصمیم را با مقادیرِ داده‌شده اجرا کن → (should_run, log, rc)."""
+    # `re` در این فایل سراسری import نشده؛ قاعدهٔ جاری همین importِ درون‌تابعی
+    # است (نمونه‌ها: سطرهای ۶۳۵، ۷۴۹، ۸۳۴ …). این را pyflakes گرفت، نه حدس.
+    import re
+    import shlex
+    import subprocess
+    import tempfile
+
+    block = _f7_decision_block()
+    with tempfile.TemporaryDirectory() as td:
+        out = os.path.join(td, "gh_output")
+        open(out, "w").close()
+        script = (
+            "set -u\n"
+            f"AGE={shlex.quote(age)}\n"
+            f"GATE_SEC={shlex.quote(gate_sec)}\n"
+            f"FRESHNESS_GATE_MINUTES={shlex.quote(gate_min)}\n"
+            f"GITHUB_OUTPUT={shlex.quote(out)}\n" + block + "\n"
+        )
+        # `bash -e` = همان پوستهٔ پیش‌فرضِ GitHub Actions (`bash -e {0}`).
+        p = subprocess.run(["bash", "-e", "-c", script],
+                           capture_output=True, text=True, timeout=60)
+        with open(out, encoding="utf-8") as f:
+            vals = re.findall(r"should_run=(\w+)", f.read())
+    return (vals[-1] if vals else None, (p.stdout + p.stderr), p.returncode)
+
+
+def test_zzz_f7_an_unreadable_age_opens_the_gate_instead_of_skipping():
+    """نقصِ اصلیِ F-7: `$AGE`ِ ناخوانا باید به «اجرا» منجر شود، نه «رد».
+
+    ریشه با اجرا اثبات شد، نه با خواندنِ کد: `test` روی عملوندِ غیرصحیح
+    کدِ **۲** می‌دهد (نه ۰/۱) و `if` هر ناصفری را «نادرست» می‌شمارد، پس
+    `[ "" -ge 780 ]` مستقیم به `else` می‌رفت و `should_run=false` می‌شد —
+    در حالی که heredocِ بالای همان بلوک نیتش را صریح نوشته است:
+    `print(10**9)  # خطا → قدیمی فرض کن تا اجرا شود`.
+
+    چرا مهم است: ۱۷ گامِ پایین‌دستی به این خروجی بسته‌اند، و چون خطای
+    `test` داخلِ شرطِ `if` است `set -e` هم آن را نمی‌گیرد ⇒ گام «سبز»
+    گزارش می‌شد. یعنی یک دورِ کاملاً پوچ، بی هیچ علامتِ خطا.
+    """
+    unreadable = [
+        ("خالی (مفسر چیزی چاپ نکرد)", ""),
+        ("فقط فاصله", "   "),
+        ("متنِ غیرعددی", "abc"),
+        ("اعشاری", "12.5"),
+        ("Traceback", "Traceback (most recent call last):"),
+        ("چندخطی: هشدار + عدد", "notice: something\n1000000000"),
+        ("عدد با دنبالهٔ متنی", "1000abc"),
+        ("عددِ علامت‌دار", "+1000"),
+    ]
+    for label, age in unreadable:
+        got, log, rc = _f7_run_decision(age)
+        assert rc == 0, (
+            f"{label}: بلوکِ تصمیم خودش با rc={rc} شکست — "
+            f"دروازه نباید گام را بکشد. log={log[-300:]!r}")
+        assert got == "true", (
+            f"{label}: AGE={age!r} ⇒ should_run={got!r}؛ باید 'true' باشد. "
+            f"با 'false' هر ۱۷ گامِ بعدی بی‌صدا رد می‌شوند و دور پوچ "
+            f"ولی «سبز» تمام می‌شود.")
+
+
+def test_zzz_f7_a_future_timestamp_does_not_freeze_the_pipeline():
+    """نیمهٔ دومِ F-7 که در گزارشِ اولیه نبود — با سنجش پیدا شد.
+
+    `AGE = now - updated_at` و `updated_at_unix` از ساعتِ خودِ runner
+    می‌آید (`aggregate.py` ← `datetime.now(utc)`). یک مُهرِ **آینده**
+    (انحرافِ ساعت یا `index.json`ِ دستکاری‌شده) `$AGE`ِ منفی می‌سازد.
+
+    ظرافتِ ماجرا: عددِ منفی «بدشکل» نیست. `[ -2591999 -ge 780 ]` تمیز
+    rc=1 می‌دهد و بی هیچ خطایی به `else` می‌رود. پس این نیمه با گاردِ
+    «فقط عدد باشد» گرفته نمی‌شد؛ الگو باید علامتِ منفی را هم رد کند.
+    اندازه‌گیری‌شده: مُهرِ ۳۰ روز آینده ⇒ ۳۰ روز خوابِ کاملِ خط‌لوله.
+    """
+    for label, age in [("۱ ثانیه آینده", "-1"),
+                       ("۱ ساعت آینده", "-3599"),
+                       ("۳۰ روز آینده", "-2591999")]:
+        got, log, rc = _f7_run_decision(age)
+        assert rc == 0, f"{label}: rc={rc} log={log[-300:]!r}"
+        assert got == "true", (
+            f"{label}: AGE={age} ⇒ should_run={got!r}. یک مُهرِ آینده نباید "
+            f"خط‌لوله را بخواباند؛ چون `index.json` هر دور بازنوشته می‌شود، "
+            f"اجرا خودش مُهر را درمان می‌کند ولی رد کردن قفلش می‌کند.")
+
+
+def test_zzz_f7_an_age_too_large_for_the_shell_still_opens_the_gate():
+    """گاردِ «همه‌رقم» به‌تنهایی کافی نبود — سرریزِ عددِ ۶۴بیتی.
+
+    مرز با اجرا پیدا شد، نه از مستندات:
+        9223372036854775807 (۱۹ رقم) → rc=0  ✓
+        9223372036854775808 (۱۹ رقم) → rc=2  ✗
+    پس یک رشتهٔ «همه‌رقم» هم می‌تواند `test` را بشکند و همان نقص را از
+    گارد رد کند. حالتِ فرضی نیست: `{"updated_at_unix": 1e300}` یک `$AGE`ِ
+    ۳۰۲رقمی و `-1e30` یک ۳۱رقمی تولید کرد (هر دو اجرا شدند).
+    """
+    for label, age in [("int64 max + 1", "9223372036854775808"),
+                       ("۳۱ رقم (از مُهرِ -1e30)", "1" + "0" * 30),
+                       ("۳۰۲ رقم (از مُهرِ 1e300)", "9" * 302)]:
+        got, log, rc = _f7_run_decision(age)
+        assert rc == 0, f"{label}: rc={rc} log={log[-300:]!r}"
+        assert got == "true", (
+            f"{label}: AGE با طولِ {len(age)} ⇒ should_run={got!r}؛ "
+            f"سرریزِ عددیِ شل هم باید fail-open شود.")
+
+    # و مرزِ ایمن نباید قربانی شود: ۱۸ رقم باید *عادی* مقایسه شود.
+    got, _, rc = _f7_run_decision("9" * 18)
+    assert rc == 0 and got == "true", (
+        f"۱۸ رقم (بزرگ و کهنه) باید true بدهد، داد {got!r}")
+
+
+def test_zzz_f7_an_unusable_threshold_also_opens_the_gate():
+    """اگر خودِ آستانه ناخوانا شد، باز هم باید اجرا کنیم.
+
+    این شاخه واقعاً قابلِ رسیدن است — با اجرا سنجیده شد، نه فرض:
+    `FRESHNESS_GATE_MINUTES=13.5` یا `=1e3` باعث خطای حسابیِ `$(( … ))`
+    می‌شود، `GATE_SEC` را **خالی** می‌گذارد، و شگفت‌آور این‌که `set -e`
+    هم گام را نمی‌کشد (rc=0). مقدارِ `-5` هم `-300` می‌سازد.
+    """
+    for label, gs in [("خالی", ""), ("غیرعددی", "abc"),
+                      ("منفی", "-300"), ("۱۹رقمِ سرریز", "9" * 19)]:
+        got, log, rc = _f7_run_decision("1000", gs)
+        assert rc == 0, f"{label}: rc={rc} log={log[-300:]!r}"
+        assert got == "true", (
+            f"آستانهٔ {label} ({gs!r}) ⇒ should_run={got!r}؛ باید 'true' باشد.")
+
+
+def test_zzz_f7_a_healthy_age_is_judged_exactly_as_before():
+    """ضدِّ رگرسیون: مسیرِ سالم باید بایت‌به‌بایت مثلِ قبلِ درمان بماند.
+
+    درمانِ fail-open بی‌ارزش است اگر دروازه را از کار بیندازد. پس نتیجهٔ
+    بلوکِ جدید را با مقایسهٔ لختِ قدیمی (`[ "$AGE" -ge "$GATE_SEC" ]`) روی
+    هر ورودیِ *سالم* می‌سنجیم و اصرار داریم یکی باشند — از جمله دو لبهٔ
+    حساسِ ۷۷۹/۷۸۰ که تفاوتشان همان تصمیمِ دروازه است.
+    """
+    import re
+    import shlex
+    import subprocess
+    import tempfile
+
+    def _old(age: str, gs: str) -> str:
+        with tempfile.TemporaryDirectory() as td:
+            out = os.path.join(td, "o")
+            open(out, "w").close()
+            script = (
+                f"set -u\nAGE={shlex.quote(age)}\nGATE_SEC={shlex.quote(gs)}\n"
+                f"GITHUB_OUTPUT={shlex.quote(out)}\n"
+                'if [ "$AGE" -ge "$GATE_SEC" ]; then\n'
+                '  echo "should_run=true" >> "$GITHUB_OUTPUT"\n'
+                'else\n'
+                '  echo "should_run=false" >> "$GITHUB_OUTPUT"\n'
+                'fi\n')
+            subprocess.run(["bash", "-e", "-c", script],
+                           capture_output=True, text=True, timeout=60)
+            with open(out, encoding="utf-8") as f:
+                v = re.findall(r"should_run=(\w+)", f.read())
+        return v[-1] if v else None
+
+    healthy = ["0", "1", "13", "779", "780", "781", "1000", "999999",
+               "1000000000", "008", "9" * 18]
+    for age in healthy:
+        for gs in ["780", "0", "60"]:
+            new, _, rc = _f7_run_decision(age, gs)
+            old = _old(age, gs)
+            assert rc == 0, f"AGE={age} GATE={gs}: rc={rc}"
+            assert new == old, (
+                f"رگرسیون: AGE={age} GATE={gs} پیش‌تر {old!r} بود و "
+                f"اکنون {new!r} است. درمانِ F-7 نباید قضاوتِ سالم را عوض کند.")
+
+    # و دو لبهٔ حساس را صریح هم قید می‌کنیم تا اگر جدول عوض شد، معنا نپرد.
+    assert _f7_run_decision("779", "780")[0] == "false", \
+        "۷۷۹ < ۷۸۰ ⇒ تازه است ⇒ باید رد شود (صرفه‌جوییِ اصلیِ دروازه)"
+    assert _f7_run_decision("780", "780")[0] == "true", \
+        "۷۸۰ >= ۷۸۰ ⇒ کهنه است ⇒ باید اجرا شود"
+
+
+def test_zzz_f7_the_gate_never_kills_the_job_and_says_why_out_loud():
+    """دو شرطِ مکمل: (۱) مرگِ مفسر نباید jobِ تجمیع را بشکند،
+    (۲) هر گریزِ fail-open باید در لاگ **بلند** اعلام شود.
+
+    ① `AGE=$( … ) || AGE=""`
+       این گام پیش از `🐍 Setup Python` اجرا می‌شود، پس `python`ِ این‌جا
+       همان چیزی است که در تصویرِ runner هست. زیرِ `bash -e` یک انتسابِ
+       ساده وضعیتِ خروجِ جانشینیِ فرمان را به ارث می‌برد؛ اندازه‌گیری شد:
+       مفسرِ غایب → rc=127، مفسرِ `os._exit(1)` → rc=1، SIGKILL → rc=137.
+       یعنی یک نقصِ محیطیِ گذرا در «خواندنِ سنِ فایل» کلِ دور را می‌شکست،
+       بی آن‌که هیچ گامِ بعدی به آن `python` وابسته باشد.
+
+    ② `::warning::`
+       fail-open نباید به fail-silent بدل شود. اگر دروازه نتوانست سن را
+       بخواند، باید در Actions دیده شود، وگرنه یک خرابیِ پایدارِ محیطی
+       ماه‌ها زیرِ «همه‌چیز سبز» می‌ماند.
+    """
+    run = _f7_gate_step()["run"]
+    assert '|| AGE=""' in run, (
+        "پسوندِ `|| AGE=\"\"` حذف شده ⇒ زیرِ `set -e` مرگِ مفسرِ python "
+        "کلِ jobِ تجمیع را با rc=127/1/137 می‌شکند، در حالی که هیچ گامِ "
+        "بعدی به آن مفسر وابسته نیست.")
+
+    # هشدارها باید واقعاً چاپ شوند (نه فقط در کامنت باشند).
+    got, log, rc = _f7_run_decision("")
+    assert got == "true" and rc == 0
+    assert "::warning::" in log, (
+        f"سنِ ناخوانا باید `::warning::` چاپ کند وگرنه fail-open به "
+        f"fail-silent بدل می‌شود. log={log[-300:]!r}")
+
+    got, log, rc = _f7_run_decision("1000", "abc")
+    assert got == "true" and rc == 0
+    assert "::warning::" in log, (
+        f"آستانهٔ ناخوانا هم باید `::warning::` چاپ کند. log={log[-300:]!r}")
+
+    # مسیرِ سالم نباید هشدار بدهد — وگرنه هشدارها بی‌معنا و نادیده می‌شوند.
+    for age, gs in [("1000", "780"), ("10", "780")]:
+        _, log, _ = _f7_run_decision(age, gs)
+        assert "::warning::" not in log, (
+            f"AGE={age} سالم است ولی هشدار داد ⇒ نویزِ هشدار. log={log!r}")
+
+
+def test_zzz_f7_the_whole_gate_chain_agrees_with_a_real_index_json():
+    """آزمونِ سرتاسری: فایل → heredocِ python → `$AGE` → تصمیم.
+
+    تست‌های بالا `$AGE` را تزریق می‌کنند؛ این یکی خودِ heredoc را هم اجرا
+    می‌کند. چرا لازم است: نقصِ F-7 دقیقاً یک **ناسازگاریِ میانِ دو لایه**
+    بود (نیتِ fail-openِ پایتون در برابر تصمیمِ fail-closedِ شل). فقط
+    آزمونِ زنجیرهٔ کامل می‌تواند ثابت کند آن دو دیگر با هم نمی‌جنگند.
+    """
+    import re
+    import shlex
+    import subprocess
+    import tempfile
+    import time
+
+    run = _f7_gate_step()["run"]
+    i = run.index("AGE=$(python")
+    j = run.rindex("\nfi")
+    chain = run[i:j + len("\nfi")]
+
+    def _chain(index_text, python_name="python3"):
+        with tempfile.TemporaryDirectory() as td:
+            out = os.path.join(td, "o")
+            open(out, "w").close()
+            gi = os.path.join(td, "gate_index.json")
+            if index_text is not None:
+                with open(gi, "w", encoding="utf-8") as f:
+                    f.write(index_text)
+            snip = chain.replace("/tmp/gate_index.json", gi)
+            snip = snip.replace("AGE=$(python ", f"AGE=$({python_name} ", 1)
+            script = ("set -u\nFRESHNESS_GATE_MINUTES='13'\n"
+                      f"GITHUB_OUTPUT={shlex.quote(out)}\n" + snip + "\n")
+            p = subprocess.run(["bash", "-e", "-c", script],
+                               capture_output=True, text=True, timeout=120)
+            with open(out, encoding="utf-8") as f:
+                v = re.findall(r"should_run=(\w+)", f.read())
+        return (v[-1] if v else None, p.returncode, p.stdout + p.stderr)
+
+    now = int(time.time())
+    cases = [
+        # (برچسب، محتوا، مفسر، انتظار)
+        ("تازه (۶۰ ثانیه)", json.dumps({"updated_at_unix": now - 60}),
+         "python3", "false"),
+        ("کهنه (۲۰ دقیقه)", json.dumps({"updated_at_unix": now - 1200}),
+         "python3", "true"),
+        ("لبه ۷۸۰", json.dumps({"updated_at_unix": now - 780}),
+         "python3", "true"),
+        ("لبه ۷۷۹", json.dumps({"updated_at_unix": now - 779}),
+         "python3", "false"),
+        ("ISO fallback", json.dumps({"updated_at": "2020-01-01T00:00:00+00:00"}),
+         "python3", "true"),
+        ("JSONِ خراب", "{not json", "python3", "true"),
+        ("JSONِ تهی", "{}", "python3", "true"),
+        ("مُهرِ آینده (۳۰ روز)",
+         json.dumps({"updated_at_unix": now + 86400 * 30}), "python3", "true"),
+        ("مُهرِ 1e300", json.dumps({"updated_at_unix": 1e300}),
+         "python3", "true"),
+        ("مفسرِ python غایب", json.dumps({"updated_at_unix": now - 60}),
+         "definitely_not_a_python_zz", "true"),
+    ]
+    for label, content, py, want in cases:
+        got, rc, log = _chain(content, py)
+        assert rc == 0, (
+            f"{label}: زنجیره با rc={rc} شکست — دروازه هرگز نباید گام را "
+            f"بکشد. log={log[-400:]!r}")
+        assert got == want, (
+            f"{label}: should_run={got!r} ولی انتظار {want!r} بود. "
+            f"log={log[-400:]!r}")
+
 
 if __name__ == "__main__":
     sys.exit(_run_all())
