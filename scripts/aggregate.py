@@ -361,8 +361,45 @@ def _write_text(path: str, content: str) -> None:
         f.write(content)
 
 
+#: خرابیِ نوشتنِ خروجیِ مبدل‌ها، به‌تفکیکِ دسته و هدف. کلید: `"{cat}/{target}"`.
+#: مقدار: متنِ کوتاهِ خطا. این نگاشت در `health.json` (کلیدِ `converter_gate`)
+#: منتشر می‌شود تا خرابی **ماشین‌خوان** باشد، نه فقط یک خطِ لاگ.
+#:
+#: چرا `converter_gate` و **نه** `output_gate`: در واژگانِ همین پروژه،
+#: «دروازهٔ خروجی / output gate» از قبل نامِ گاردِ **بایتِ کنترلی** است
+#: (`core.ControlByteInOutput` و سه آزمونِ `test_zzz_p2_output_gate_*`).
+#: هم‌نام‌کردن، مانیتورینگ را دوپهلو می‌کرد: خواننده نمی‌فهمید این کلید از
+#: «بایتِ کنترلی» می‌گوید یا از «شکستِ مبدل». این نام‌گذاری قرینهٔ
+#: `brand_gate` است — «دروازهٔ <چیزی که سنجیده می‌شود>».
+CONVERT_FAILURES: Dict[str, str] = {}
+
+
 def write_category(out_dir: str, cat: str, r: CategoryResult) -> None:
-    """فایل‌های یک دسته (configs.txt / base64 / clash / singbox)."""
+    """فایل‌های یک دسته (configs.txt / base64 / clash / singbox).
+
+    ══════════════════════════════════════════════════════════════════════════
+    🔒 دروازهٔ مبدل‌ها — چرا شکستِ یک مبدل دیگر «بی‌صدا» نیست
+    ══════════════════════════════════════════════════════════════════════════
+    پیش از این، استثنای `build_clash_yaml`/`build_singbox_json` فقط لاگ
+    می‌شد و فایل نوشته نمی‌شد. سه پیامدِ **اندازه‌گیری‌شده** داشت:
+
+      ۱) **کهنگیِ خاموش، نه ۴۰۴.** این فایل‌ها در `main` ردگیری می‌شوند
+         (`git ls-files` تأیید شد) و ورک‌فلو با `actions/checkout` شروع
+         می‌شود، پس نسخهٔ دورِ قبل روی دیسک هست. «ننوشتن» یعنی همان فایلِ
+         **بایات** دوباره منتشر می‌شود؛ مشترک سرورهای قدیمی می‌گیرد بی هیچ
+         سیگنالی. این از ۴۰۴ بدتر است (سیاستِ `_remove_if_exists` در همین
+         فایل، ۴۰۴ را عمداً بر «بدنهٔ خالی» ترجیح می‌دهد — به همان دلیل).
+      ۲) **تلمتریِ نادرست.** `index.json` بی‌قید `clash_yaml` و
+         `singbox_json` را تبلیغ می‌کرد و `health.json` هیچ کلیدی نداشت.
+      ۳) **گاردِ fail-closed دور می‌خورد.** `MUST_EXIST`ِ ورک‌فلو فقط
+         `all/clash.yaml` و `all/singbox.json` را می‌دید؛ `heavy/*` و
+         `light/*` سوراخ بودند (۴ سوراخِ سنجیده‌شده).
+
+    درمان — دقیقاً همان الگویی که «دروازهٔ برندینگ (E-6)» در این پروژه دارد:
+    شکست **ثبت** می‌شود (`CONVERT_FAILURES` → `health.json.converter_gate`) و
+    فایلِ بایات **حذف** می‌شود تا لینک ۴۰۴ بدهد (سیگنالِ صادق) نه دادهٔ
+    کهنه. اجرا متوقف نمی‌شود: `configs.txt` مستقل است و نباید قربانی شود.
+    """
     base = os.path.join(out_dir, cat)
     # سرآیندِ درون‌فایلیِ Hiddify **همیشه اولین چیزِ فایل** است: پویشگرِ Hiddify
     # فقط ۲۹ خطِ نخست را می‌بیند (توضیح و مدرک در core.py، بخشِ «سرآیندِ
@@ -380,12 +417,20 @@ def write_category(out_dir: str, cat: str, r: CategoryResult) -> None:
         # `yaml.safe_load` قبل و بعد **دقیقاً برابر** است (۱۰۵۸۶ پروکسی).
         _write_text(os.path.join(base, "clash.yaml"),
                     hh + converters.build_clash_yaml(r.unique))
+        CONVERT_FAILURES.pop(f"{cat}/clash", None)
     except Exception as e:
         log(f"  ⚠️ clash {cat}: {e}")
+        CONVERT_FAILURES[f"{cat}/clash"] = f"{type(e).__name__}: {e}"[:200]
+        if _remove_if_exists(os.path.join(base, "clash.yaml")):
+            log(f"  🗑️ pruned stale {cat}/clash.yaml (404 beats stale data)")
     try:
         _write_text(os.path.join(base, "singbox.json"), converters.build_singbox_json(r.unique))
+        CONVERT_FAILURES.pop(f"{cat}/singbox", None)
     except Exception as e:
         log(f"  ⚠️ singbox {cat}: {e}")
+        CONVERT_FAILURES[f"{cat}/singbox"] = f"{type(e).__name__}: {e}"[:200]
+        if _remove_if_exists(os.path.join(base, "singbox.json")):
+            log(f"  🗑️ pruned stale {cat}/singbox.json (404 beats stale data)")
 
 
 def _remove_if_exists(path: str) -> bool:
@@ -657,6 +702,12 @@ def build_health_report(
                      اگر دانلودِ mmdb در ورک‌فلو خراب شود، خط‌لوله بی‌صدا به
                      برچسب‌گذاریِ ضعیفِ قدیمی برمی‌گشت و کسی نمی‌فهمید.
 
+      `converter_gate` — کدام مبدل در کدام دسته **نوشته نشد** (F-8).
+                     خالی‌بودنش یعنی همهٔ خروجی‌ها این دور تازه نوشته شدند.
+                     غیرِخالی یعنی آن لینک عمداً ۴۰۴ شده تا دادهٔ بایات منتشر
+                     نشود. (نامش عمداً `output_gate` نیست — آن اصطلاح در این
+                     پروژه از قبل به گاردِ بایتِ کنترلی تعلق دارد.)
+
     هر دو بخش «بهترین تلاش»اند: اگر ماژول در دسترس نباشد، مقدارشان None می‌شود و
     گزارش همان ساختارِ قبلی را حفظ می‌کند (سازگاریِ عقب‌رو برای هر مصرف‌کننده‌ای
     که health.json را پارس می‌کند).
@@ -710,6 +761,22 @@ def build_health_report(
         except Exception:
             geo_stats = None
 
+    # ── دروازهٔ مبدل‌ها (F-8) — رصدپذیریِ شکستِ نوشتنِ خروجی ────────────
+    # چرا اینجا و چرا **همیشه یک dict** (نه None وقتی خالی است):
+    # این کلید باید سه حالت را از هم جدا کند، نه دو حالت:
+    #   `{}`            → دروازه اجرا شد و **هیچ** شکستی نبود (سلامتِ اثبات‌شده)
+    #   `{"heavy/clash": "..."}` → دروازه اجرا شد و شکست دارد (کارِ فوری)
+    #   کلید **غایب**    → این نسخهٔ قدیمیِ health.json است (نه ادعای سلامت)
+    # اگر `or None` می‌گذاشتیم، حالتِ اول و سوم یکی می‌شدند و مانیتورینگ
+    # نمی‌توانست «سالم» را از «اندازه‌گیری‌نشده» تشخیص دهد. همین منطقِ
+    # `brand_gate` هم هست: وقتی سنجش انجام شده، dictِ واقعی می‌آید — حتی اگر
+    # همهٔ عددهایش صفر باشند.
+    #
+    # کپیِ سطحی (`dict(...)`) عمدی است: گزارش نباید به نگاشتِ سراسریِ زنده
+    # ارجاع بدهد، وگرنه هر نوشتنِ بعدی گزارشِ سریال‌نشده را از زیرِ پا تغییر
+    # می‌دهد. مقدارها `str` هستند، پس کپیِ سطحی کافی است.
+    converter_gate = dict(CONVERT_FAILURES)
+
     return {
         "brand": core.BRAND_CHANNEL,
         "checked_at": now.isoformat(),
@@ -725,6 +792,7 @@ def build_health_report(
         "converters": conv_stats,
         "converters_by_category": conv_by_cat or None,
         "brand_gate": brand_gate,
+        "converter_gate": converter_gate,
         "geo": geo_stats,
     }
 

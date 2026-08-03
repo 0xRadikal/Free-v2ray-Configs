@@ -9331,5 +9331,195 @@ def test_zzz_idx_write_is_atomic_and_leaves_no_tmp_behind():
         assert not os.path.exists(os.path.join(d, "index.json.tmp"))
         json.load(open(os.path.join(d, "index.json"), encoding="utf-8"))
 
+
+# ══════════════════════════════════════════════════════════════════════════════
+# فاز F — دروازهٔ مبدل‌ها (F-8): شکستِ clash/singbox دیگر «بی‌صدا» نیست
+# ══════════════════════════════════════════════════════════════════════════════
+# پیش از این، استثنای مبدل فقط لاگ می‌شد و فایل نوشته نمی‌شد. چون این فایل‌ها
+# در `main` ردگیری می‌شوند و ورک‌فلو با `actions/checkout` شروع می‌شود، نسخهٔ
+# **دورِ قبل** روی دیسک می‌ماند و دوباره منتشر می‌شد: کهنگیِ خاموش، نه ۴۰۴.
+# سه ناوردا اینجا قفل می‌شود: (۱) حذفِ فایلِ بایات، (۲) ثبتِ ماشین‌خوان در
+# health.json، (۳) پوشش fail-closed برای هر شش خروجیِ مبدل در ورک‌فلو.
+
+def _fgate_result(lines):
+    """`CategoryResult` هیچ آرگومانی نمی‌گیرد؛ فیلدها بعد از ساخت پر می‌شوند."""
+    r = aggregate.CategoryResult()
+    r.unique = list(lines)
+    r.total_seen = len(lines)
+    r.active_sources = 1
+    return r
+
+
+class _FgateBoom:
+    """جانشینِ موقتِ مبدل‌ها + بازگردانیِ تضمینی (حتی وقتی assert بشکند).
+
+    چرا context-manager و نه جایگذاریِ ساده: اگر آزمون در میانه fail شود،
+    جایگذاریِ دستی برنمی‌گردد و **بقیهٔ ۳۳۵ آزمون** با مبدلِ خراب اجرا
+    می‌شوند — یک آزمونِ شکسته به آبشاری از شکست‌های دروغین بدل می‌شود.
+    """
+
+    def __init__(self, clash=True, singbox=True):
+        self.clash, self.singbox = clash, singbox
+
+    def __enter__(self):
+        self._c = converters.build_clash_yaml
+        self._s = converters.build_singbox_json
+        if self.clash:
+            def boom_c(*a, **k):
+                raise RuntimeError("clash exploded")
+            converters.build_clash_yaml = boom_c
+        if self.singbox:
+            def boom_s(*a, **k):
+                raise ValueError("singbox exploded")
+            converters.build_singbox_json = boom_s
+        return self
+
+    def __exit__(self, *exc):
+        converters.build_clash_yaml = self._c
+        converters.build_singbox_json = self._s
+        return False
+
+
+def _fgate_seed(d, cats=("all", "heavy", "light")):
+    """فایلِ «دورِ قبل» را می‌کارد — همان چیزی که checkout بازمی‌گرداند."""
+    for cat in cats:
+        os.makedirs(os.path.join(d, cat), exist_ok=True)
+        with open(os.path.join(d, cat, "clash.yaml"), "w", encoding="utf-8") as fh:
+            fh.write("STALE-CLASH\n")
+        with open(os.path.join(d, cat, "singbox.json"), "w", encoding="utf-8") as fh:
+            fh.write('{"stale": true}\n')
+
+
+def test_zzz_f8_converter_failure_prunes_the_stale_file_instead_of_republishing():
+    """ناوردای ۱ — فایلِ بایات باید حذف شود؛ ۴۰۴ صادق‌تر از دادهٔ کهنه است."""
+    import tempfile
+    with tempfile.TemporaryDirectory() as d:
+        _fgate_seed(d)
+        aggregate.CONVERT_FAILURES.clear()
+        try:
+            with _FgateBoom():
+                aggregate.write_category(d, "heavy", _fgate_result(["vless://u@1.2.3.4:443#x"]))
+            assert not os.path.exists(os.path.join(d, "heavy", "clash.yaml")), \
+                "clash.yamlِ بایات حذف نشد ⇒ دادهٔ کهنه دوباره منتشر می‌شود"
+            assert not os.path.exists(os.path.join(d, "heavy", "singbox.json")), \
+                "singbox.jsonِ بایات حذف نشد ⇒ دادهٔ کهنه دوباره منتشر می‌شود"
+            # configs.txt مستقل است و **نباید** قربانیِ شکستِ مبدل شود.
+            assert os.path.exists(os.path.join(d, "heavy", "configs.txt")), \
+                "شکستِ مبدل، configs.txt را هم قربانی کرد"
+            # دسته‌های دیگر دست‌نخورده می‌مانند (حذف باید هدف‌مند باشد).
+            assert os.path.exists(os.path.join(d, "all", "clash.yaml")), \
+                "حذف به دستهٔ دیگری سرریز کرد"
+        finally:
+            aggregate.CONVERT_FAILURES.clear()
+
+
+def test_zzz_f8_converter_failure_is_machine_readable_in_health_json():
+    """ناوردای ۲ — خرابی باید در health.json دیده شود، نه فقط در لاگ.
+
+    سه‌حالتیِ عمدی: `{}` = سنجیده و سالم، غیرخالی = خرابی، کلیدِ غایب =
+    نسخهٔ قدیمیِ فایل. پس این کلید **همیشه** dict است، نه None.
+    """
+    import tempfile
+    with tempfile.TemporaryDirectory() as d:
+        _fgate_seed(d, ("light",))
+        aggregate.CONVERT_FAILURES.clear()
+        try:
+            with _FgateBoom(clash=True, singbox=False):
+                aggregate.write_category(d, "light", _fgate_result(["vless://u@1.2.3.4:443#x"]))
+            rep = aggregate.build_health_report(1.0)
+            gate = rep.get("converter_gate")
+            assert isinstance(gate, dict), \
+                f"converter_gate باید همیشه dict باشد، بود: {type(gate).__name__}"
+            assert "light/clash" in gate, f"شکستِ clash ثبت نشد: {gate!r}"
+            assert "light/singbox" not in gate, \
+                f"مبدلِ سالم به‌اشتباه خراب ثبت شد: {gate!r}"
+            assert "RuntimeError" in gate["light/clash"], \
+                f"نوعِ خطا در پیام نیست: {gate['light/clash']!r}"
+            # گزارش نباید به نگاشتِ زندهٔ سراسری ارجاع بدهد (کپیِ سطحی).
+            aggregate.CONVERT_FAILURES["injected/after"] = "x"
+            assert "injected/after" not in gate, \
+                "گزارش به CONVERT_FAILURESِ زنده ارجاع می‌دهد ⇒ از زیرِ پا تغییر می‌کند"
+        finally:
+            aggregate.CONVERT_FAILURES.clear()
+
+
+def test_zzz_f8_a_later_successful_write_clears_the_failure_flag():
+    """ناوردای ۲-ب — بازیابی: دورِ سالمِ بعدی نباید خرابیِ کهنه را نشان دهد.
+
+    بی این، یک شکستِ گذرا برای همیشه در health.json می‌ماند و مانیتورینگ
+    «همیشه خراب» می‌شود — یعنی عملاً بی‌فایده.
+    """
+    import tempfile
+    with tempfile.TemporaryDirectory() as d:
+        _fgate_seed(d, ("heavy",))
+        aggregate.CONVERT_FAILURES.clear()
+        try:
+            r = _fgate_result(["vless://u@1.2.3.4:443#x"])
+            with _FgateBoom():
+                aggregate.write_category(d, "heavy", r)
+            assert aggregate.CONVERT_FAILURES, "شکست ثبت نشد (پیش‌شرطِ آزمون)"
+            aggregate.write_category(d, "heavy", r)          # دورِ سالم
+            assert aggregate.CONVERT_FAILURES == {}, \
+                f"پرچمِ خرابی پس از نوشتنِ موفق پاک نشد: {aggregate.CONVERT_FAILURES!r}"
+            assert aggregate.build_health_report(1.0)["converter_gate"] == {}, \
+                "health.json هنوز خرابیِ برطرف‌شده را گزارش می‌کند"
+            assert os.path.exists(os.path.join(d, "heavy", "clash.yaml")), \
+                "فایل در دورِ سالم بازنوشته نشد"
+            assert os.path.exists(os.path.join(d, "heavy", "singbox.json")), \
+                "فایل در دورِ سالم بازنوشته نشد"
+        finally:
+            aggregate.CONVERT_FAILURES.clear()
+
+
+def test_zzz_f8_publish_gate_covers_every_converter_output_not_just_all():
+    """ناوردای ۳ — گاردِ fail-closed باید هر شش خروجیِ مبدل را ببیند.
+
+    پیش‌تر فقط `all/*` پوشش داشت، پس شکستِ heavy/light بی‌مانع منتشر می‌شد.
+    ایمنیِ این افزودن اجرایی اثبات شد: در بدترین حالت (دستهٔ صفرکانفیگ)
+    مبدل‌ها استثنا نمی‌دهند بلکه سندِ معتبرِ کوچک می‌سازند، پس `[ -s ]`
+    رد نمی‌شود و انتشار برای همیشه قفل نمی‌گردد.
+    """
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    with open(os.path.join(root, ".github", "workflows", "aggregate.yml"),
+              encoding="utf-8") as fh:
+        wf = fh.read()
+    i = wf.index('MUST_EXIST="')
+    toks = wf[i + 12:wf.index('"', i + 12)].split()
+    for cat in ("all", "heavy", "light"):
+        for name in ("clash.yaml", "singbox.json"):
+            assert f"{cat}/{name}" in toks, \
+                f"{cat}/{name} در MUST_EXIST نیست ⇒ شکستش انتشار را متوقف نمی‌کند"
+
+
+def test_zzz_f8_both_converters_survive_a_zero_config_category():
+    """پشتوانهٔ ایمنیِ ناوردای ۳ — بی این، افزودن به MUST_EXIST خطرناک بود.
+
+    اگر مبدل روی ورودیِ خالی استثنا می‌داد یا رشتهٔ خالی برمی‌گرداند،
+    `[ -s ]` رد می‌شد و یک دستهٔ خالی، انتشار را **برای همیشه** قفل می‌کرد.
+    """
+    for fn in (converters.build_clash_yaml, converters.build_singbox_json):
+        out = fn([])
+        assert isinstance(out, str) and out.strip(), \
+            f"{fn.__name__}([]) خروجیِ خالی داد ⇒ MUST_EXIST انتشار را قفل می‌کند"
+    # و سندها باید واقعاً قابلِ پارس باشند، نه فقط غیرخالی.
+    import yaml as _yaml
+    assert isinstance(_yaml.safe_load(converters.build_clash_yaml([])), dict)
+    assert isinstance(json.loads(converters.build_singbox_json([])), dict)
+
+
+def test_zzz_f8_gate_name_does_not_collide_with_the_control_byte_gate():
+    """واژگانِ پروژه: «output gate» از قبل نامِ گاردِ بایتِ کنترلی است.
+
+    اگر کلیدِ health.json هم `output_gate` بود، مانیتورینگ نمی‌فهمید خرابی از
+    بایتِ کنترلی است یا از شکستِ مبدل. این آزمون آن ابهام را قفل می‌کند.
+    """
+    rep = aggregate.build_health_report(1.0)
+    assert "converter_gate" in rep, "کلیدِ دروازهٔ مبدل‌ها در گزارش نیست"
+    assert "output_gate" not in rep, \
+        "نامِ مبهم `output_gate` در health.json ظاهر شد (متعلق به گاردِ بایتِ کنترلی است)"
+    assert hasattr(core, "ControlByteInOutput"), \
+        "گاردِ بایتِ کنترلی حذف شده؟ آن‌گاه استدلالِ نام‌گذاری باید بازبینی شود"
+
+
 if __name__ == "__main__":
     sys.exit(_run_all())
