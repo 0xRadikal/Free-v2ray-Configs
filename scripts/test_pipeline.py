@@ -9977,5 +9977,259 @@ def test_zzz_f1_fetch_all_still_reraises_a_programming_error():
         _f1_restore(monkey)
 
 
+# ──────────────────────────────────────────────────────────────────────────────
+# F-4 — بررسی‌های ساختاریِ `validate.py` شکلِ سند را مفروض می‌گرفتند
+#
+# با اجرا (نه با خواندن) **۲۳** شکلِ متمایز پیدا شد که استثنا می‌دادند؛ گزارشِ
+# اولیه فقط ۱۲ موردِ «سطحِ بالا dict نیست» را دیده بود. و چون هیچ‌کدام از دو
+# فراخوانی (`check_singbox`/`check_clash`) گارد ندارند، استثنا **کلِ**
+# `validate.py` را می‌کشت — یعنی به‌جای «یک فایلِ خراب = یک fail»، دروازهٔ
+# اعتبارسنجی از کار می‌افتاد.
+# ──────────────────────────────────────────────────────────────────────────────
+
+def _f4_tmp(text: str, suffix: str) -> str:
+    import tempfile
+    fd, p = tempfile.mkstemp(suffix=suffix)
+    os.close(fd)
+    with open(p, "w", encoding="utf-8") as f:
+        f.write(text)
+    return p
+
+
+#: (برچسب, متنِ سند) — هر کدام پیش از درمان یک استثنای واقعی می‌داد.
+_F4_SINGBOX_BAD = (
+    # ── ۶ موردِ گزارش‌شده: سطحِ بالا شیء نیست ──
+    ("top-level list", "[]", "AttributeError"),
+    ("top-level list with items", '[{"tag":"a"}]', "AttributeError"),
+    ("top-level string", '"hello"', "AttributeError"),
+    ("top-level number", "42", "AttributeError"),
+    ("top-level null", "null", "AttributeError"),
+    ("top-level bool", "true", "AttributeError"),
+    # ── ۶ موردِ کشف‌شده در همین دور (در گزارشِ اولیه نبودند) ──
+    ("route is a string",
+     '{"outbounds":[{"tag":"a","type":"direct"}],"route":"oops"}', "AttributeError"),
+    ("route is a list",
+     '{"outbounds":[{"tag":"a","type":"direct"}],"route":["oops"]}', "AttributeError"),
+    ("route is a number",
+     '{"outbounds":[{"tag":"a","type":"direct"}],"route":7}', "AttributeError"),
+    ("selector.outbounds is a number",
+     '{"outbounds":[{"tag":"s","type":"selector","outbounds":5}]}', "TypeError"),
+    ("tag is a list (unhashable)",
+     '{"outbounds":[{"tag":["a"],"type":"direct"}]}', "TypeError"),
+    ("tag is a dict (unhashable)",
+     '{"outbounds":[{"tag":{"x":1},"type":"direct"}]}', "TypeError"),
+)
+
+_F4_CLASH_BAD = (
+    # ── گزارش‌شده ──
+    ("top-level list", "- a\n- b\n", "AttributeError"),
+    ("top-level string", "just a scalar\n", "AttributeError"),
+    ("top-level number", "42\n", "AttributeError"),
+    ("top-level null", "null\n", "AttributeError"),
+    ("empty document", "", "AttributeError"),
+    ("only a comment", "# nothing here\n", "AttributeError"),
+    # ── کشف‌شده در همین دور ──
+    ("proxy-groups is a list of scalars",
+     "proxies:\n  - name: a\nproxy-groups:\n  - notadict\n", "AttributeError"),
+    ("proxy-groups is a string",
+     "proxies:\n  - name: a\nproxy-groups: oops\n", "AttributeError"),
+    ("proxy-groups is a dict",
+     "proxies:\n  - name: a\nproxy-groups:\n  k: v\n", "AttributeError"),
+    ("group.proxies is a number",
+     "proxies:\n  - name: a\nproxy-groups:\n  - name: g\n    proxies: 5\n", "TypeError"),
+    ("proxy name is a list", "proxies:\n  - name: [a, b]\n", "TypeError"),
+)
+
+
+def test_zzz_f4_structural_checks_never_raise_on_a_malformed_document():
+    """هیچ شکلی از سندِ بدشکل نباید استثنا بدهد — باید `fail` گزارش شود (F-4).
+
+    این ۲۳ شکل، همه پیش از درمان با اجرا استثنا دادند (نوعِ استثنا در
+    تاپل‌های بالا ثبت است). قاعدهٔ درست: یک **اعتبارسنج** روی ورودیِ نامعتبر
+    نمی‌میرد؛ می‌گوید «نامعتبر».
+    """
+    for label, text, was in _F4_SINGBOX_BAD:
+        p = _f4_tmp(text, ".json")
+        try:
+            try:
+                ok, detail = validate._structural_singbox(p)
+            except BaseException as exc:  # noqa: BLE001
+                raise AssertionError(
+                    f"singbox/{label}: استثنا داد ({type(exc).__name__}: {exc}) "
+                    f"— پیش از درمان {was} بود و باید به `fail` بدل شود"
+                ) from None
+            assert ok is False, f"singbox/{label}: سندِ بدشکل قبول شد"
+            assert isinstance(detail, str) and detail, \
+                f"singbox/{label}: پیامِ خالی"
+        finally:
+            os.unlink(p)
+
+    for label, text, was in _F4_CLASH_BAD:
+        p = _f4_tmp(text, ".yaml")
+        try:
+            try:
+                ok, detail = validate._structural_clash(p)
+            except BaseException as exc:  # noqa: BLE001
+                raise AssertionError(
+                    f"clash/{label}: استثنا داد ({type(exc).__name__}: {exc}) "
+                    f"— پیش از درمان {was} بود و باید به `fail` بدل شود"
+                ) from None
+            assert ok is False, f"clash/{label}: سندِ بدشکل قبول شد"
+            assert isinstance(detail, str) and detail, f"clash/{label}: پیامِ خالی"
+        finally:
+            os.unlink(p)
+
+
+def test_zzz_f4_a_malformed_file_becomes_a_reportable_fail_not_a_crash():
+    """مسیرِ واقعیِ فراخوانی: `check_*` باید `status="fail"` بدهد، نه استثنا.
+
+    شعاعِ انفجار همین‌جاست: `check_singbox:170` و `check_clash:183` هیچ گاردی
+    ندارند، پس پیش از درمان استثنا از `validate_outputs` بیرون می‌زد و
+    `validate.py` می‌مرد — کلِ دروازه، نه یک فایل.
+    """
+    for checker, text, sfx in (
+        (validate.check_singbox, "[]", ".json"),
+        (validate.check_clash, "- a\n", ".yaml"),
+    ):
+        p = _f4_tmp(text, sfx)
+        try:
+            try:
+                res = checker(p, None)      # binary=None ⇒ مسیرِ ساختاری
+            except BaseException as exc:  # noqa: BLE001
+                raise AssertionError(
+                    f"{checker.__name__} استثنا داد: {type(exc).__name__}: {exc}"
+                ) from None
+            assert res["status"] == "fail", \
+                f"{checker.__name__}: وضعیت {res['status']!r} شد (باید fail باشد)"
+        finally:
+            os.unlink(p)
+
+
+def test_zzz_f4_a_malformed_file_closes_the_publish_gate():
+    """ناوردای fail-closed: فایلِ بدشکل باید `report["ok"]` را `False` کند.
+
+    این مهم‌ترین بندِ F-4 است. تبدیلِ استثنا به `(False, …)` تنها در صورتی
+    درست است که آن `False` واقعاً دروازه را ببندد؛ وگرنه ما یک کرشِ بلند را
+    به یک شکستِ **خاموش** بدل کرده بودیم — بدتر از خودِ باگ.
+    """
+    import tempfile
+    with tempfile.TemporaryDirectory() as root:
+        # سه دستهٔ اصلی، همه سالم
+        for cat in validate.CORE_CATEGORIES:
+            os.makedirs(os.path.join(root, cat))
+            with open(os.path.join(root, cat, "singbox.json"), "w",
+                      encoding="utf-8") as f:
+                json.dump({"outbounds": [{"type": "direct", "tag": "d"}]}, f)
+            with open(os.path.join(root, cat, "clash.yaml"), "w",
+                      encoding="utf-8") as f:
+                yaml.safe_dump({"proxies": [{"name": "n", "type": "socks5",
+                                             "server": "1.2.3.4", "port": 1080}]}, f)
+        base = validate.validate_outputs(root)
+        assert base["ok"] is True, f"پایهٔ سالم نباید بشکند: {base['summary']}"
+
+        # حالا `all/singbox.json` را به یک سندِ بدشکل بدل کن
+        with open(os.path.join(root, "all", "singbox.json"), "w",
+                  encoding="utf-8") as f:
+            f.write("[]")
+        try:
+            rep = validate.validate_outputs(root)
+        except BaseException as exc:  # noqa: BLE001
+            raise AssertionError(
+                f"`validate_outputs` با یک فایلِ بدشکل مرد: "
+                f"{type(exc).__name__}: {exc} — یعنی کلِ دروازه از کار افتاد"
+            ) from None
+        assert rep["results"]["all"]["singbox"]["status"] == "fail", \
+            rep["results"]["all"]["singbox"]
+        assert rep["summary"]["fail"] >= 1, rep["summary"]
+        assert rep["ok"] is False, \
+            "سندِ بدشکل دروازه را نبست ⇒ خروجیِ خراب بی‌صدا منتشر می‌شود"
+
+
+def test_zzz_f4_healthy_documents_are_still_accepted_unchanged():
+    """ضدِ رگرسیون: گاردهای نو نباید سندِ سالم را رد کنند (F-4).
+
+    بی این بند، «سخت‌گیرترکردن» می‌توانست هر سه دسته را `fail` کند و انتشار
+    را برای همیشه ببندد — یک رگرسیونِ فاجعه‌بار که آزمونِ بالا نمی‌گرفتش،
+    چون آن فقط می‌خواهد بدشکل‌ها `False` شوند.
+    """
+    sb_ok = json.dumps({
+        "outbounds": [
+            {"tag": "a", "type": "direct"},
+            {"tag": "sel", "type": "selector", "outbounds": ["a"]},
+        ],
+        "route": {"final": "sel"},
+    })
+    p = _f4_tmp(sb_ok, ".json")
+    try:
+        ok, detail = validate._structural_singbox(p)
+        assert ok is True, f"سندِ سالمِ sing-box رد شد: {detail}"
+        assert "structural ok" in detail, detail
+    finally:
+        os.unlink(p)
+
+    cl_ok = ("proxies:\n"
+             "  - name: a\n"
+             "    type: socks5\n"
+             "  - name: b\n"
+             "    type: socks5\n"
+             "proxy-groups:\n"
+             "  - name: g\n"
+             "    proxies:\n"
+             "      - a\n"
+             "      - b\n"
+             "  - name: g2\n"
+             "    proxies:\n"
+             "      - g\n")
+    p = _f4_tmp(cl_ok, ".yaml")
+    try:
+        ok, detail = validate._structural_clash(p)
+        assert ok is True, f"سندِ سالمِ clash رد شد: {detail}"
+        assert "structural ok" in detail, detail
+    finally:
+        os.unlink(p)
+    # و پیام‌های تشخیصیِ قدیمی باید سرِ جایشان باشند (نه بلعیده‌شده)
+    p = _f4_tmp(json.dumps({"outbounds": [
+        {"tag": "s", "type": "selector", "outbounds": ["ghost"]}]}), ".json")
+    try:
+        ok, detail = validate._structural_singbox(p)
+        assert ok is False and "dangling reference" in detail, detail
+    finally:
+        os.unlink(p)
+
+
+def test_zzz_f4_the_total_wrapper_is_the_last_resort_not_the_first():
+    """لفافِ کل باید *پشتوانه* باشد، نه جایگزینِ پیامِ خوانا (F-4).
+
+    اگر همهٔ شکل‌های بدِ شناخته‌شده به پیامِ عمومیِ «unexpected document
+    shape» می‌رسیدند، یعنی گاردهای دقیق کار نمی‌کنند و عیب‌یابی کور می‌شود.
+    این آزمون آن فرق را قفل می‌کند.
+    """
+    generic = "unexpected document shape"
+    for label, text, _ in _F4_SINGBOX_BAD:
+        p = _f4_tmp(text, ".json")
+        try:
+            _, detail = validate._structural_singbox(p)
+            assert generic not in detail, \
+                f"singbox/{label}: به لفافِ عمومی افتاد ({detail!r}) — " \
+                f"گاردِ دقیق برای این شکل لازم است"
+        finally:
+            os.unlink(p)
+    for label, text, _ in _F4_CLASH_BAD:
+        p = _f4_tmp(text, ".yaml")
+        try:
+            _, detail = validate._structural_clash(p)
+            assert generic not in detail, \
+                f"clash/{label}: به لفافِ عمومی افتاد ({detail!r})"
+        finally:
+            os.unlink(p)
+    # و کنترلِ مثبت: لفاف واقعاً وجود دارد و کار می‌کند
+    assert hasattr(validate._structural_singbox, "__wrapped__"), \
+        "لفافِ کل حذف شده ⇒ شکلِ ناشناختهٔ آینده باز هم `validate.py` را می‌کشد"
+    boom = validate._total_check(
+        lambda _p: (_ for _ in ()).throw(RuntimeError("synthetic")))
+    ok, detail = boom("/nonexistent")
+    assert ok is False and generic in detail and "RuntimeError" in detail, detail
+
+
 if __name__ == "__main__":
     sys.exit(_run_all())

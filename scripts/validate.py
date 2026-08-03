@@ -115,30 +115,105 @@ def _run(cmd: List[str]) -> Tuple[int, str]:
 # اعتبارسنجی ساختاری (وقتی باینری نیست)
 # ──────────────────────────────────────────────────────────────────────────────
 
+def _total_check(fn):
+    """یک بررسیِ ساختاری را به تابعی **کل** بدل می‌کند: هرگز استثنا نمی‌دهد.
+
+    ── چرا این لایه لازم است (F-4) ───────────────────────────────────────────
+    دو بررسیِ زیر شکلِ سندِ خوانده‌شده را «مفروض» می‌گرفتند. با اجرا (نه با
+    خواندنِ کد) روی سندهای بدشکل، **۲۳** شکلِ متمایز پیدا شد که استثنا
+    می‌دادند — گزارشِ اولیه فقط ۱۲ موردِ «سطحِ بالا dict نیست» را دیده بود.
+    نمونه‌های تازه‌کشف‌شده:
+
+        route یک رشته باشد        → AttributeError ('str' has no 'get')
+        tag یک لیست باشد          → TypeError: unhashable type: 'list'
+        selector.outbounds عدد    → TypeError: 'int' object is not iterable
+        proxy-groups رشته/dict    → AttributeError
+        group.proxies عدد         → TypeError
+
+    و این استثناها گزارش نمی‌شدند، بلکه **می‌کشتند**: هر دو فراخوانی
+    (`check_singbox:170` و `check_clash:183`) هیچ `try` ندارند، پس با اجرا
+    ثابت شد که `check_singbox(path, None)` خودش استثنا بیرون می‌دهد و
+    `validate.py` می‌میرد — یعنی به‌جای «یک فایلِ خراب = یک `fail`» کلِ
+    دروازهٔ اعتبارسنجی از کار می‌افتاد.
+
+    ── چرا یک لفافِ کل، و نه فقط شمردنِ شکل‌ها ────────────────────────────────
+    گاردهای دقیق (پایین‌تر) پیامِ خوانا می‌دهند و باید باشند. ولی شمارشِ
+    دستیِ شکل‌ها شمارشی است که هر بار یک شکلِ نو جا می‌ماند — همان‌طور که
+    گزارشِ اولیه ۱۱ شکل را جا انداخت. پس این لفاف پشتوانهٔ نهایی است:
+
+      • این توابع **اعتبارسنج** اند؛ کارشان همین است که بگویند «این فایل
+        قابل‌قبول است یا نه». هر شکلِ غیرمنتظره، به تعریف، «قابل‌قبول نیست».
+        پس تبدیلِ استثنا به `(False, …)` نه پنهان‌کاری است، نه نرم‌کردنِ
+        دروازه — دقیقاً همان معناست.
+      • fail-closed می‌ماند: `check_*` مقدارِ `False` را به وضعیتِ `"fail"`
+        نگاشت می‌کند، `fail` در `summary` شمرده می‌شود و `report["ok"]` را
+        `False` می‌کند (سطرِ ~۲۶۲)، پس با `--strict` انتشار می‌ایستد.
+        یعنی خروجیِ خراب هرگز بی‌صدا منتشر نمی‌شود.
+      • نامِ استثنا در پیام می‌آید تا عیب‌یابی کور نشود.
+    """
+    def wrapper(path: str) -> Tuple[bool, str]:
+        try:
+            return fn(path)
+        except Exception as e:  # noqa: BLE001
+            # یک شکلِ پیش‌بینی‌نشده. «نمی‌دانم» در یک اعتبارسنج یعنی «رد».
+            return False, (f"unexpected document shape "
+                           f"({type(e).__name__}: {str(e)[:120]})")
+    wrapper.__name__ = fn.__name__
+    wrapper.__doc__ = fn.__doc__
+    wrapper.__wrapped__ = fn
+    return wrapper
+
+
+@_total_check
 def _structural_singbox(path: str) -> Tuple[bool, str]:
     try:
         with open(path, encoding="utf-8") as f:
             doc = json.load(f)
     except Exception as e:  # noqa: BLE001
         return False, f"JSON parse error: {e}"
+    # JSONِ معتبر لازم نیست یک شیء باشد: `[]`، `"x"`، `42`، `null`، `true`
+    # همه سندِ معتبرند و همه پیش از این `AttributeError` می‌دادند.
+    if not isinstance(doc, dict):
+        return False, (f"top-level JSON must be an object, "
+                       f"got {type(doc).__name__}")
     if not isinstance(doc.get("outbounds"), list) or not doc["outbounds"]:
         return False, "missing/empty outbounds"
-    tags = {o.get("tag") for o in doc["outbounds"] if isinstance(o, dict)}
-    # هر ارجاعی در selector/urltest باید به یک tag موجود اشاره کند،
-    # وگرنه sing-box با «outbound not found» کل فایل را رد می‌کند.
+    tags = set()
     for o in doc["outbounds"]:
         if not isinstance(o, dict):
             return False, "non-object outbound"
+        tag = o.get("tag")
+        # `tag` باید هش‌شدنی باشد وگرنه ساختنِ همین مجموعه می‌شکست
+        # (`TypeError: unhashable type: 'list'`).
+        if isinstance(tag, (dict, list, set)):
+            return False, f"outbound tag must be a scalar, got {type(tag).__name__}"
+        tags.add(tag)
+    # هر ارجاعی در selector/urltest باید به یک tag موجود اشاره کند،
+    # وگرنه sing-box با «outbound not found» کل فایل را رد می‌کند.
+    for o in doc["outbounds"]:
         if o.get("type") in ("selector", "urltest"):
-            for ref in o.get("outbounds", []):
+            refs = o.get("outbounds", [])
+            # فقط لیست پیمایش می‌شود: عدد `TypeError` می‌داد، و رشته/dict
+            # کاراکتر‌به‌کاراکتر یا کلید‌به‌کلید پیمایش می‌شد و پیامِ
+            # گمراه‌کنندهٔ «dangling reference: 'a'» می‌ساخت.
+            if not isinstance(refs, list):
+                return False, (f"{o.get('tag')!r}: selector/urltest outbounds "
+                               f"must be a list, got {type(refs).__name__}")
+            for ref in refs:
                 if ref not in tags:
                     return False, f"dangling reference: {ref!r}"
-    final = (doc.get("route") or {}).get("final")
+    route = doc.get("route")
+    # `route` تُنُک ولی غیرشیء (`"oops"`, `[…]`, `7`) → پیش از این
+    # `(doc.get("route") or {}).get(...)` استثنا می‌داد.
+    if route is not None and not isinstance(route, dict):
+        return False, f"route must be an object, got {type(route).__name__}"
+    final = (route or {}).get("final")
     if final and final not in tags:
         return False, f"route.final points to unknown tag: {final!r}"
     return True, f"structural ok ({len(doc['outbounds'])} outbounds)"
 
 
+@_total_check
 def _structural_clash(path: str) -> Tuple[bool, str]:
     try:
         import yaml
@@ -146,15 +221,40 @@ def _structural_clash(path: str) -> Tuple[bool, str]:
             doc = yaml.safe_load(f)
     except Exception as e:  # noqa: BLE001
         return False, f"YAML parse error: {e}"
+    # `safe_load` روی فایلِ خالی یا فقط-توضیح `None` می‌دهد، و روی سندِ
+    # لیستی/اسکالر یک non-dict. همه پیش از این `AttributeError` می‌دادند.
+    if not isinstance(doc, dict):
+        got = "empty document" if doc is None else type(doc).__name__
+        return False, f"top-level YAML must be a mapping, got {got}"
     proxies = doc.get("proxies")
     if not isinstance(proxies, list) or not proxies:
         return False, "missing/empty proxies"
-    names = {p.get("name") for p in proxies if isinstance(p, dict)}
+    names = set()
+    for p in proxies:
+        # پیش از این، ورودیِ غیر-dict فقط از `names` می‌افتاد و بعد با
+        # پیامِ گمراه‌کنندهٔ «duplicate proxy names» گزارش می‌شد. آینهٔ
+        # همان قاعدهٔ «non-object outbound» در sing-box است.
+        if not isinstance(p, dict):
+            return False, "non-object proxy entry"
+        nm = p.get("name")
+        if isinstance(nm, (dict, list, set)):
+            return False, f"proxy name must be a scalar, got {type(nm).__name__}"
+        names.add(nm)
     if len(names) != len(proxies):
         return False, "duplicate proxy names (mihomo rejects the file)"
-    for g in doc.get("proxy-groups") or []:
-        for ref in g.get("proxies", []):
-            if ref not in names and ref not in {gg.get("name") for gg in doc["proxy-groups"]}:
+    groups = doc.get("proxy-groups") or []
+    if not isinstance(groups, list):
+        return False, f"proxy-groups must be a list, got {type(groups).__name__}"
+    group_names = {g.get("name") for g in groups if isinstance(g, dict)}
+    for g in groups:
+        if not isinstance(g, dict):
+            return False, "non-object proxy-group entry"
+        refs = g.get("proxies", [])
+        if not isinstance(refs, list):
+            return False, (f"group {g.get('name')!r}: proxies must be a list, "
+                           f"got {type(refs).__name__}")
+        for ref in refs:
+            if ref not in names and ref not in group_names:
                 return False, f"group {g.get('name')!r} references unknown proxy {ref!r}"
     return True, f"structural ok ({len(proxies)} proxies)"
 
