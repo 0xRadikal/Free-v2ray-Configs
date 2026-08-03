@@ -1067,7 +1067,7 @@ def main() -> int:
                 log(f"       ↳ {s}")
 
     proto_counts = write_protocols(out_dir, res_all.unique)
-    log(f"  • protocols: " + ", ".join(f"{k}={v}" for k, v in proto_counts.items() if v))
+    log("  • protocols: " + ", ".join(f"{k}={v}" for k, v in proto_counts.items() if v))
 
     elapsed = time.time() - t0
     # `out_dir` پاس داده می‌شود تا تبلیغ به **واقعیتِ دیسک** گره بخورد، نه به

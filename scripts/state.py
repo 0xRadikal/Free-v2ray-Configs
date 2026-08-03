@@ -40,7 +40,7 @@ import hashlib
 import json
 import os
 import time
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 #: نسخهٔ schema. هر عددِ دیگری «ناشناس» است و حافظه از صفر ساخته می‌شود.
 SCHEMA = 1

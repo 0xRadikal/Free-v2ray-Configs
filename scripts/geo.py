@@ -72,16 +72,24 @@ import os
 import socket
 import threading
 from concurrent.futures import ThreadPoolExecutor
-from typing import Dict, Iterable, List, Optional, Set, Tuple
+from typing import Dict, Iterable, Optional, Set, Tuple
 
 #: مسیرِ پایگاهِ داده. CI آن را دانلود و در همین مسیر cache می‌کند.
 MMDB_PATH = os.environ.get("GEOIP_MMDB", os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".cache", "dbip-country-lite.mmdb"
 ))
 
-#: نشانیِ دانلود. الگوی ماهانه؛ CI ماهِ جاری و ماهِ پیش را امتحان می‌کند چون
-#: فایلِ ماهِ جاری در روزهای نخستِ ماه ممکن است هنوز منتشر نشده باشد.
-DBIP_URL_TEMPLATE = "https://download.db-ip.com/free/dbip-country-lite-{ym}.mmdb.gz"
+#: ⚠️ در این‌جا یک `DBIP_URL_TEMPLATE` بود با همین توضیح که «CI ماهِ جاری و
+#: ماهِ پیش را امتحان می‌کند». حذف شد چون **هرگز مصرف نمی‌شد** و بدتر از آن،
+#: یک منبعِ حقیقتِ دوم بود:
+#:   • جست‌وجویِ کلِ مخزن دقیقاً ۱ مورد داد — همان خطِ تعریفِ خودش.
+#:   • این ماژول اصلاً دانلودکننده ندارد: هیچ `urllib`/`requests`/`urlopen`/
+#:     `gzip` در آن نیست و تنها کارش خواندنِ فایلِ آمادهٔ `MMDB_PATH` است.
+#:   • دانلودِ واقعی در `.github/workflows/aggregate.yml` (گامِ «Download GeoIP
+#:     database») انجام می‌شود و همان نشانی را **مستقلاً** می‌سازد. یعنی این
+#:     ثابت یک نسخهٔ بدلِ خاموش بود که اگر روزی نشانیِ DB-IP عوض شود، به‌روز
+#:     نمی‌شد و خواننده را به بیراهه می‌برد.
+#: منبعِ حقیقت برای نشانیِ دانلود = همان گامِ ورک‌فلو، نه این‌جا.
 
 #: شمارِ رشته‌های همروندِ DNS. اندازه‌گیری: ۶۴ رشته ← ۴٫۹ ثانیه برای ۱۳۶۵ میزبان.
 #: افزایش به ۱۲۸ نتیجه را بهتر نکرد (۸٫۴ ثانیه) چون گلوگاه، پاسخِ حل‌کنندهٔ
@@ -91,7 +99,19 @@ DNS_WORKERS = int(os.environ.get("GEO_DNS_WORKERS", "64"))
 #: مهلتِ هر پرسشِ DNS به ثانیه.
 DNS_TIMEOUT = float(os.environ.get("GEO_DNS_TIMEOUT", "4"))
 
-UNKNOWN = ("Global", "🌐")
+#: ⚠️ در این‌جا `UNKNOWN = ("Global", "🌐")` بود. حذف شد چون در کلِ مخزن صفر
+#: مصرف‌کننده داشت (جست‌وجویِ واژه‌مرزی: ۱ مورد = خودِ تعریف) و هیچ‌یک از توابعِ
+#: همین ماژول هم آن را برنمی‌گرداند؛ `country_of_ip` / `country_of_addrs` /
+#: `country_for_host` در حالتِ ناشناس `None` می‌دهند، نه این تاپل.
+#: نکتهٔ ثبت‌شده برای مالک: مقدارِ ("Global", "🌐") در `core.py` دو بار
+#: به‌صورتِ literal تکرار شده است — هر دو داخلِ `detect_country_from_remark()`
+#: (به تابع ارجاع داده شد نه به شمارهٔ خط، چون شمارهٔ خط با هر ویرایش می‌شکند؛
+#: خودِ همین توضیح یک بار عددِ کهنه داشت و در بازبینی گرفته شد). ضمناً
+#: `country_for_endpoint()` رشتهٔ "Global" را به‌عنوان نگهبان مقایسه می‌کند.
+#: یکی‌کردنِ آن‌ها یعنی وابسته‌کردنِ `core` به
+#: `geo` در سطحِ ماژول، در حالی که `core` عمداً `geo` را فقط **تنبل** و درونِ
+#: تابع import می‌کند. پس این تصمیمِ معماری است نه پاک‌سازیِ کدِ مرده، و
+#: یک‌طرفه اعمال نشد.
 
 _reader = None
 _reader_tried = False

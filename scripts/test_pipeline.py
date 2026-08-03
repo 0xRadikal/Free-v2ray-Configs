@@ -11813,5 +11813,276 @@ def test_zzz_f5_a_run_that_proved_nothing_is_visible_not_silent() -> None:
         assert rep2["ok"] is True
 
 
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# P6 — کدِ مرده و توضیحاتِ کهنه
+#
+# سه نامِ سطحِ ماژول حذف شد (`core.VALID_PREFIXES`, `geo.DBIP_URL_TEMPLATE`,
+# `geo.UNKNOWN`) به‌علاوهٔ سه importِ بی‌مصرفِ `typing`. آزمون‌های زیر دو کارِ
+# متفاوت می‌کنند و هیچ‌کدام جانشینِ دیگری نیست:
+#
+#   • آزمونِ نقطه‌ای: همان سه نام برنگردند.
+#   • آزمونِ الگو (`_p6_zero_external_names`): **هر** نامِ سطحِ ماژولِ تازه‌ای
+#     که صفر مصرف‌کننده داشته باشد گرفته شود. بدونِ این، فردا نامِ مردهٔ
+#     چهارم بی‌صدا اضافه می‌شود و آزمونِ نقطه‌ای سبز می‌ماند.
+#
+# ⚠️ نکتهٔ روش: `vulture` هر فایل را جدا می‌بیند، پس هر سمبلِ میان‌ماژولی را
+#    «بی‌مصرف (۶۰٪)» گزارش می‌کند — ۲۱ مثبتِ کاذب فقط در `core.py`+`state.py`.
+#    این آزمون به‌جای آن، ارجاعِ **کلِ مخزن** را می‌شمارد و خطِ تعریف را کنار
+#    می‌گذارد، پس مثبتِ کاذب نمی‌دهد.
+# ══════════════════════════════════════════════════════════════════════════════
+
+_P6_PROD_MODULES = ("core.py", "geo.py", "state.py", "filters.py",
+                    "reachability.py", "realtest.py", "pipeline.py",
+                    "aggregate.py", "validate.py", "sources.py",
+                    "converters.py")
+
+#: نام‌هایی که در P6 حذف شدند. هیچ‌یک نباید برگردد.
+_P6_REMOVED = (
+    ("core", "VALID_PREFIXES"),
+    ("geo", "DBIP_URL_TEMPLATE"),
+    ("geo", "UNKNOWN"),
+)
+
+
+def _p6_scripts_dir() -> str:
+    return os.path.dirname(os.path.abspath(__file__))
+
+
+def _p6_module_level_names(path: str):
+    """(name, lineno) برای هر انتسابِ سطحِ ماژول — با AST، نه با جست‌وجویِ متن.
+
+    جست‌وجویِ متنی روی توضیحات مثبتِ کاذب می‌دهد؛ درسِ ثبت‌شدهٔ همین مخزن
+    (تستِ E-9). این تابع فقط `body`ِ سطحِ اولِ درخت را می‌بیند، پس نام‌های
+    داخلِ تابع/کلاس را نمی‌شمارد.
+    """
+    import ast as _ast
+    with open(path, "r", encoding="utf-8") as fh:
+        tree = _ast.parse(fh.read())
+    out = []
+    for node in tree.body:
+        if isinstance(node, (_ast.FunctionDef, _ast.AsyncFunctionDef,
+                             _ast.ClassDef)):
+            out.append((node.name, node.lineno))
+        elif isinstance(node, _ast.Assign):
+            for t in node.targets:
+                if isinstance(t, _ast.Name):
+                    out.append((t.id, node.lineno))
+        elif isinstance(node, _ast.AnnAssign):
+            if isinstance(node.target, _ast.Name):
+                out.append((node.target.id, node.lineno))
+    return out
+
+
+def _p6_repo_root() -> str:
+    return os.path.dirname(_p6_scripts_dir())
+
+
+def _p6_source_files():
+    """همهٔ فایل‌هایی که ممکن است یک نام را مصرف کنند — بی‌سنگینیِ node_modules."""
+    root = _p6_repo_root()
+    skip_dirs = {".git", "node_modules", ".pytest_cache", ".ruff_cache",
+                 ".cache", "archive"}
+    keep_ext = {".py", ".yml", ".yaml", ".md", ".json", ".html", ".js",
+                ".ts", ".tsx", ".css", ".sh", ".txt", ".cff", ".toml"}
+    for dirpath, dirnames, filenames in os.walk(root):
+        dirnames[:] = [d for d in dirnames if d not in skip_dirs]
+        for fn in filenames:
+            if os.path.splitext(fn)[1] in keep_ext:
+                yield os.path.join(dirpath, fn)
+
+
+def _p6_reference_map(names):
+    """{name: [(relpath, lineno), …]} — ارجاعِ واژه‌مرزیِ کلِ مخزن.
+
+    یک‌بار همهٔ فایل‌ها را می‌خواند (نه یک‌بار به‌ازای هر نام)، وگرنه با ۳۲۴
+    نام و ~۱۵۰ فایل، ۴۸٬۶۰۰ بار I/O می‌شد.
+    """
+    import re as _re
+    if not names:
+        return {}
+    pat = _re.compile(r"\b(" + "|".join(_re.escape(n) for n in names) + r")\b")
+    hits = {n: [] for n in names}
+    root = _p6_repo_root()
+    for path in _p6_source_files():
+        try:
+            with open(path, "r", encoding="utf-8", errors="replace") as fh:
+                for i, line in enumerate(fh, 1):
+                    for m in pat.finditer(line):
+                        hits[m.group(1)].append(
+                            (os.path.relpath(path, root), i))
+        except OSError:
+            continue
+    return hits
+
+
+def test_zzz_p6_the_names_removed_as_dead_code_did_not_come_back():
+    """آزمونِ نقطه‌ای: هر سه نامِ حذف‌شده باید غایب بمانند.
+
+    چرا نقطه‌ای هم لازم است: آزمونِ الگویِ بعدی «صفر مصرف‌کننده» را می‌گیرد.
+    اگر کسی `VALID_PREFIXES` را برگرداند **و** یک‌جا مصرفش کند، آزمونِ الگو
+    ساکت می‌ماند ولی همان allowlistِ متضاد با `is_proxy_config()` برگشته
+    است. این آزمون آن حالت را هم می‌بندد.
+    """
+    for mod_name, attr in _P6_REMOVED:
+        mod = sys.modules.get(mod_name)
+        if mod is None:
+            __import__(mod_name)
+            mod = sys.modules[mod_name]
+        assert not hasattr(mod, attr), (
+            f"`{mod_name}.{attr}` برگشته است. این نام در P6 حذف شد چون صفر "
+            f"مصرف‌کننده داشت و توضیحش هم غلط بود؛ اگر واقعاً لازم شده، اول "
+            f"مصرف‌کننده‌اش را بنویسید و این آزمون را با دلیلِ سنجیده به‌روز کنید.")
+
+
+def test_zzz_p6_no_module_level_name_in_scripts_has_zero_consumers():
+    """آزمونِ الگو: هیچ نامِ سطحِ ماژولی نباید صفر ارجاعِ بیرونی داشته باشد.
+
+    «ارجاعِ بیرونی» = هر مورد جز خطِ تعریفِ خودش. نامِ صفرارجاع یا کدِ مرده
+    است یا API‌ای که هیچ‌کس صدا نمی‌زند؛ هر دو بدهی‌اند.
+
+    ضدِپوچی درونِ خودِ آزمون: اگر شمارشِ کل صفر شود یعنی پیمایش شکسته و
+    آزمون بی‌معنا سبز می‌ماند، پس کرانِ پایین هم بررسی می‌شود.
+
+    ⚠️ دامی که اندازه‌گیری شد و عمداً از آن پرهیز شده: وسوسه‌انگیز است که
+       خودِ همین فایلِ آزمون را از «جهانِ ارجاع» بیرون بگذاریم تا سنجه
+       سخت‌گیرتر شود. اندازه‌گیریِ واقعی (روی همین ۳۱۴ نام) نشان داد آن کار
+       **چهار مثبتِ کاذب** می‌سازد، چون این چهار نام عمداً فقط برای آزمون
+       وجود دارند و کدِ مرده نیستند:
+         • core.reset_country_cache  (قلابِ پاک‌سازیِ کش، ۱۴ ارجاعِ آزمونی)
+         • core.HIDDIFY_HEADER_KEYS  (سنجهٔ سرصفحه، ۱۳ ارجاع)
+         • sources.all_sources       (۳ ارجاع)
+         • converters._SINGBOX_TRANSPORTS (۱ ارجاع)
+       پس «ارجاع از آزمون هم ارجاع است». هزینه‌اش این است که اگر کسی نامِ
+       مرده‌ای را فقط داخلِ همین فایل به‌صورت رشته بنویسد، این آزمون آن را
+       نمی‌گیرد؛ درست به همین دلیل آزمونِ نقطه‌ایِ بالا جدا نگه داشته شده و
+       جانشین‌پذیر نیست.
+    """
+    scripts = _p6_scripts_dir()
+    decl = {}                      # name -> set of (relfile, lineno)
+    for fn in _P6_PROD_MODULES:
+        path = os.path.join(scripts, fn)
+        assert os.path.exists(path), f"ماژولِ تولیدیِ «{fn}» پیدا نشد"
+        for name, lineno in _p6_module_level_names(path):
+            if name.startswith("__"):
+                continue
+            decl.setdefault(name, set()).add(
+                (os.path.join("scripts", fn), lineno))
+
+    assert len(decl) > 250, (
+        f"فقط {len(decl)} نامِ سطحِ ماژول دیده شد؛ اندازه‌گیریِ زمانِ نوشتنِ این "
+        f"آزمون ۳۱۴ بود ⇒ پیمایش شکسته و آزمون پوچ است")
+
+    refs = _p6_reference_map(list(decl))
+    orphans = []
+    for name, decl_sites in decl.items():
+        external = [(f, ln) for f, ln in refs.get(name, [])
+                    if (f, ln) not in decl_sites]
+        if not external:
+            sites = ", ".join(f"{f}:{ln}" for f, ln in sorted(decl_sites))
+            orphans.append(f"{name} ({sites})")
+
+    assert not orphans, (
+        "نامِ سطحِ ماژول با صفر مصرف‌کننده در کلِ مخزن ⇒ کدِ مرده:\n  "
+        + "\n  ".join(sorted(orphans))
+        + "\n(اگر عمدی است، مصرف‌کننده بنویسید یا نام را حذف کنید؛ "
+          "«شاید بعداً لازم شود» بدهی است نه طراحی.)")
+
+
+def test_zzz_p6_the_accept_gate_is_a_denylist_so_new_protocols_pass():
+    """قفلِ طراحی: پذیرشِ کانفیگ باید فهرستِ سیاه باشد، نه سفید.
+
+    `VALID_PREFIXES` یک allowlistِ ۲۰تایی بود کنارِ `is_proxy_config()` که
+    فهرستِ سیاه است. اندازه‌گیری نشان داد آن تاپل از قبل پوسیده بود: نسبت به
+    `PROTOCOL_ORDER` هفت نامِ غیرcanonical داشت (`hy`, `hy2`, `socks5`, `ss`,
+    `ssr`, `warp`, `wg`) و `shadowsocksr` را جا انداخته بود. این آزمون همان
+    اشتباه را می‌بندد: پروتکلی که امروز وجود ندارد هم باید پذیرفته شود.
+
+    ⚠️ این آزمون **عمداً** به F-5 شبیه است ولی جهتش برعکس است: آن‌جا دروازهٔ
+       *اعتبارسنجی* باید سفید باشد (چیزِ ناشناس = خطا)، این‌جا دروازهٔ
+       *پذیرشِ پروتکل* باید سیاه باشد (پروتکلِ ناشناس = فرصت). فرقشان در
+       هزینهٔ خطاست، نه در سلیقه.
+    """
+    future = [
+        "brandnewproto://user@example.com:443?sni=a#node",
+        "quicthing://aaaa@1.2.3.4:8443/path",
+        "xyz2://Zm9vOmJhcg@10.0.0.1:9000",
+    ]
+    for line in future:
+        assert core.is_proxy_config(line) is True, (
+            f"پروتکلِ ناشناختهٔ «{line}» رد شد ⇒ دروازهٔ پذیرش به فهرستِ سفید "
+            f"برگشته و هر پروتکلِ تازه بی‌صدا حذف می‌شود")
+
+    # و ضدِپوچی: دروازه باید هنوز چیزهای واقعاً نامربوط را رد کند، وگرنه
+    # آزمونِ بالا با یک `return True` هم سبز می‌شود.
+    for bad in ("http://example.com", "https://example.com/sub",
+                "ws://a.b/c", "not a config at all", "", "vless://"):
+        assert core.is_proxy_config(bad) is False, (
+            f"«{bad}» نباید کانفیگِ پروکسی شمرده شود")
+
+
+def test_zzz_p6_geo_module_has_no_second_source_of_truth_for_the_download_url():
+    """`geo.py` نباید نشانیِ دانلودِ پایگاهِ داده را تکرار کند.
+
+    نشانی در گامِ «Download GeoIP database»ِ ورک‌فلو ساخته می‌شود. نسخهٔ دومِ
+    خاموش در ماژول، اگر روزی نشانی عوض شود، به‌روز نمی‌شد و خواننده را به
+    بیراهه می‌برد — و چون هیچ کدی آن را صدا نمی‌زد، هیچ آزمونی هم نمی‌شکست.
+
+    آزمون روی **کدِ اجرایی** است نه توضیحات: توضیحِ همین حذف حق دارد نامِ
+    db-ip را ببرد (همان درسی که در تستِ MaxMind ثبت شد).
+    """
+    import ast as _ast
+    import inspect as _inspect
+    import geo as _geo
+
+    tree = _ast.parse(_inspect.getsource(_geo))
+    offenders = []
+    for node in _ast.walk(tree):
+        if isinstance(node, _ast.Constant) and isinstance(node.value, str):
+            if "db-ip.com" in node.value or "dbip-country-lite-{" in node.value:
+                offenders.append(f"خط {node.lineno}: {node.value[:60]!r}")
+    assert not offenders, (
+        "نشانیِ دانلودِ DB-IP دوباره داخلِ geo.py رشته‌ای شده است ⇒ منبعِ "
+        f"حقیقتِ دوم: {offenders}. منبعِ حقیقت گامِ ورک‌فلو است.")
+
+    # ضدِپوچی: خودِ ورک‌فلو باید همان نشانی را داشته باشد، وگرنه این آزمون
+    # فقط ثابت می‌کند «هیچ‌جا نشانی نیست» که وضعِ خرابی است نه سالم.
+    wf = _workflow_run_text()
+    assert "download.db-ip.com" in wf, (
+        "گامِ اجراییِ ورک‌فلو دیگر DB-IP را دانلود نمی‌کند ⇒ یا نشانی جابه‌جا "
+        "شده یا این آزمون سنجهٔ خود را از دست داده است")
+
+
+def test_zzz_p6_geo_reports_unknown_country_as_none_not_as_a_placeholder():
+    """قفلِ رفتاری برای حذفِ `geo.UNKNOWN`.
+
+    آن تاپل صفر مصرف‌کننده داشت، ولی وجودش این توهم را می‌ساخت که توابعِ
+    `geo` در حالتِ ناشناس یک برچسبِ جانشین برمی‌گردانند. اندازه‌گیریِ AST روی
+    هر سه تابع نشان داد همه `None` می‌دهند. این آزمون همان قرارداد را قفل
+    می‌کند، چون `country_for_endpoint` در `core.py` بر پایهٔ «None یعنی
+    نمی‌دانم» تصمیم می‌گیرد؛ اگر یک روز تاپل برگردانده شود، آن منطق بی‌صدا
+    برچسبِ «Global» را حقیقتِ سنجیده‌شده می‌پندارد.
+    """
+    import geo as _geo
+
+    # میزبانی که هرگز حل نمی‌شود ⇒ مسیرِ «نمی‌دانم»
+    res = _geo.country_for_host("no-such-host.invalid")
+    assert res is None, (
+        f"میزبانِ حل‌نشدنی باید None بدهد نه جانشین؛ شد {res!r}")
+
+    # نشانیِ رزروشدهٔ مستندسازی (RFC 5737) ⇒ در پایگاهِ داده کشوری ندارد
+    assert _geo.country_of_addrs([]) is None, "فهرستِ خالی باید None بدهد"
+
+    # و قراردادِ خروجی: هر مقدارِ غیرِNone باید تاپلِ (کد, پرچم) باشد، نه رشته
+    ok = _geo.country_for_host("8.8.8.8")
+    if ok is not None:
+        assert isinstance(ok, tuple) and len(ok) == 2, (
+            f"قراردادِ خروجیِ country_for_host شکسته: {ok!r}")
+        assert ok[0] != "Global", (
+            "برچسبِ جانشینِ «Global» از geo برگشت ⇒ همان چیزی که حذفِ UNKNOWN "
+            "قرار بود جلویش را بگیرد")
+
+
 if __name__ == "__main__":
     sys.exit(_run_all())
