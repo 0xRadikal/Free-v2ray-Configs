@@ -40,6 +40,91 @@ import aggregate  # noqa: E402
 
 
 # ──────────────────────────────────────────────────────────────────────────────
+# پاک‌سازیِ پوشه‌های موقتِ خودِ سوئیت (F-6)
+# ──────────────────────────────────────────────────────────────────────────────
+# نقصِ سنجیده‌شده: از ۱۷ فراخوانیِ `mkdtemp`/`mkstemp` در همین فایل، ۱۳ مورد
+# هیچ پاک‌سازی‌ای نداشتند. اندازه‌گیریِ واقعی با `TMPDIR` اختصاصی، پس از یک
+# اجرای کاملِ سوئیت (۳۷۶/۳۷۶ سبز):
+#
+#     ۱۹ پوشه، ۱۸۳٬۰۹۲ بایت (۱۷۸.۸ کیلوبایت) جا مانده
+#
+# و حساب دقیقاً سر می‌رسد: ۱۳ محلِ نشتی ⇄ ۱۹ پوشهٔ مشاهده‌شده، بدون هیچ
+# موردِ توضیح‌داده‌نشده در هیچ طرف. چهار محلی که پاک‌سازی دارند
+# (`fakexk_`، `f3_owned_`، `f3_empty_` و `mkstemp`ِ خطِ ۹۹۹۲) در فهرستِ نشت
+# **نیستند** و همین، صحتِ اندازه‌گیری را متقابلاً تأیید می‌کند.
+#
+# چرا این یک نقصِ واقعی است و نه سلیقه: سوئیت در CI و روی ماشینِ توسعه‌دهنده
+# ده‌ها بار در روز اجرا می‌شود و `/tmp` در این سندباکس یک tmpfsِ ۴۹۳ مگابایتی
+# است — یعنی نشت به **رَم** است، نه به دیسک. هر اجرا ۱۷۸.۸ کیلوبایت و ۱۹
+# پوشه اضافه می‌کند و هیچ‌کس پاکش نمی‌کند.
+#
+# چرا `finally`ِ محلی کافی **نیست** (دو قیدِ واقعیِ کد):
+#   ۱. `_fresh_outdir` پوشه را **برمی‌گرداند**؛ عمرِ پوشه از عمرِ تابع
+#      بیشتر است، پس پاک‌سازیِ درون‌تابعی معنا ندارد.
+#   ۲. `_f3_fake_xray_knife` و `_f3_input_file` نتیجه را **کش** می‌کنند تا
+#      بین تست‌ها بازاستفاده شود؛ پاک‌کردنشان در پایانِ تستِ اول، تستِ بعدی
+#      را می‌شکند.
+# پس مرزِ درستِ پاک‌سازی «پایانِ فرآیند» است، نه «پایانِ تابع» — همان درسی
+# که در F-12 گرفتیم: مرزِ پاک‌سازی را جایی بگذار که مالکیت تمام می‌شود.
+#
+# چرا `TemporaryDirectory` جای این کار را نمی‌گیرد: آن یک context manager
+# است و برای همان دو موردِ بالا (بازگشتی و کش‌شده) قابلِ استفاده نیست؛
+# بازنویسیِ ۱۳ محل به سبکِ `with` ساختارِ تست‌ها را عوض می‌کند و ریسکِ
+# رگرسیون می‌سازد. این کمکی، همان `mkdtemp` را نگه می‌دارد و فقط ثبتش می‌کند.
+
+def _tmpdir(prefix: str = "tp_") -> str:
+    """یک پوشهٔ موقت بساز و برای پاک‌سازیِ خودکار در پایانِ فرآیند ثبتش کن.
+
+    جانشینِ مستقیمِ `tempfile.mkdtemp(prefix=...)` است: همان امضا، همان
+    مقدارِ بازگشتی (مسیرِ پوشه). تنها تفاوت این است که مسیر در یک فهرستِ
+    ماژولی ثبت می‌شود و یک قلابِ `atexit` در پایانِ فرآیند همه را
+    `rmtree` می‌کند.
+
+    نکاتِ طراحی:
+      • `ignore_errors=True` عمدی است: پاک‌سازیِ پایانِ کار هرگز نباید
+        باعثِ خطا یا تغییرِ کدِ خروجِ سوئیت شود. اگر تستی خودش پوشه را
+        پاک کرده باشد، دوباره‌پاک‌کردن باید بی‌صدا رد شود.
+      • ثبت **پیش از** بازگشت انجام می‌شود تا حتی اگر فراخوان بلافاصله
+        استثنا بدهد، پوشه فراموش نشود.
+      • `atexit` فقط یک بار ثبت می‌شود (نگهبانِ `_TMP_HOOKED`)، وگرنه هر
+        فراخوانی یک قلابِ تکراری اضافه می‌کرد.
+      • این تابع **فقط برای خودِ تست‌ها** است؛ هیچ کدِ محصولی آن را
+        صدا نمی‌زند.
+    """
+    import atexit
+    import tempfile
+
+    global _TMP_HOOKED
+    path = tempfile.mkdtemp(prefix=prefix)
+    _TMP_DIRS.append(path)
+    if not _TMP_HOOKED:
+        atexit.register(_tmpdir_cleanup)
+        _TMP_HOOKED = True
+    return path
+
+
+def _tmpdir_cleanup() -> int:
+    """همهٔ پوشه‌های ثبت‌شده را پاک کن و تعدادِ پاک‌شده‌ها را برگردان.
+
+    عددِ بازگشتی برای تست‌پذیریِ خودِ این سازوکار است: بدونِ آن، تنها راهِ
+    آزمودنِ پاک‌سازی، اجرای یک فرآیندِ کامل و شمردنِ `TMPDIR` بود.
+    """
+    import shutil
+
+    removed = 0
+    while _TMP_DIRS:
+        path = _TMP_DIRS.pop()
+        if os.path.isdir(path):
+            shutil.rmtree(path, ignore_errors=True)
+            removed += 1
+    return removed
+
+
+_TMP_DIRS: list = []
+_TMP_HOOKED = False
+
+
+# ──────────────────────────────────────────────────────────────────────────────
 # P0-1 — لیستِ سفیدِ رمزهای shadowsocks و طولِ کلیدِ SS-2022
 # ──────────────────────────────────────────────────────────────────────────────
 
@@ -347,8 +432,7 @@ def test_output_limit_is_high_enough_not_to_discard_configs():
 
 def _fresh_outdir():
     """یک پوشهٔ خروجیِ موقت با «فایل‌های دورِ قبل» از پیش کاشته‌شده."""
-    import tempfile
-    d = tempfile.mkdtemp(prefix="aggtest_")
+    d = _tmpdir(prefix="aggtest_")
     os.makedirs(os.path.join(d, "archive"), exist_ok=True)
     os.makedirs(os.path.join(d, "protocols"), exist_ok=True)
     return d
@@ -917,8 +1001,7 @@ def test_state_memory_never_raises_on_a_corrupt_or_missing_file():
     برای بهبودِ دورِ بعد اضافه شد، دورِ فعلی را نابود می‌کند. پس مسیرِ خرابی
     باید fail-open باشد، نه fail-closed.
     """
-    import tempfile as _tf
-    d = _tf.mkdtemp()
+    d = _tmpdir(prefix="tp_state_")
     p = os.path.join(d, "state.json")
 
     # ۱) فایل نیست — اولین دور
@@ -960,8 +1043,7 @@ def test_state_history_growth_is_bounded():
     سنجیده‌شده: با ۲۱ منبع و ۱۰۰ دور، اوجِ حجم **۱۸.۴۵ KiB** بود و از دورِ ۲۰
     تا ۱۰۰ فقط **۲۹ بایت** (پهنایِ رقم‌ها) رشد کرد.
     """
-    import tempfile as _tf
-    d = _tf.mkdtemp()
+    d = _tmpdir(prefix="tp_hist_")
     p = os.path.join(d, "state.json")
     urls = sources.all_sources()
 
@@ -3347,11 +3429,10 @@ def test_realtest_refuses_an_empty_input_that_would_hang_the_job() -> None:
     `except` زیر آن را به‌عنوان شکست اعلام می‌کند. این تست باید بدونِ
     هیچ ابزارِ نصب‌شده‌ای و **مستقل از محیط** معنا داشته باشد.
     """
-    import tempfile as _tf
-    absent_xk = os.path.join(_tf.mkdtemp(prefix="l3_noxk_"), "xray-knife")
+    absent_xk = os.path.join(_tmpdir(prefix="l3_noxk_"), "xray-knife")
     assert not os.path.exists(absent_xk), "the shim path must not exist"
 
-    missing = os.path.join(_tf.mkdtemp(prefix="l3_none_"), "nope.txt")
+    missing = os.path.join(_tmpdir(prefix="l3_none_"), "nope.txt")
     try:
         realtest.run_test(missing, binary=absent_xk)
     except realtest.EmptyInput:
@@ -3365,7 +3446,7 @@ def test_realtest_refuses_an_empty_input_that_would_hang_the_job() -> None:
 
     for content, label in (("", "a zero-byte file"),
                            ("\n   \n\t\n", "a whitespace-only file")):
-        path = os.path.join(_tf.mkdtemp(prefix="l3_empty_"), "in.txt")
+        path = os.path.join(_tmpdir(prefix="l3_empty_"), "in.txt")
         with open(path, "w", encoding="utf-8") as fh:
             fh.write(content)
         try:
@@ -3925,14 +4006,13 @@ def test_pipeline_top_file_is_sorted_and_never_padded():
 
 def test_pipeline_writes_files_with_an_honest_shortfall_notice():
     """خروجی باید معیارش را بنویسد و کمبود را **اعلام** کند، نه پنهان."""
-    import tempfile as _tf
     good = "vless://g@1.1.1.1:443?security=tls#g"
     plain = "vless://p@2.2.2.2:443?security=none#p"
     rows = [_pl_row(good, delay=100), _pl_row(plain, delay=100, tls="none")]
     with _StubL3([rows] * 3):
         res = pipeline.run_l3_round([good, plain], rounds=3)
     buckets = pipeline.build_buckets(res, top_n=100)
-    out = _tf.mkdtemp(prefix="pl_out_")
+    out = _tmpdir(prefix="pl_out_")
     paths = pipeline.write_buckets(out, buckets)
 
     for cat in ("verified", "fast", "secure"):
@@ -4085,7 +4165,6 @@ def test_pipeline_output_survives_the_publication_gate():
     داشته باشد** به‌سختیِ دسته‌های اصلی سنجیده می‌شود. یعنی وصل‌کردنِ
     آبشار به CI، کلِ انتشار را می‌شکست.
     """
-    import tempfile as _tf
     import validate as _validate
 
     links = [
@@ -4098,7 +4177,7 @@ def test_pipeline_output_survives_the_publication_gate():
         res = pipeline.run_l3_round(links, rounds=3)
     buckets = pipeline.build_buckets(res)
 
-    out = _tf.mkdtemp(prefix="pl_gate_")
+    out = _tmpdir(prefix="pl_gate_")
     pipeline.write_buckets(out, buckets)
 
     # دسته‌های اصلی را هم می‌سازیم، چون دروازه بی‌قید و شرط سراغشان می‌رود.
@@ -8455,8 +8534,7 @@ def test_zzz_p2_output_gate_forbids_every_c0_byte_except_newline():
 
 def test_zzz_p2_output_gate_is_wired_into_both_writers():
     """گارد باید در **هر دو** نویسنده فعال باشد و فایلِ نیمه‌نوشته نگذارد."""
-    import tempfile as _tf
-    d = _tf.mkdtemp(prefix="p2gate_")
+    d = _tmpdir(prefix="p2gate_")
 
     p1 = os.path.join(d, "sub", "bad.txt")
     try:
@@ -8924,7 +9002,6 @@ def test_zzz_hd_every_subscription_writer_applies_the_shield():
     این تست عمداً *فایلِ نوشته‌شده* را می‌خوانَد، نه تابعِ کمکی را: تنها
     چیزی که کاربر می‌بیند همان فایل است.
     """
-    import tempfile
     ssr = "ssr://" + base64.b64encode(
         b"h.example.com:8388:origin:aes-256-cfb:plain:cHcxMjM").decode()
     good = "vless://u@h.example.com:443?type=ws#A"
@@ -8938,7 +9015,7 @@ def test_zzz_hd_every_subscription_writer_applies_the_shield():
             assert i > 0 and rows[i - 1].startswith(("#", "//")), (label, rows)
         assert ssr in rows, label            # نود حذف نشده، فقط سپر خورده
 
-    d = tempfile.mkdtemp(prefix="hd_shield_")
+    d = _tmpdir(prefix="hd_shield_")
     r = aggregate.CategoryResult()
     r.unique = list(lines)
     r.broken = list(lines)
@@ -8962,7 +9039,7 @@ def test_zzz_hd_every_subscription_writer_applies_the_shield():
         assert core.SHIELD_LINE in decoded, rel
 
     # و مسیرِ pipeline (سطل‌های verified/fast/secure + top100)
-    d2 = tempfile.mkdtemp(prefix="hd_shield2_")
+    d2 = _tmpdir(prefix="hd_shield2_")
     buckets = {c: list(lines) for c in pipeline.CATEGORIES}
     buckets["top"] = list(lines)
     buckets["stats"] = {
@@ -11060,7 +11137,6 @@ def _f3_fake_xray_knife(kind: str = "good") -> str:
     گونه‌ها: good | rcbad | nofile | malformed | hangs
     """
     import stat as _stat
-    import tempfile as _tf
 
     if kind in _F3_BINS:
         return _F3_BINS[kind]
@@ -11091,7 +11167,7 @@ def _f3_fake_xray_knife(kind: str = "good") -> str:
     if kind not in bodies:
         raise AssertionError(f"unknown f3 shim kind: {kind!r}")
 
-    path = os.path.join(_tf.mkdtemp(prefix="f3_bin_"), f"xk_{kind}")
+    path = os.path.join(_tmpdir(prefix="f3_bin_"), f"xk_{kind}")
     with open(path, "w", encoding="utf-8") as fh:
         fh.write("#!/usr/bin/env python3\n" + find_out + bodies[kind])
     os.chmod(path, os.stat(path).st_mode | _stat.S_IEXEC | _stat.S_IXGRP
@@ -11114,9 +11190,8 @@ def _f3_fake_xray_knife(kind: str = "good") -> str:
 
 def _f3_input_file() -> str:
     """یک فایلِ ورودیِ ناتهیِ بازاستفاده‌شدنی برای L3."""
-    import tempfile as _tf
     if not _F3_INPUT:
-        path = os.path.join(_tf.mkdtemp(prefix="f3_in_"), "in.txt")
+        path = os.path.join(_tmpdir(prefix="f3_in_"), "in.txt")
         with open(path, "w", encoding="utf-8") as fh:
             fh.write("vless://f3@1.2.3.4:443?type=tcp#f3\n")
         _F3_INPUT.append(path)
@@ -11283,6 +11358,266 @@ def test_zzz_f3_a_full_l3_round_leaves_no_temp_file_behind() -> None:
     assert not new, (
         f"یک دورِ کاملِ L3 این‌ها را جا گذاشت: "
         f"{[os.path.basename(p) for p in new]} (پیش از درمان: ۳ فایل)")
+
+
+# ============================================================================
+# F-6 — پاک‌سازیِ پوشه‌های موقتِ خودِ سوئیت
+# ============================================================================
+
+def test_zzz_f6_the_temp_helper_registers_and_really_removes_its_dirs() -> None:
+    """
+    نقصِ سنجیده‌شده (F-6): از ۱۷ فراخوانیِ ساختِ منبعِ موقت در این فایل،
+    ۱۳ مورد هیچ پاک‌سازی‌ای نداشتند. با یک `TMPDIR`ِ اختصاصی و اجرای کاملِ
+    سوئیت اندازه‌گیری شد: **۱۹ پوشه، ۱۸۳٬۰۹۲ بایت (۱۷۸.۸ کیلوبایت)** جا
+    می‌ماند — و چون `/tmp` اینجا یک tmpfs است، نشت به رَم بود نه دیسک.
+
+    این تست خودِ سازوکار را می‌سنجد، نه یک متنِ کد: پوشه‌ای می‌سازد، وجودش
+    را تأیید می‌کند، سپس پاک‌سازیِ ثبت‌شده را صدا می‌زند و نبودش را تأیید
+    می‌کند. عددِ بازگشتیِ `_tmpdir_cleanup` هم بررسی می‌شود تا تستِ
+    تشریفاتی نشود (اگر تابع هیچ کاری نکند، عدد صفر می‌ماند و تست می‌شکند).
+    """
+    saved = list(_TMP_DIRS)
+    try:
+        del _TMP_DIRS[:]
+        first = _tmpdir(prefix="f6_probe_a_")
+        second = _tmpdir(prefix="f6_probe_b_")
+
+        assert os.path.isdir(first) and os.path.isdir(second), (
+            "کمکی باید واقعاً پوشه بسازد")
+        assert first in _TMP_DIRS and second in _TMP_DIRS, (
+            f"هر پوشه باید ثبت شود تا در پایان پاک شود؛ ثبت‌شده‌ها: {_TMP_DIRS}")
+
+        # یک فایل درونش بگذار: `rmtree` باید پوشهٔ غیرخالی را هم بردارد.
+        with open(os.path.join(first, "payload.txt"), "w",
+                  encoding="utf-8") as handle:
+            handle.write("x" * 128)
+
+        removed = _tmpdir_cleanup()
+        assert removed == 2, (
+            f"باید هر ۲ پوشه پاک شود، ولی گزارش شد: {removed}")
+        assert not os.path.exists(first), f"پوشهٔ غیرخالی باقی ماند: {first!r}"
+        assert not os.path.exists(second), f"پوشه باقی ماند: {second!r}"
+        assert not _TMP_DIRS, f"فهرست باید تخلیه شود، ولی: {_TMP_DIRS}"
+    finally:
+        del _TMP_DIRS[:]
+        _TMP_DIRS.extend(saved)
+
+
+def test_zzz_f6_cleanup_is_idempotent_and_never_raises() -> None:
+    """
+    پاک‌سازیِ پایانِ کار هرگز نباید علتِ خطا یا تغییرِ کدِ خروج شود.
+
+    سه حالتِ خطرناک آزموده می‌شود:
+      ۱) فراخوانیِ دوباره روی فهرستِ خالی
+      ۲) پوشه‌ای که تستِ دیگری خودش پیش‌تر پاک کرده (مسیرِ ناموجود)
+      ۳) مسیری که پوشه نیست بلکه فایل است
+    هیچ‌کدام نباید استثنا بدهد؛ وگرنه یک سوئیتِ سبز می‌توانست با کدِ خروجِ
+    غلط تمام شود.
+    """
+    saved = list(_TMP_DIRS)
+    try:
+        del _TMP_DIRS[:]
+
+        assert _tmpdir_cleanup() == 0, "روی فهرستِ خالی باید صفر برگردد"
+        assert _tmpdir_cleanup() == 0, "فراخوانیِ دوباره هم باید بی‌خطر باشد"
+
+        gone = _tmpdir(prefix="f6_gone_")
+        import shutil as _shutil
+        _shutil.rmtree(gone)                     # حالتِ ۲
+        assert not os.path.exists(gone)
+
+        holder = _tmpdir(prefix="f6_hold_")
+        as_file = os.path.join(holder, "not_a_dir")
+        with open(as_file, "w", encoding="utf-8") as handle:
+            handle.write("f")
+        _TMP_DIRS.append(as_file)                # حالتِ ۳
+
+        removed = _tmpdir_cleanup()              # نباید استثنا بدهد
+        assert removed >= 1, (
+            f"پوشهٔ واقعی باید پاک شده باشد؛ گزارش: {removed}")
+        assert not os.path.exists(holder), "پوشهٔ واقعی باید رفته باشد"
+        assert not _TMP_DIRS, "فهرست باید در هر حالت تخلیه شود"
+    finally:
+        del _TMP_DIRS[:]
+        _TMP_DIRS.extend(saved)
+
+
+def test_zzz_f6_the_atexit_hook_really_fires_at_process_exit() -> None:
+    """
+    قلابِ `atexit` باید **واقعاً** در پایانِ فرآیند اجرا شود.
+
+    ★ چرا این تست وجود دارد (شکافی که جهش‌سنجی لو داد، نه حدس): در
+    جهش‌سنجیِ F-6، جهشِ M5 — یعنی «ثبتِ `atexit` را حذف کن» — **زنده ماند**
+    و سوئیت ۳۷۹/۳۷۹ سبز شد، در حالی که همان اجرا **۱۹ پوشه** جا گذاشت.
+    دلیلش روشن بود: سه تستِ دیگر `_tmpdir_cleanup()` را **مستقیم** صدا
+    می‌زنند، پس هیچ‌کدام نمی‌سنجید که قلاب خودش نصب شده است یا نه.
+
+    تنها راهِ صادقِ سنجش، اجرای یک **فرآیندِ جدا** است: پوشه‌ای بساز، فقط
+    بگذار فرآیند تمام شود، و از بیرون ببین پوشه رفته است یا نه. هیچ
+    فراخوانیِ دستیِ پاک‌سازی در کار نیست.
+    """
+    import shutil as _shutil
+    import subprocess as _sub
+    import sys as _sys
+    import tempfile as _tf
+
+    box = _tf.mkdtemp(prefix="f6_atexit_")
+    try:
+        # فرآیندِ فرزند: مسیرِ پوشه را چاپ می‌کند و بعد طبیعی تمام می‌شود.
+        code = (
+            "import os, sys\n"
+            f"sys.path.insert(0, {os.path.dirname(os.path.abspath(__file__))!r})\n"
+            "import test_pipeline as T\n"
+            "d = T._tmpdir(prefix='f6_child_')\n"
+            "open(os.path.join(d, 'payload.txt'), 'w').write('x' * 64)\n"
+            "assert os.path.isdir(d)\n"
+            "print(d)\n"
+        )
+        env = dict(os.environ)
+        env["TMPDIR"] = box
+        proc = _sub.run([_sys.executable, "-c", code], capture_output=True,
+                        text=True, env=env, timeout=300)
+        assert proc.returncode == 0, (
+            f"فرزند باید طبیعی تمام شود؛ rc={proc.returncode}\n"
+            f"{proc.stderr[-600:]}")
+
+        made = proc.stdout.strip().splitlines()[-1]
+        # ضدِ-تشریفات: مسیر باید واقعاً درونِ همان جعبه ساخته شده باشد،
+        # وگرنه «نبودنش» چیزی را ثابت نمی‌کند.
+        assert made.startswith(box), (
+            f"پوشهٔ فرزند باید در {box!r} باشد، ولی گزارش شد {made!r}")
+        assert os.path.basename(made).startswith("f6_child_"), made
+
+        assert not os.path.exists(made), (
+            f"قلابِ atexit کار نکرد: {made!r} پس از پایانِ فرآیند باقی مانده "
+            "است. (جهشِ M5 دقیقاً همین حالت بود و ۱۹ پوشه جا می‌گذاشت.)")
+        assert not os.listdir(box), (
+            f"جعبه باید کاملاً خالی بماند، ولی: {os.listdir(box)}")
+    finally:
+        _shutil.rmtree(box, ignore_errors=True)
+
+
+def test_zzz_f6_no_test_creates_an_unregistered_temp_dir() -> None:
+    """
+    نگهبانِ بازگشت (regression guard): هر `mkdtemp`/`mkstemp`ِ تازه‌ای که کسی
+    در آینده اضافه کند باید یا از `_tmpdir` بگذرد یا پاک‌سازیِ خودش را داشته
+    باشد. نشتِ پوشه در یک اجرای واحد بی‌صداست و هیچ خطایی تولید نمی‌کند، پس
+    تنها راهِ دیدنش شمردنِ محل‌های ساخت است.
+
+    ★ درسِ سنجیده‌شده در نوشتنِ همین تست: نسخهٔ اولِ این نگهبان **دو موردِ
+    بی‌گناه** را متهم کرد، چون تحلیلگرش فقط توابعِ سطحِ-بالا را می‌دید:
+      • `_FakeXk.__enter__` (خطِ ۳۱۶۲) — یک متدِ کلاس است، و پاک‌سازی‌اش در
+        `__exit__` همان کلاس با `rmtree` انجام می‌شود.
+      • `_f4_tmp` (خطِ ۱۰۰۶۹) — یک کمکی است که مسیر را **برمی‌گرداند** و هر
+        ۹ فراخوانش در فراخوان `os.unlink(p)` دارند.
+    اندازه‌گیریِ واقعی هم همین را تأیید کرد: در اجرای پیش از درمان **صفر
+    فایل** جا نمانده بود (۱۹ پوشه، ولی هیچ فایلی). پس این تست باید
+    «مالکیتِ کلاسی» و «جفتِ کمکی/فراخوان» را بفهمد، وگرنه خودش باگ دارد.
+    """
+    import ast as _ast
+
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                        "test_pipeline.py")
+    with open(path, encoding="utf-8") as handle:
+        tree = _ast.parse(handle.read())
+
+    # ── مالکیت: هر خط به نزدیک‌ترین «واحدِ پاک‌سازی» نسبت داده می‌شود.
+    #    برای متدهای یک کلاس، واحد = خودِ کلاس (چون `__exit__` جای دیگری است).
+    owner = {}
+    for node in _ast.walk(tree):
+        if isinstance(node, _ast.ClassDef):
+            for line in range(node.lineno, (node.end_lineno or node.lineno) + 1):
+                owner[line] = "class:" + node.name
+    for node in _ast.walk(tree):
+        if isinstance(node, (_ast.FunctionDef, _ast.AsyncFunctionDef)):
+            for line in range(node.lineno, (node.end_lineno or node.lineno) + 1):
+                owner.setdefault(line, "func:" + node.name)
+                if not owner[line].startswith("class:"):
+                    owner[line] = "func:" + node.name
+
+    # واحدهایی که در خودشان پاک‌سازی دارند
+    cleaners = set()
+    for node in _ast.walk(tree):
+        if (isinstance(node, _ast.Call)
+                and isinstance(node.func, _ast.Attribute)
+                and node.func.attr in ("rmtree", "remove", "unlink")):
+            unit = owner.get(node.lineno)
+            if unit:
+                cleaners.add(unit)
+
+    # کمکی‌هایی که مسیر می‌سازند و برمی‌گردانند، ولی فراخوانشان پاک می‌کند:
+    # اگر نامِ کمکی در تابعی صدا زده شود که همان‌جا پاک‌سازی دارد، بی‌گناه است.
+    returning_helpers = set()
+    for node in tree.body:
+        if isinstance(node, _ast.FunctionDef):
+            makes = any(isinstance(c, _ast.Call)
+                        and isinstance(c.func, _ast.Attribute)
+                        and c.func.attr in ("mkdtemp", "mkstemp")
+                        for c in _ast.walk(node))
+            returns = any(isinstance(r, _ast.Return) and r.value is not None
+                          for r in _ast.walk(node))
+            if makes and returns:
+                returning_helpers.add(node.name)
+
+    helper_is_cleaned = {}
+    for name in returning_helpers:
+        callers_cleaning = 0
+        callers_total = 0
+        for node in _ast.walk(tree):
+            if (isinstance(node, _ast.Call) and isinstance(node.func, _ast.Name)
+                    and node.func.id == name):
+                unit = owner.get(node.lineno)
+                if unit and unit != "func:" + name:
+                    callers_total += 1
+                    if unit in cleaners:
+                        callers_cleaning += 1
+        helper_is_cleaned[name] = (callers_total > 0
+                                   and callers_cleaning == callers_total)
+
+    offenders = []
+    for node in _ast.walk(tree):
+        if (isinstance(node, _ast.Call)
+                and isinstance(node.func, _ast.Attribute)
+                and node.func.attr in ("mkdtemp", "mkstemp")):
+            unit = owner.get(node.lineno, "<module>")
+            if unit == "func:_tmpdir":            # خودِ کمکیِ ثبت‌کننده
+                continue
+            if unit in cleaners:                  # خودش پاک‌سازی دارد
+                continue
+            bare = unit.split(":", 1)[-1]
+            if helper_is_cleaned.get(bare):       # فراخوان‌هایش پاک می‌کنند
+                continue
+            offenders.append((node.lineno, unit))
+
+    assert not offenders, (
+        "این محل‌ها منبعِ موقت می‌سازند ولی نه از `_tmpdir` استفاده می‌کنند، "
+        f"نه خودشان و نه فراخوان‌هایشان پاکش می‌کنند: {offenders}. "
+        "پیش از درمانِ F-6 اینجا ۱۳ محل بود و هر اجرا ۱۹ پوشه / "
+        "۱۸۳٬۰۹۲ بایت (۱۷۸.۸ کیلوبایت) جا می‌گذاشت.")
+
+    # ضدِ-تشریفات: تحلیلگر باید واقعاً چیزی دیده باشد. اگر روزی الگوها عوض
+    # شوند و هیچ محلی پیدا نشود، تست الکی سبز می‌ماند — این assert جلویش را
+    # می‌گیرد.
+    #
+    # ★ این assert در همان نوبتِ نوشتن، یک اشتباهِ خودم را گرفت: آستانه را
+    # روی «≥۱۵ محلِ `mkdtemp`» گذاشته بودم، ولی پس از درمان ۱۳ محل به
+    # `_tmpdir(...)` تبدیل شده‌اند که در AST یک `Name` است نه `Attribute`،
+    # پس شمارش به ۵ افتاد و تست شکست. عددِ درست باید **هر دو سبک** را
+    # بشمارد. سنجیده‌شده پس از درمان: ۵ محلِ خام + ۱۷ فراخوانیِ `_tmpdir`
+    # = ۲۲ محلِ ساختِ منبعِ موقت.
+    raw = [n for n in _ast.walk(tree)
+           if isinstance(n, _ast.Call) and isinstance(n.func, _ast.Attribute)
+           and n.func.attr in ("mkdtemp", "mkstemp")]
+    viaHelper = [n for n in _ast.walk(tree)
+                 if isinstance(n, _ast.Call) and isinstance(n.func, _ast.Name)
+                 and n.func.id == "_tmpdir"]
+    assert len(raw) + len(viaHelper) >= 18, (
+        f"تحلیلگر فقط {len(raw)} محلِ خام و {len(viaHelper)} فراخوانیِ "
+        "`_tmpdir` دید؛ انتظار مجموعاً ≥۱۸ بود. یعنی الگوی جست‌وجو دیگر با "
+        "کد جور نیست و تست توخالی شده است.")
+    assert len(viaHelper) >= 13, (
+        f"فقط {len(viaHelper)} فراخوانیِ `_tmpdir` دیده شد؛ ۱۳ محلِ نشتیِ "
+        "اصلی باید از آن بگذرند، وگرنه درمانِ F-6 عقب‌گرد کرده است.")
 
 
 if __name__ == "__main__":
