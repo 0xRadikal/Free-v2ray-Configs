@@ -11624,6 +11624,35 @@ def test_zzz_f6_no_test_creates_an_unregistered_temp_dir() -> None:
         "اصلی باید از آن بگذرند، وگرنه درمانِ F-6 عقب‌گرد کرده است.")
 
 
+class _f5_argv:
+    """`sys.argv` را موقتاً جانشین می‌کند و **همیشه** برمی‌گرداند.
+
+    لازم است چون `validate.main()` از `argparse` استفاده می‌کند و آن هم
+    `sys.argv` را می‌خواند. اگر بازگردانی در `__exit__` نباشد، هر آزمونِ
+    بعدی که به argv نگاه کند به‌شکلِ مرموزی می‌شکند — درست همان دستهٔ
+    باگی که این مخزن مکرراً ثبت کرده است.
+
+    ⚠️ چرا کلاس و نه `@contextlib.contextmanager`: `contextlib` در سطحِ
+       ماژولِ این فایل import نشده (سنجیده شد: تنها base64/json/os/sys/
+       urllib.parse) و افزودنِ یک importِ سطحِ ماژولِ تازه، سیاستِ
+       importهای این فایل را عوض می‌کرد. یک کلاسِ ۴ خطی همان کار را
+       بی‌هیچ وابستگیِ تازه می‌کند.
+    """
+
+    def __init__(self, argv):
+        self._argv = list(argv)
+        self._saved = None
+
+    def __enter__(self):
+        self._saved = sys.argv
+        sys.argv = self._argv
+        return self
+
+    def __exit__(self, *_exc):
+        sys.argv = self._saved
+        return False
+
+
 def _f5_healthy_tree(root: str) -> None:
     """یک درختِ خروجیِ سالم و *ساختاراً معتبر* می‌سازد (سه دستهٔ اصلی).
 
@@ -11724,12 +11753,27 @@ def test_zzz_f5_the_fix_changes_no_verdict_for_real_statuses() -> None:
 
     توجه: این مقایسه روی *منطق* است، نه روی متنِ کد؛ پس اگر کسی فردا
     شکلِ شرط را عوض کند و رفتار را بشکند، همین‌جا دیده می‌شود.
+
+    ⚠️ دامی که با آزمونِ جهش (mutation testing) گرفته شد و اینجا ثبت می‌شود
+       تا تکرار نشود: نسخهٔ پیشینِ همین آزمون فهرستِ سفید را با
+       `set(validate.ACCEPTABLE_STATUSES) if hasattr(validate,
+       "ACCEPTABLE_STATUSES") else {"pass", "skipped"}` می‌گرفت. آن زمان
+       `ACCEPTABLE_STATUSES` یک متغیرِ **محلیِ** `validate_outputs` بود، پس
+       `hasattr` همیشه False می‌شد و آزمون در واقع رونوشتِ درون-تستیِ خودش
+       را می‌سنجید، نه تولید را. اندازه‌گیریِ اجرایی: با گشاد‌کردنِ فهرستِ
+       سفیدِ تولید به `("pass","skipped","fail","missing")` — دروازهٔ کاملاً
+       fail-open — هر ۵ آزمونِ F-5 **سبز ماندند**. درمان: نام به سطحِ ماژول
+       رفت و این‌جا **بی‌قید و شرط** خوانده می‌شود؛ اگر روزی حذف شود،
+       `AttributeError` بلند می‌شکند و خاموش عقب‌نشینی نمی‌کند.
     """
     import itertools
 
     real = ("pass", "fail", "skipped", "missing")
-    acceptable = set(validate.ACCEPTABLE_STATUSES) if hasattr(
-        validate, "ACCEPTABLE_STATUSES") else {"pass", "skipped"}
+    # ★ بی‌`hasattr` و بی‌جانشین: تنها منبعِ حقیقت، خودِ تولید است.
+    acceptable = set(validate.ACCEPTABLE_STATUSES)
+    assert acceptable == {"pass", "skipped"}, (
+        "فهرستِ سفیدِ تولید عوض شده است. اگر عمدی است، اثرش را روی دروازه "
+        f"بسنجید و این آزمون را با دلیلِ اندازه‌گیری‌شده به‌روز کنید: {acceptable}")
 
     disagreements = []
     for counts in itertools.product(range(3), repeat=len(real)):
@@ -11815,6 +11859,83 @@ def test_zzz_f5_a_run_that_proved_nothing_is_visible_not_silent() -> None:
         assert rep2["summary"]["pass"] == 6, rep2["summary"]
         assert rep2["real_validation"] is True, rep2["summary"]
         assert rep2["ok"] is True
+
+
+def test_zzz_f5_the_strict_exit_code_is_what_ci_actually_gates_on() -> None:
+    """
+    ★ بستنِ شکافِ **قرارداد خروج** — نقصی که با آزمونِ جهش کشف شد.
+
+    همهٔ پنج آزمونِ F-5 روی `validate_outputs()` (تابعِ کتابخانه‌ای) کار
+    می‌کنند و `report["ok"]` را می‌سنجند. ولی چیزی که انتشار را واقعاً
+    می‌بندد، **کدِ خروجِ** فرآیند است:
+
+        aggregate.yml:665
+          run: python scripts/validate.py --out . --strict --json validation.json
+
+    و این گام `continue-on-error` **ندارد** (سنجیده شد) ⇒ اگر rc≠0 باشد،
+    کلِ job می‌شکند و commit نمی‌شود. پس مسیرِ `main()` → `--strict` → rc
+    خودِ دروازه است، نه یک تشریفاتِ چاپی.
+
+    اندازه‌گیریِ اجراییِ شکاف (mutation testing):
+      • جهشِ `if args.strict and not rep["ok"]:` به
+        `if False and args.strict and not rep["ok"]:` — یعنی حذفِ کاملِ
+        دروازه — روی درختی با یک فایلِ خراب اجرا شد:
+            پیش از جهش : rc=1 ، ok=False ، offending={'fail': 1}
+            پس از جهش  : rc=0 ، ok=False ، offending={'fail': 1}
+      • هیچ‌یک از ۳۹۳ آزمون آن را ندید (survived).
+      • دلیلش با شمارش تأیید شد: ۵۱ ارجاع به `validate.*` در این فایل
+        وجود دارد ولی **صفر** ارجاع به `validate.main`.
+
+    این آزمون همان قرارداد را قفل می‌کند و عمداً `main()` را **در فرآیند**
+    صدا می‌زند (نه subprocess): سریع‌تر است و به مفسرِ بیرونی وابسته نیست.
+    """
+    import contextlib
+    import io
+    import tempfile
+
+    with tempfile.TemporaryDirectory() as root:
+        _f5_healthy_tree(root)
+
+        # ۱) درختِ سالم + --strict ⇒ rc باید ۰ باشد، وگرنه انتشارِ سالم را
+        #    می‌شکستیم (همان رگرسیونی که در سندِ F-5 هشدار داده شده).
+        argv = ["validate.py", "--out", root, "--strict"]
+        with _f5_argv(argv), contextlib.redirect_stdout(io.StringIO()):
+            rc_ok = validate.main()
+        assert rc_ok == 0, (
+            f"درختِ سالمِ ساختاری باید rc=0 بدهد، وگرنه CI انتشار را "
+            f"بی‌دلیل می‌بندد: rc={rc_ok}")
+
+        # ۲) همان درخت، یک فایل خراب ⇒ status می‌شود `fail` و rc باید ۱ شود.
+        broken = os.path.join(root, validate.CORE_CATEGORIES[0], "singbox.json")
+        with open(broken, "w", encoding="utf-8") as handle:
+            handle.write("{ this is not json")
+
+        buf = io.StringIO()
+        with _f5_argv(argv), contextlib.redirect_stdout(buf):
+            rc_bad = validate.main()
+
+        # ضدِ-تشریفات: مطمئن شو فیکسچر واقعاً وضعیتِ `fail` ساخته است،
+        # وگرنه rc=1 می‌توانست از چیزِ دیگری بیاید و آزمون چیزی را ثابت نکند.
+        rep = validate.validate_outputs(root)
+        assert rep["offending"].get("fail", 0) >= 1, (
+            f"فیکسچر باید حداقل یک `fail` بسازد: {rep['summary']}")
+        assert rc_bad == 1, (
+            f"خروجیِ خراب باید rc=1 بدهد وگرنه گامِ CI موفق می‌شود و خروجیِ "
+            f"خراب commit می‌شود: rc={rc_bad}, offending={rep['offending']}")
+
+        # ۳) و پیام باید بلند باشد، نه خاموش — وگرنه عیب‌یابی کور می‌شود.
+        out = buf.getvalue()
+        assert "Validation gate FAILED" in out, (
+            f"دروازهٔ بسته باید دلیلش را چاپ کند: {out[-300:]!r}")
+
+        # ۴) بدونِ `--strict` همان درختِ خراب باید rc=0 بدهد (گزارش‌گری
+        #    محض). این مرزْ عمدی است و اگر عوض شود، کاربردهای غیرِ CI
+        #    بی‌صدا می‌شکنند.
+        with _f5_argv(["validate.py", "--out", root]), \
+                contextlib.redirect_stdout(io.StringIO()):
+            rc_soft = validate.main()
+        assert rc_soft == 0, (
+            f"بدونِ --strict باید فقط گزارش بدهد، نه شکست: rc={rc_soft}")
 
 
 
@@ -12229,12 +12350,16 @@ def test_zzz_f2_no_production_signature_lies_about_accepting_none() -> None:
     scripts = _f2_scripts_dir()
     seen_functions = 0
     seen_defaults = 0
+    module_level_functions = 0
     offenders = {}
     for name in _F2_PROD_MODULES:
         path = os.path.join(scripts, name)
         assert os.path.isfile(path), f"production module missing: {name}"
         with open(path, encoding="utf-8") as handle:
             tree = _ast.parse(handle.read())
+        module_level_functions += sum(
+            1 for node in tree.body
+            if isinstance(node, (_ast.FunctionDef, _ast.AsyncFunctionDef)))
         for node in _ast.walk(tree):
             if not isinstance(node, (_ast.FunctionDef, _ast.AsyncFunctionDef)):
                 continue
@@ -12257,9 +12382,182 @@ def test_zzz_f2_no_production_signature_lies_about_accepting_none() -> None:
         f"examined (measured 42 when written); the census loop that F-2 "
         f"depends on must have broken")
 
+    # ★ آستانهٔ **نسبی** — و دلیلِ اندازه‌گیری‌شدهٔ وجودش:
+    #
+    # سندِ بالا ادعا می‌کرد اگر سرشماری از `ast.walk` به `tree.body` تنزل
+    # کند، آستانه‌های مطلقِ بالا «بلند می‌شکنند». با آزمونِ جهش سنجیده شد
+    # که این ادعا **غلط** بود:
+    #     ast.walk  → ۱۷۹ تابع / ۴۲ پیش‌فرض
+    #     tree.body → ۱۶۹ تابع / ۴۱ پیش‌فرض
+    # و هر دو از ۱۵۰ و ۳۰ بزرگ‌ترند ⇒ جهش **زنده می‌ماند** و ناوردا خاموش
+    # کور می‌شد (۱۰ تابعِ تودرتو، شاملِ `converters.record` که خودش پارامترِ
+    # پیش‌فرض-None دارد، از پیمایش می‌افتادند).
+    #
+    # این ادعا با یک سنجهٔ **نسبی** به دندانِ واقعی تبدیل می‌شود: پیمایشِ
+    # درست باید *اکیداً* بیش از توابعِ سطحِ ماژول ببیند، چون تودرتوها وجود
+    # دارند. زیرِ `tree.body` دو عدد برابر می‌شوند و این خطْ بلند می‌شکند.
+    assert module_level_functions >= 140, (
+        f"anti-vacuity: only {module_level_functions} module-level functions "
+        f"(measured 169 when written); the traversal must have broken")
+    assert seen_functions > module_level_functions, (
+        f"the census saw {seen_functions} functions but {module_level_functions} "
+        f"are module-level; a correct ast.walk MUST see strictly more (measured "
+        f"179 > 169, i.e. 10 nested functions). Equality means the traversal "
+        f"degraded to `tree.body` and nested definitions are no longer checked")
+
     assert not offenders, (
         "implicit-Optional signatures are back (PEP 484 revoked that "
         "shorthand; ruff RUF013 / mypy --no-implicit-optional flag it): "
+        + "; ".join(f"{mod}: " + ", ".join(
+            f"{fn}({arg}) @L{ln}" for fn, arg, ln in sites)
+            for mod, sites in sorted(offenders.items())))
+
+
+def test_zzz_f2_the_site_detector_itself_is_proven_not_assumed() -> None:
+    """
+    ★ گواهیِ **مثبت** برای `_f2_implicit_optional_sites` — رفعِ نقصی که با
+    آزمونِ جهش کشف شد (mutant F2-M7).
+
+    مسئله (اندازه‌گیری‌شده، نه حدس): همهٔ آزمون‌های F-2 تشخیص‌دهنده را تنها
+    به‌شکلِ **منفی** به کار می‌گیرند — «هیچ متخلفی نباید پیدا شود». اما یک
+    تشخیص‌دهندهٔ **کاملاً کور** هم همین شرط را برمی‌آورد! پس آن آزمون‌ها
+    نسبت به شکستنِ خودِ تشخیص‌دهنده پوچ‌اند.
+
+    سنجهٔ عددی: با تغییرِ `_ast.walk(tree)` به `tree.body` در همین
+    تشخیص‌دهنده، هر ۳۹۵ آزمونِ مخزن **سبز ماندند** (mutant survived). دلیلش
+    هم اندازه‌گیری شد: روی هر ۱۳ فایلِ پایتونِ فعلیِ مخزن، هر دو نسخهٔ
+    درست و شکسته خروجیِ یکسانِ «صفر متخلف» می‌دهند — یعنی روی کدِ امروز
+    یک «جهشِ هم‌ارز» است. اما به محضِ آنکه کسی فردا یک امضای دروغینِ
+    **تودرتو** بنویسد، نسخهٔ شکسته آن را نمی‌بیند و ناوردا خاموش رد می‌شود.
+
+    درمان: تشخیص‌دهنده را روی یک نمونهٔ ساختگی با پاسخِ **از پیش معلوم**
+    اجرا می‌کنیم. این هر سه دامی را که داک‌استرینگِ خودش ادعا می‌کند
+    می‌سنجد: تابعِ تودرتو، متدِ داخلِ کلاسِ تودرتو، و اینکه امضاهای درست
+    به‌غلط متخلف شمرده نشوند.
+    """
+    import tempfile
+
+    # ⚠️ چرا `TemporaryDirectory` و نه `_tmpdir`: نگهبانِ نشتیِ F-6 تنها
+    #    `mkdtemp`/`mkstemp` را می‌شمارد؛ این context manager خودش پاک
+    #    می‌کند، پس نه نشتی می‌سازد و نه شمارشِ آن نگهبان را می‌آشوبد.
+    sample = (
+        "from typing import Optional\n"
+        "\n"
+        "\n"
+        "def outer_ok(a: Optional[int] = None) -> None:\n"
+        "    def nested_liar(b: int = None) -> None:\n"
+        "        return None\n"
+        "\n"
+        "    class Inner:\n"
+        "        def method_liar(self, c: str = None) -> None:\n"
+        "            return None\n"
+        "\n"
+        "        def method_ok(self, d: Optional[str] = None) -> None:\n"
+        "            return None\n"
+        "    return None\n"
+        "\n"
+        "\n"
+        "def module_liar(e: float = None) -> None:\n"
+        "    return None\n")
+
+    with tempfile.TemporaryDirectory() as room:
+        probe = os.path.join(room, "f2_detector_probe.py")
+        with open(probe, "w", encoding="utf-8") as handle:
+            handle.write(sample)
+        found = _f2_implicit_optional_sites(probe)
+
+    got = {(fn, arg) for fn, arg, _ in found}
+
+    # ۱) امضایِ دروغینِ سطحِ ماژول باید دیده شود (کمینه‌ترین توقع).
+    assert ("module_liar", "e") in got, (
+        f"detector missed a module-level implicit-Optional signature: {got}")
+
+    # ۲) ★ تابعِ **تودرتو** — همان چیزی که `tree.body` نمی‌بیند. این تنها
+    #    اثباتی است که پیمایش واقعاً بازگشتی است.
+    assert ("nested_liar", "b") in got, (
+        "detector missed a NESTED implicit-Optional signature; the traversal "
+        "has degraded from `ast.walk` to a shallow `tree.body` scan. Measured "
+        "consequence: real offenders like `converters.py:record(proto: "
+        f"Optional[str] = None)` live at nested depth. got={got}")
+
+    # ۳) متدِ داخلِ کلاسِ تودرتو — عمقِ دو، برای اطمینان از اینکه پیمایش در
+    #    اولین لایه متوقف نمی‌شود.
+    assert ("method_liar", "c") in got, (
+        f"detector missed a method inside a nested class (depth 2): {got}")
+
+    # ۴) ضدِ مثبتِ کاذب: امضاهای **درست** نباید متخلف شمرده شوند، وگرنه
+    #    تشخیص‌دهنده پرحرف می‌شود و ناوردا به‌ناچار خفه خواهد شد.
+    honest = {("outer_ok", "a"), ("method_ok", "d")}
+    assert not (got & honest), (
+        f"detector falsely flagged correctly-annotated Optional signature(s): "
+        f"{got & honest}")
+
+    # ۵) و دقیقاً همان سه مورد، نه بیشتر — تا هیچ رفتارِ ناخواستهٔ تازه‌ای
+    #    بی‌صدا وارد نشود.
+    assert got == {("module_liar", "e"), ("nested_liar", "b"),
+                   ("method_liar", "c")}, (
+        f"detector output changed unexpectedly; expected exactly the three "
+        f"planted liars, got {got}")
+
+
+def test_zzz_f2_the_invariant_covers_every_python_file_not_just_eleven() -> None:
+    """
+    ★ بستنِ **شکافِ دامنهٔ** F-2 — نقصی که با آزمونِ جهش کشف شد.
+
+    ناوردای اصلیِ F-2 فقط `_F2_PROD_MODULES` (یازده ماژولِ تولیدی) را
+    می‌گردد. اندازه‌گیریِ اجرایی نشان داد این یک شکافِ واقعی است: با
+    تزریقِ `def probe(x: int = None)` داخلِ همین فایلِ آزمون، **هیچ‌یک**
+    از ۳۹۳ آزمونِ مخزن آن را ندید (mutant survived).
+
+    چرا این «سلیقه» نیست: همان اشتباهِ RUF013 در فایلِ ۱۲٬۴۰۰ خطیِ آزمون
+    هم دقیقاً همان دروغِ امضاست، و در فاز lint (۲۰۲۶-۰۸-۰۴) یک نمونهٔ
+    واقعی از آن در همین فایل پیدا و رفع شد
+    (`_StubL3.__init__(csv_text: str = None)`) — یعنی این شکاف فرضی نبود،
+    یک بار **واقعاً** رخ داده بود.
+
+    چرا فقط به ruff تکیه نمی‌کنیم (اندازه‌گیری‌شده، نه فرض):
+      • `ruff check .` با پیکربندیِ مخزن RUF013 را روی همین فایل هم
+        می‌گیرد (با یک فایلِ کاوشگر تأیید شد: rc=1)
+      • ولی `grep -nE "ruff|flake8|mypy" .github/workflows/*.yml` **خالی**
+        است ⇒ CI هیچ linter اجرا نمی‌کند. تنها دروازهٔ خودکار همین
+        `test_pipeline.py` است. پس ناوردا باید خودش بسنجد، وگرنه محافظت
+        به یک گامِ اختیاریِ محلی وابسته می‌ماند.
+
+    دامنه: هر فایلِ پایتونِ نوشته‌شده به‌دستِ آدم در مخزن —
+    `scripts/*.py` + `assets/*.py` — نه فقط آن یازده ماژول.
+    """
+    import glob as _glob
+
+    scripts = _f2_scripts_dir()
+    repo_root = os.path.dirname(scripts)
+    targets = sorted(
+        _glob.glob(os.path.join(scripts, "*.py"))
+        + _glob.glob(os.path.join(repo_root, "assets", "*.py")))
+
+    # ضدِ خالی‌بودن: اندازه‌گیریِ زمانِ نوشتن ۱۳ فایل بود (۱۲ در scripts/ و
+    # ۱ در assets/). اگر الگو بشکند و صفر فایل پیدا شود، آزمون پوچ می‌ماند.
+    assert len(targets) >= 12, (
+        f"only {len(targets)} python files found (measured 13 when written); "
+        f"the glob must have broken: {[os.path.basename(t) for t in targets]}")
+
+    # و باید *فراتر* از یازده ماژولِ ناوردای اصلی برود، وگرنه این آزمون
+    # چیزِ تازه‌ای نمی‌سنجد و تنها تکرارِ تشریفاتیِ آن است.
+    extra = [os.path.basename(t) for t in targets
+             if os.path.basename(t) not in _F2_PROD_MODULES]
+    assert extra, (
+        "this test must cover files beyond _F2_PROD_MODULES, otherwise it "
+        "adds no coverage over the primary F-2 invariant")
+
+    offenders = {}
+    for path in targets:
+        sites = _f2_implicit_optional_sites(path)
+        if sites:
+            offenders[os.path.relpath(path, repo_root)] = sites
+
+    assert not offenders, (
+        "implicit-Optional signature(s) outside the eleven production "
+        "modules — PEP 484 revoked that shorthand and CI runs no linter, so "
+        "this invariant is the only automated guard: "
         + "; ".join(f"{mod}: " + ", ".join(
             f"{fn}({arg}) @L{ln}" for fn, arg, ln in sites)
             for mod, sites in sorted(offenders.items())))

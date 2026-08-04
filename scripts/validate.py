@@ -79,6 +79,22 @@ assert len(set(CATEGORIES)) == len(CATEGORIES), "duplicate category name"
 #: زمان بیشینهٔ اجرای هر باینری اعتبارسنج (ثانیه).
 CHECK_TIMEOUT = 180
 
+#: ★ فهرستِ سفیدِ دروازه (F-5). تنها وضعیت‌هایی که اجازهٔ عبور دارند؛ هر
+#: وضعیتِ دیگر — از جمله هر وضعیتِ **ناشناختهٔ** آینده — دروازه را می‌بندد.
+#:
+#: ⚠️ چرا این نام در **سطحِ ماژول** است و نه داخلِ `validate_outputs`:
+#:    تا ۲۰۲۶-۰۸-۰۴ این تاپل یک متغیرِ محلی بود. با اجرا (نه با خواندنِ کد)
+#:    اندازه‌گیری شد که آزمونِ ناوردا
+#:    (`test_zzz_f5_the_fix_changes_no_verdict_for_real_statuses`) با
+#:    `hasattr(validate, "ACCEPTABLE_STATUSES")` سراغش می‌آمد و چون نامِ
+#:    محلی از بیرون دیده نمی‌شود، آن شرط **همیشه** False بود و آزمون به
+#:    نسخهٔ رونویسی‌شدهٔ `{"pass", "skipped"}` داخلِ خودش تکیه می‌کرد.
+#:    نتیجهٔ سنجیده‌شدهٔ آن جداافتادگی: با گشاد‌کردنِ همین تاپل به
+#:    `("pass", "skipped", "fail", "missing")` — یعنی دروازهٔ کاملاً
+#:    fail-open — هر ۵ آزمونِ F-5 **سبز ماندند**. پس فهرستِ سفید باید تنها
+#:    یک منبعِ حقیقت داشته باشد و آزمون همان را بخواند، نه رونوشتش را.
+ACCEPTABLE_STATUSES = ("pass", "skipped")
+
 #: sing-box/mihomo پیام‌ها را رنگی چاپ می‌کنند؛ در لاگ CI به بایت‌های زائد
 #: تبدیل می‌شود و مقایسهٔ رشته‌ای را می‌شکند، پس پاک می‌شود.
 _ANSI_RE = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
@@ -357,7 +373,8 @@ def validate_outputs(out_dir: str) -> Dict[str, Any]:
     # نصبِ باینری‌ها fail-closed است (`set -euo pipefail` + چهار checksum و
     # بدونِ `continue-on-error`)، پس رسیدن به `skipped` در CI یعنی آن گام
     # پیش‌تر کلِ job را شکسته است.
-    ACCEPTABLE_STATUSES = ("pass", "skipped")
+    # فهرستِ سفید در سطحِ ماژول تعریف شده (بالای فایل) تا آزمونِ ناوردا
+    # بتواند **همان** منبعِ حقیقت را بخواند، نه رونوشتی از آن.
     offending = {status: count
                  for status, count in report["summary"].items()
                  if count > 0 and status not in ACCEPTABLE_STATUSES}
