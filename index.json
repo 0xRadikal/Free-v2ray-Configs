@@ -1,11 +1,11 @@
 {
   "brand": "@Raydikalx",
   "generator": "RaydikalxBot aggregator",
-  "updated_at": "2026-08-02T22:53:45.376062+00:00",
-  "updated_at_unix": 1785711225,
-  "next_update_eta": "2026-08-02T23:08:45.376062+00:00",
+  "updated_at": "2026-08-04T06:23:42.339342+00:00",
+  "updated_at_unix": 1785824622,
+  "next_update_eta": "2026-08-04T06:38:42.339342+00:00",
   "update_interval_minutes": 15,
-  "elapsed_seconds": 21.5,
+  "elapsed_seconds": 21.1,
   "raw_base": "https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main",
   "cdn_base": "https://cdn.jsdelivr.net/gh/0xRadikal/Free-v2ray-Configs@main",
   "primary_base": "https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main",
@@ -23,19 +23,19 @@
   },
   "categories": {
     "all": {
-      "unique": 10645,
+      "unique": 10295,
       "broken": 1,
-      "duplicates": 4441,
-      "total_fetched": 15087,
+      "duplicates": 4108,
+      "total_fetched": 14404,
       "active_sources": 17,
       "protocols": {
-        "vless": 4046,
-        "vmess": 3261,
-        "shadowsocks": 2144,
-        "trojan": 1042,
-        "hysteria2": 122,
+        "vless": 3594,
+        "vmess": 3306,
+        "shadowsocks": 2101,
+        "trojan": 1144,
+        "hysteria2": 117,
         "shadowsocksr": 28,
-        "socks": 1,
+        "socks": 4,
         "tuic": 1
       },
       "files": {
@@ -50,17 +50,17 @@
       }
     },
     "heavy": {
-      "unique": 8901,
+      "unique": 8615,
       "broken": 1,
-      "duplicates": 3160,
-      "total_fetched": 12062,
+      "duplicates": 2775,
+      "total_fetched": 11391,
       "active_sources": 13,
       "protocols": {
-        "vless": 3150,
-        "vmess": 2677,
-        "shadowsocks": 2057,
-        "trojan": 955,
-        "hysteria2": 36,
+        "vless": 2846,
+        "vmess": 2679,
+        "shadowsocks": 2015,
+        "trojan": 1007,
+        "hysteria2": 42,
         "shadowsocksr": 24,
         "socks": 1,
         "tuic": 1
@@ -77,18 +77,19 @@
       }
     },
     "light": {
-      "unique": 2599,
+      "unique": 2510,
       "broken": 0,
-      "duplicates": 426,
-      "total_fetched": 3025,
+      "duplicates": 503,
+      "total_fetched": 3013,
       "active_sources": 4,
       "protocols": {
-        "vless": 1413,
-        "vmess": 745,
-        "shadowsocks": 198,
-        "trojan": 144,
-        "hysteria2": 95,
-        "shadowsocksr": 4
+        "vless": 1178,
+        "vmess": 806,
+        "trojan": 235,
+        "shadowsocks": 197,
+        "hysteria2": 87,
+        "shadowsocksr": 4,
+        "socks": 3
       },
       "files": {
         "configs_txt": "https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/light/configs.txt",
@@ -103,14 +104,14 @@
     }
   },
   "protocols": {
-    "vless": 4046,
-    "vmess": 3261,
-    "shadowsocks": 2144,
-    "trojan": 1042,
-    "hysteria2": 122,
+    "vless": 3594,
+    "vmess": 3306,
+    "shadowsocks": 2101,
+    "trojan": 1144,
+    "hysteria2": 117,
     "shadowsocksr": 28,
+    "socks": 4,
     "tuic": 1,
-    "socks": 1,
     "hysteria": 0,
     "wireguard": 0,
     "juicity": 0,
@@ -162,5 +163,55 @@
     "unhealthy": 0,
     "health_url": "https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/health.json",
     "health_url_mirror": "https://cdn.jsdelivr.net/gh/0xRadikal/Free-v2ray-Configs@main/health.json"
+  },
+  "cascade_categories": {
+    "verified": {
+      "unique": 964,
+      "criterion": "a real proxied request succeeded in ALL rounds of this run",
+      "files": {
+        "configs_txt": "https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/verified/configs.txt",
+        "configs_txt_mirror": "https://cdn.jsdelivr.net/gh/0xRadikal/Free-v2ray-Configs@main/verified/configs.txt",
+        "configs_base64": "https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/verified/configs_base64.txt",
+        "configs_base64_mirror": "https://cdn.jsdelivr.net/gh/0xRadikal/Free-v2ray-Configs@main/verified/configs_base64.txt",
+        "clash_yaml": "https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/verified/clash.yaml",
+        "clash_yaml_mirror": "https://cdn.jsdelivr.net/gh/0xRadikal/Free-v2ray-Configs@main/verified/clash.yaml",
+        "singbox_json": "https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/verified/singbox.json",
+        "singbox_json_mirror": "https://cdn.jsdelivr.net/gh/0xRadikal/Free-v2ray-Configs@main/verified/singbox.json"
+      }
+    },
+    "fast": {
+      "unique": 699,
+      "criterion": "verified AND median delay across all rounds is under the threshold",
+      "files": {
+        "configs_txt": "https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/fast/configs.txt",
+        "configs_txt_mirror": "https://cdn.jsdelivr.net/gh/0xRadikal/Free-v2ray-Configs@main/fast/configs.txt",
+        "configs_base64": "https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/fast/configs_base64.txt",
+        "configs_base64_mirror": "https://cdn.jsdelivr.net/gh/0xRadikal/Free-v2ray-Configs@main/fast/configs_base64.txt",
+        "clash_yaml": "https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/fast/clash.yaml",
+        "clash_yaml_mirror": "https://cdn.jsdelivr.net/gh/0xRadikal/Free-v2ray-Configs@main/fast/clash.yaml",
+        "singbox_json": "https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/fast/singbox.json",
+        "singbox_json_mirror": "https://cdn.jsdelivr.net/gh/0xRadikal/Free-v2ray-Configs@main/fast/singbox.json"
+      }
+    },
+    "secure": {
+      "unique": 561,
+      "criterion": "verified AND forward secrecy ((EC)DHE via TLS/REALITY/QUIC) AND certificate validation not disabled",
+      "files": {
+        "configs_txt": "https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/secure/configs.txt",
+        "configs_txt_mirror": "https://cdn.jsdelivr.net/gh/0xRadikal/Free-v2ray-Configs@main/secure/configs.txt",
+        "configs_base64": "https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/secure/configs_base64.txt",
+        "configs_base64_mirror": "https://cdn.jsdelivr.net/gh/0xRadikal/Free-v2ray-Configs@main/secure/configs_base64.txt",
+        "clash_yaml": "https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/secure/clash.yaml",
+        "clash_yaml_mirror": "https://cdn.jsdelivr.net/gh/0xRadikal/Free-v2ray-Configs@main/secure/clash.yaml",
+        "singbox_json": "https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/secure/singbox.json",
+        "singbox_json_mirror": "https://cdn.jsdelivr.net/gh/0xRadikal/Free-v2ray-Configs@main/secure/singbox.json"
+      }
+    }
+  },
+  "top100": {
+    "count": 100,
+    "criterion": "verified configs sorted by median delay (fastest first); never padded with untested ones",
+    "url": "https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/top100.txt",
+    "url_mirror": "https://cdn.jsdelivr.net/gh/0xRadikal/Free-v2ray-Configs@main/top100.txt"
   }
 }
