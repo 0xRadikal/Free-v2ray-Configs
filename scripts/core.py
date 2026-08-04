@@ -1385,11 +1385,11 @@ def try_base64_decode(raw: str) -> Optional[str]:
         for encoding in ("utf-8", "latin-1"):
             try:
                 text = decoded_bytes.decode(encoding)
-                non_empty = [l.strip() for l in text.splitlines() if l.strip()]
+                non_empty = [ln.strip() for ln in text.splitlines() if ln.strip()]
                 if not non_empty:
                     continue
                 # هوشمند: هر scheme:// معتبر (نه فقط prefixهای ثابت) شمارش می‌شود
-                valid = [l for l in non_empty if is_proxy_config(l)]
+                valid = [ln for ln in non_empty if is_proxy_config(ln)]
                 if valid and (len(valid) / len(non_empty)) >= 0.20:
                     return text
             except UnicodeDecodeError:
@@ -1650,8 +1650,8 @@ def extract_valid_lines(content: str) -> List[str]:
     if not content:
         return []
     first_real = next(
-        (l.strip() for l in content.splitlines()
-         if l.strip() and not l.strip().startswith("//") and not l.strip().startswith("#")),
+        (ln.strip() for ln in content.splitlines()
+         if ln.strip() and not ln.strip().startswith("//") and not ln.strip().startswith("#")),
         "",
     )
     # اگر اولین خطِ واقعی، کانفیگِ پروکسی نبود → احتمالاً blob base64 است

@@ -50,7 +50,7 @@ import aggregate  # noqa: E402
 #
 # و حساب دقیقاً سر می‌رسد: ۱۳ محلِ نشتی ⇄ ۱۹ پوشهٔ مشاهده‌شده، بدون هیچ
 # موردِ توضیح‌داده‌نشده در هیچ طرف. چهار محلی که پاک‌سازی دارند
-# (`fakexk_`، `f3_owned_`، `f3_empty_` و `mkstemp`ِ خطِ ۹۹۹۲) در فهرستِ نشت
+# (`fakexk_`، `f3_owned_`، `f3_empty_` و `mkstemp`ِ خطِ ۱۰۰۷۳) در فهرستِ نشت
 # **نیستند** و همین، صحتِ اندازه‌گیری را متقابلاً تأیید می‌کند.
 #
 # چرا این یک نقصِ واقعی است و نه سلیقه: سوئیت در CI و روی ماشینِ توسعه‌دهنده
@@ -677,7 +677,8 @@ def test_publish_branch_is_the_default_branch_and_configurable():
     «تاریخِ سورس + دقیقاً یک کامیتِ خروجی» است ⇒ هزینه O(1)).
     پس اینجا الزام می‌کنیم که برنچِ پیش‌فرض `main` باشد، ولی hard-code نباشد.
     """
-    import importlib, os as _os
+    import importlib
+    import os as _os
     import aggregate
 
     assert aggregate.GH_BRANCH == "main", \
@@ -3148,7 +3149,7 @@ class _FakeXk:
         رفتارِ سنجیده‌شدهٔ `--max-passed` (خروجیِ ناقص)
     """
 
-    def __init__(self, csv_text: str = None, rc: int = 0,
+    def __init__(self, csv_text: str | None = None, rc: int = 0,
                  rows_from_input: bool = False) -> None:
         self.csv_text = csv_text
         self.rc = rc
@@ -4135,7 +4136,7 @@ def test_pipeline_matches_the_real_l3_result_contract():
 
     # ۱) شیم باید dict بدهد، مثل منبع
     rows = [_pl_row("vless://x@1.1.1.1:443?security=tls#x")]
-    with _StubL3([rows]) as stub:
+    with _StubL3([rows]):
         out = realtest.test_lines(["vless://x@1.1.1.1:443?security=tls#x"])
     assert isinstance(out["rows"], dict), \
         f"the stub must mimic the real dict shape, got {type(out['rows'])}"
@@ -4808,7 +4809,7 @@ def test_branding_survives_every_adversarial_remark_in_the_text_outputs():
         f"خواستهٔ صریحِ مالک نقض می‌شود. نمونه: {bad[:5]}")
 
     # برندِ رقیب باید **بازنویسی** شود، نه اینکه کنارِ برندِ ما بنشیند.
-    ad = [l for k, l in corpus if k == "vless" and "oneclickvpnkeys" in l][0]
+    ad = [ln for k, ln in corpus if k == "vless" and "oneclickvpnkeys" in ln][0]
     assert "oneclickvpnkeys" not in _e4_remark_of(core.brand_remark(ad)), \
         "تبلیغِ کانالِ رقیب در ریمارکِ منتشرشدهٔ ما باقی مانده است"
 
@@ -4821,7 +4822,7 @@ def test_branding_survives_in_clash_and_singbox_for_the_adversarial_corpus():
     بی‌برندِ کاذب ساخت. قاعده: وقتی ابزارِ سنجش از قالبِ داده ساده‌تر است،
     مرجع، تحلیل‌گرِ رسمی است.
     """
-    branded = [core.brand_remark(l) for _, l in _e4_corpus()]
+    branded = [core.brand_remark(ln) for _, ln in _e4_corpus()]
 
     doc = yaml.safe_load(converters.build_clash_yaml(branded))
     names = [p["name"] for p in doc["proxies"]]
@@ -4843,7 +4844,7 @@ def test_every_output_group_name_carries_the_brand():
     بودنشان از بی‌برند بودنِ یک نود بدتر است. تا پیش از فاز E سه گروه بی‌برند
     بودند: `♻️ Auto` (clash و sing-box) و `🔯 Fallback` (clash).
     """
-    branded = [core.brand_remark(l) for _, l in _e4_corpus()]
+    branded = [core.brand_remark(ln) for _, ln in _e4_corpus()]
 
     doc = yaml.safe_load(converters.build_clash_yaml(branded))
     gnames = [g["name"] for g in doc["proxy-groups"]]
@@ -4872,7 +4873,7 @@ def test_no_group_reference_is_left_dangling():
     می‌جوید که وجود ندارد. برای همین نام‌ها در `converters.GROUP_*` یک‌جا
     تعریف شده‌اند؛ این تست همان قرارداد را قفل می‌کند.
     """
-    branded = [core.brand_remark(l) for _, l in _e4_corpus()]
+    branded = [core.brand_remark(ln) for _, ln in _e4_corpus()]
 
     doc = yaml.safe_load(converters.build_clash_yaml(branded))
     universe = ({p["name"] for p in doc["proxies"]}
@@ -8953,7 +8954,7 @@ def test_zzz_hd_shield_is_inserted_once_per_maximal_run():
                    v.replace("#A", "#B"), core.SHIELD_LINE, "ssr://d",
                    v.replace("#A", "#C")]
     # هیچ خطی گم یا بازچینش نمی‌شود
-    assert [l for l in out if l != core.SHIELD_LINE] == lines
+    assert [ln for ln in out if ln != core.SHIELD_LINE] == lines
 
 
 def test_zzz_hd_shield_is_idempotent_and_respects_existing_comments():
@@ -9170,7 +9171,7 @@ def test_zzz_hdr_block_has_exactly_the_five_documented_keys():
     got = _hd_headers(blk + "vless://x@h:443#n\n")
     assert set(got) == set(core.HIDDIFY_HEADER_KEYS), (set(got), core.HIDDIFY_HEADER_KEYS)
     # ترتیبِ اعلام‌شده هم باید همان ترتیبِ واقعیِ خطوط باشد
-    assert [l.split(":", 1)[0].lstrip("#") for l in lines] == list(core.HIDDIFY_HEADER_KEYS)
+    assert [ln.split(":", 1)[0].lstrip("#") for ln in lines] == list(core.HIDDIFY_HEADER_KEYS)
 
 
 def test_zzz_hdr_values_are_what_hiddify_will_actually_show():
@@ -9269,7 +9270,8 @@ def test_zzz_hdr_aggregate_writes_headers_into_txt_b64_yaml_but_not_json():
         decoded = base64.b64decode(raw_b64).decode("utf-8")
         assert decoded.startswith("#profile-title:"), decoded[:80]
         # base64 و متن نباید در کانفیگ‌ها واگرا شوند
-        assert [l for l in decoded.split("\n") if l.startswith(("vless://", "trojan://", "ss://"))] == lines
+        assert [ln for ln in decoded.split("\n")
+                if ln.startswith(("vless://", "trojan://", "ss://"))] == lines
 
         y = open(os.path.join(d, "all", "clash.yaml"), encoding="utf-8").read()
         assert set(_hd_headers(y)) >= set(core.HIDDIFY_HEADER_KEYS)
@@ -9366,7 +9368,7 @@ def test_zzz_hdr_header_does_not_change_the_config_payload():
     with tempfile.TemporaryDirectory() as d:
         pipeline.write_buckets(d, _hdr_buckets(lines))
         body = open(os.path.join(d, "verified", "configs.txt"), encoding="utf-8").read()
-        payload = [l for l in body.split("\n") if l and not l.startswith("#")]
+        payload = [ln for ln in body.split("\n") if ln and not ln.startswith("#")]
         assert payload == lines, payload
 
 
@@ -9517,7 +9519,9 @@ def test_zzz_idx_primary_links_are_raw_and_outnumber_mirrors_in_real_shape():
 
 def test_zzz_idx_merge_is_failsafe_and_never_raises():
     """مثلِ `merge_health`: نبود/خرابیِ فایل نباید کلِ آبشار را بشکند."""
-    import contextlib, io, tempfile
+    import contextlib
+    import io
+    import tempfile
     def _warned(fn):
         buf = io.StringIO()
         with contextlib.redirect_stderr(buf):
@@ -11506,9 +11510,9 @@ def test_zzz_f6_no_test_creates_an_unregistered_temp_dir() -> None:
 
     ★ درسِ سنجیده‌شده در نوشتنِ همین تست: نسخهٔ اولِ این نگهبان **دو موردِ
     بی‌گناه** را متهم کرد، چون تحلیلگرش فقط توابعِ سطحِ-بالا را می‌دید:
-      • `_FakeXk.__enter__` (خطِ ۳۱۶۲) — یک متدِ کلاس است، و پاک‌سازی‌اش در
+      • `_FakeXk.__enter__` (خطِ ۳۱۶۳) — یک متدِ کلاس است، و پاک‌سازی‌اش در
         `__exit__` همان کلاس با `rmtree` انجام می‌شود.
-      • `_f4_tmp` (خطِ ۱۰۰۶۹) — یک کمکی است که مسیر را **برمی‌گرداند** و هر
+      • `_f4_tmp` (خطِ ۱۰۰۷۳) — یک کمکی است که مسیر را **برمی‌گرداند** و هر
         ۹ فراخوانش در فراخوان `os.unlink(p)` دارند.
     اندازه‌گیریِ واقعی هم همین را تأیید کرد: در اجرای پیش از درمان **صفر
     فایل** جا نمانده بود (۱۹ پوشه، ولی هیچ فایلی). پس این تست باید
