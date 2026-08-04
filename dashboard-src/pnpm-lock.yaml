@@ -4,6 +4,9 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+overrides:
+  minimist: ^1.2.8
+
 importers:
 
   .:
@@ -2116,11 +2119,8 @@ packages:
     resolution: {integrity: sha512-PXwfBhYu0hBCPw8Dn0E+WDYb7af3dSLVWKi3HGv84IdF4TyFoC0ysxFd0Goxw7nSv4T/PzEJQxsYsEiFCKo2BA==}
     engines: {node: '>=8.6'}
 
-  minimist@0.0.10:
-    resolution: {integrity: sha512-iotkTvxc+TwOm5Ieim8VnSNvCDjCK9S8G3scJ50ZthspSxa7jx50jkhYduuAtAjvfDUwSgOwf8+If99AlOEhyw==}
-
-  minimist@1.1.3:
-    resolution: {integrity: sha512-2RbeLaM/Hbo9vJ1+iRrxzfDnX9108qb2m923U+s+Ot2eMey0IYGdSjzHmvtg2XsxoCuMnzOMw7qc573RvnLgwg==}
+  minimist@1.2.8:
+    resolution: {integrity: sha512-2yyAR8qBkN3YuheJanUpWC5U3bb5osDywNB8RzDVlDwDHbocAJveqqj1u8+SVD7jkWT4yvsHCpWqqWqAxb0zCA==}
 
   msgpackr-extract@3.0.4:
     resolution: {integrity: sha512-4kmO/MdyUIkLIvTPr8VHLil4AtoKIoniWPIEk5+CDy0xnWC84azhSFmuJ7PxZdsYtiP5kEeQsORAVIeMgxT+Hw==}
@@ -4422,7 +4422,7 @@ snapshots:
 
   html-inline@1.2.0:
     dependencies:
-      minimist: 1.1.3
+      minimist: 1.2.8
       through2: 0.6.5
       trumpet: 1.7.2
 
@@ -4431,7 +4431,7 @@ snapshots:
       cssauron: 1.4.0
       duplexer2: 0.0.2
       inherits: 2.0.4
-      minimist: 0.0.10
+      minimist: 1.2.8
       readable-stream: 1.1.14
       split: 0.3.3
       stream-splicer: 1.3.2
@@ -4440,7 +4440,7 @@ snapshots:
   html-tokenize@1.2.5:
     dependencies:
       inherits: 2.0.4
-      minimist: 0.0.10
+      minimist: 1.2.8
       readable-stream: 1.0.34
       through2: 0.4.2
 
@@ -4551,9 +4551,7 @@ snapshots:
       braces: 3.0.3
       picomatch: 2.3.2
 
-  minimist@0.0.10: {}
-
-  minimist@1.1.3: {}
+  minimist@1.2.8: {}
 
   msgpackr-extract@3.0.4:
     dependencies:
