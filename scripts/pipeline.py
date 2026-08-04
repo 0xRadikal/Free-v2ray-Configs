@@ -192,7 +192,7 @@ def _rows_of(result: Dict[str, Any]) -> List[Dict[str, str]]:
         f"unexpected shape for the L3 'rows' field: {type(rows).__name__}")
 
 
-def run_l3_round(lines: Sequence[str], rounds: int = None,
+def run_l3_round(lines: Sequence[str], rounds: Optional[int] = None,
                  **kwargs: Any) -> Dict[str, Any]:
     """
     L3 را `rounds` بار روی همان ورودی اجرا می‌کند و پایداری را می‌سنجد.
@@ -264,8 +264,8 @@ def run_l3_round(lines: Sequence[str], rounds: int = None,
 
 
 def build_buckets(round_result: Dict[str, Any],
-                  fast_ms: int = None,
-                  top_n: int = None) -> Dict[str, Any]:
+                  fast_ms: Optional[int] = None,
+                  top_n: Optional[int] = None) -> Dict[str, Any]:
     """
     از نتیجهٔ دور، سه سبد + `top100` را می‌سازد.
 
@@ -646,8 +646,8 @@ def _pct(part: int, whole: int) -> float:
 
 
 def run_pipeline(lines: Iterable[str], out_dir: str,
-                 rounds: int = None, fast_ms: int = None,
-                 top_n: int = None, **kwargs: Any) -> Dict[str, Any]:
+                 rounds: Optional[int] = None, fast_ms: Optional[int] = None,
+                 top_n: Optional[int] = None, **kwargs: Any) -> Dict[str, Any]:
     """آبشارِ کامل: L0/L1 → L2 → L3×n → سبدها → فایل‌ها → health.json."""
     lines = list(lines)
     t_all = time.time()

@@ -421,10 +421,10 @@ def _non_blank_count(path: str) -> int:
 
 def build_argv(in_path: str, out_path: str, *,
                binary: str,
-               test_url: str = None,
-               threads: int = None,
-               mdelay_ms: int = None,
-               timeout_ms: int = None,
+               test_url: Optional[str] = None,
+               threads: Optional[int] = None,
+               mdelay_ms: Optional[int] = None,
+               timeout_ms: Optional[int] = None,
                max_passed: int = 0,
                retries: int = 0) -> List[str]:
     """
@@ -454,15 +454,15 @@ def build_argv(in_path: str, out_path: str, *,
 
 
 def run_test(in_path: str, *,
-             out_path: str = None,
-             binary: str = None,
-             test_url: str = None,
-             threads: int = None,
-             mdelay_ms: int = None,
-             timeout_ms: int = None,
+             out_path: Optional[str] = None,
+             binary: Optional[str] = None,
+             test_url: Optional[str] = None,
+             threads: Optional[int] = None,
+             mdelay_ms: Optional[int] = None,
+             timeout_ms: Optional[int] = None,
              max_passed: int = 0,
              retries: int = 0,
-             hard_timeout: int = None) -> Dict[str, Any]:
+             hard_timeout: Optional[int] = None) -> Dict[str, Any]:
     """
     L3 را روی یک فایلِ ورودی اجرا می‌کند و نتیجهٔ داوری‌شده را برمی‌گرداند.
 

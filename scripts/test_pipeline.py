@@ -12084,5 +12084,297 @@ def test_zzz_p6_geo_reports_unknown_country_as_none_not_as_a_placeholder():
             "قرار بود جلویش را بگیرد")
 
 
+
+
+# ── F-2 ─────────────────────────────────────────────────────────────────────
+# «امضایی که دروغ می‌گوید» — پارامترِ پیش‌فرض‌ِ None با نوعِ ناپذیرندهٔ None
+# ────────────────────────────────────────────────────────────────────────────
+
+_F2_PROD_MODULES = (
+    "core.py", "geo.py", "state.py", "filters.py", "reachability.py",
+    "realtest.py", "pipeline.py", "aggregate.py", "validate.py",
+    "sources.py", "converters.py",
+)
+
+
+def _f2_scripts_dir() -> str:
+    return os.path.dirname(os.path.abspath(__file__))
+
+
+def _f2_admits_none(node) -> bool:
+    """
+    آیا این حاشیه‌نویسیِ نوع، `None` را می‌پذیرد؟
+
+    این تابع **همان** منطقِ سرشماری است که تصمیمِ F-2 بر آن سوار شد؛ عمداً
+    اینجا تکرار شده تا آزمون به هیچ ابزارِ بیرونی (ruff/mypy) وابسته نباشد.
+    نکته‌های سنجیده‌شده که هرکدام یک مثبتِ کاذب را حذف می‌کنند:
+      • `Optional[X]`            → می‌پذیرد
+      • `Union[X, None]`         → می‌پذیرد (باید داخلِ tuple را گشت)
+      • `X | None`               → می‌پذیرد (BinOp/BitOr، سبکِ PEP 604)
+      • `Any` و `object`         → هر چیزی، پس `None` هم
+      • حاشیه‌نویسیِ رشته‌ای     → باید **بازگشتی** تجزیه شود، وگرنه
+        `"Optional[int]"` به‌اشتباه «ناپذیرنده» شمرده می‌شد
+    """
+    import ast as _ast
+    if node is None:
+        return True
+    if isinstance(node, _ast.Constant) and node.value is None:
+        return True
+    if isinstance(node, _ast.Name):
+        return node.id in ("Any", "object")
+    if isinstance(node, _ast.Attribute):
+        return node.attr in ("Any",)
+    if isinstance(node, _ast.BinOp) and isinstance(node.op, _ast.BitOr):
+        return (_f2_admits_none(node.left)
+                or _f2_admits_none(node.right))
+    if isinstance(node, _ast.Subscript):
+        base = node.value
+        name = (base.id if isinstance(base, _ast.Name)
+                else getattr(base, "attr", ""))
+        if name == "Optional":
+            return True
+        if name == "Union":
+            sl = node.slice
+            elts = sl.elts if isinstance(sl, _ast.Tuple) else [sl]
+            return any(_f2_admits_none(e) for e in elts)
+        return False
+    if isinstance(node, _ast.Constant) and isinstance(node.value, str):
+        try:
+            inner = _ast.parse(node.value, mode="eval").body
+        except SyntaxError:
+            return False
+        return _f2_admits_none(inner)
+    return False
+
+
+def _f2_implicit_optional_sites(path: str):
+    """
+    فهرستِ `(نامِ تابع، نامِ پارامتر، شمارهٔ خط)` برای هر پارامتری که
+    پیش‌فرضش literal `None` است ولی نوعش `None` را نمی‌پذیرد.
+
+    سه دامِ اندازه‌گیری‌شده که این پیاده‌سازی از آن‌ها پرهیز می‌کند:
+      ۱) توابعِ **تودرتو** هم باید دیده شوند ⇒ `ast.walk` نه `tree.body`
+      ۲) `posonlyargs`/`args`/`kwonlyargs` هر یک فهرستِ پیش‌فرضِ خودشان را
+         دارند و ترتیبِ چیدنشان یکسان نیست؛ `defaults` از **انتها** تراز
+         می‌شود ولی `kw_defaults` هم‌طولِ `kwonlyargs` است و می‌تواند
+         `None` (یعنی «پیش‌فرض ندارد») داشته باشد
+      ۳) پارامترِ بی‌حاشیه‌نویسی (`x=None`) موضوعِ F-2 نیست — دروغی گفته
+         نشده، فقط چیزی گفته نشده
+    """
+    import ast as _ast
+    with open(path, encoding="utf-8") as handle:
+        tree = _ast.parse(handle.read())
+    out = []
+    for fn in _ast.walk(tree):
+        if not isinstance(fn, (_ast.FunctionDef, _ast.AsyncFunctionDef)):
+            continue
+        arguments = fn.args
+        groups = []
+        positional = list(arguments.posonlyargs) + list(arguments.args)
+        if arguments.defaults:
+            groups.append((positional[len(positional) - len(arguments.defaults):],
+                           arguments.defaults))
+        if arguments.kwonlyargs:
+            groups.append((arguments.kwonlyargs, arguments.kw_defaults))
+        for args, defaults in groups:
+            for arg, default in zip(args, defaults):
+                if default is None:
+                    continue
+                if not (isinstance(default, _ast.Constant)
+                        and default.value is None):
+                    continue
+                if arg.annotation is None:
+                    continue
+                if _f2_admits_none(arg.annotation):
+                    continue
+                out.append((fn.name, arg.arg, arg.lineno))
+    return out
+
+
+def test_zzz_f2_no_production_signature_lies_about_accepting_none() -> None:
+    """
+    ★ ناوردای F-2: هیچ امضای تولیدی نباید بگوید «`int` می‌گیرم» و بعد
+    `None` را پیش‌فرض بگذارد.
+
+    این چرا **باگ** است و نه سلیقه: PEP 484 میان‌بُرِ «Optional ضمنی» را
+    صریحاً پس گرفت. امروز `def f(x: int = None)` یعنی «تنها `int`»، و
+    پیش‌فرضی که خودش `None` است نوعِ اعلام‌شده را **نقض** می‌کند. اثرِ
+    اجراییِ حاشیه‌نویسی صفر است، پس این یک نقصِ **مستندسازی** است — ولی
+    نقصی که هم mypy (`--no-implicit-optional`) هم ruff (`RUF013`) آن را
+    خطا می‌شمارند و هم خواننده را به این باور می‌رساند که «این پارامتر
+    هرگز None نیست»، در حالی که پیش‌فرضش همان None است.
+
+    اندازه‌گیریِ پیش از درمان (۲۰ مورد، هر سه با ruff هم تأیید شد):
+        reachability.py  ۳   |   realtest.py  ۱۱   |   pipeline.py  ۶
+    و هشت ماژولِ دیگر صفر.
+
+    ⚠️ دامی که در همین آزمون گرفته شد و ثبت می‌شود تا تکرار نشود: نسخهٔ
+       اولِ این ناوردا آستانهٔ ضدِ خالی‌بودن را «> ۲۵۰ تابع» گذاشته بود —
+       عددی که **حدس** بود نه اندازه‌گیری. اجرای آزمایشی همان‌جا شکست و
+       عددِ واقعی را داد. اندازه‌گیریِ سنجیده‌شدهٔ همین یازده ماژول:
+           توابع (با ast.walk، شاملِ تودرتوها) = ۱۷۹
+           توابعِ سطحِ ماژول                    = ۱۶۹
+           پارامترهای دارای پیش‌فرض             = ۴۲   ← چیزی که سرشماری
+                                                        واقعاً روی آن حلقه
+                                                        می‌زند
+       پس آستانه بر پایهٔ **هر دو** سنجه بسته می‌شود و با فاصلهٔ ایمن زیرِ
+       مقدارِ اندازه‌گیری‌شده، تا اگر سرشماری روزی از کار بیفتد (مثلاً
+       `tree.body` جای `ast.walk`) بلند بشکند، نه خاموش سبز بماند.
+    """
+    import ast as _ast
+    scripts = _f2_scripts_dir()
+    seen_functions = 0
+    seen_defaults = 0
+    offenders = {}
+    for name in _F2_PROD_MODULES:
+        path = os.path.join(scripts, name)
+        assert os.path.isfile(path), f"production module missing: {name}"
+        with open(path, encoding="utf-8") as handle:
+            tree = _ast.parse(handle.read())
+        for node in _ast.walk(tree):
+            if not isinstance(node, (_ast.FunctionDef, _ast.AsyncFunctionDef)):
+                continue
+            seen_functions += 1
+            seen_defaults += len(node.args.defaults)
+            seen_defaults += sum(1 for d in node.args.kw_defaults
+                                 if d is not None)
+        sites = _f2_implicit_optional_sites(path)
+        if sites:
+            offenders[name] = sites
+
+    # ضدِ خالی‌بودن — با اعدادِ **اندازه‌گیری‌شده** (۱۷۹ تابع، ۴۲ پیش‌فرض)،
+    # نه با عددِ دلخواه. آستانه‌ها با فاصلهٔ ایمن زیرِ آن‌ها بسته شده‌اند.
+    assert seen_functions >= 150, (
+        f"anti-vacuity: only {seen_functions} functions scanned across "
+        f"{len(_F2_PROD_MODULES)} modules (measured 179 when written); "
+        f"the census must have broken")
+    assert seen_defaults >= 30, (
+        f"anti-vacuity: only {seen_defaults} parameters-with-a-default were "
+        f"examined (measured 42 when written); the census loop that F-2 "
+        f"depends on must have broken")
+
+    assert not offenders, (
+        "implicit-Optional signatures are back (PEP 484 revoked that "
+        "shorthand; ruff RUF013 / mypy --no-implicit-optional flag it): "
+        + "; ".join(f"{mod}: " + ", ".join(
+            f"{fn}({arg}) @L{ln}" for fn, arg, ln in sites)
+            for mod, sites in sorted(offenders.items())))
+
+
+def test_zzz_f2_optional_is_imported_wherever_it_is_used() -> None:
+    """
+    درمانِ F-2 نامِ `Optional` را به سه فایل اضافه کرد؛ اگر روزی کسی
+    importِ `typing` را «تمیز» کند، همهٔ آن حاشیه‌نویسی‌ها به نامِ ناموجود
+    ارجاع می‌دهند.
+
+    چرا این سکوت می‌کند و نه بلند: هر سه ماژول
+    `from __future__ import annotations` دارند (سنجیده شد)، پس حاشیه‌نویسی
+    **تنبل** است و در زمانِ تعریفِ تابع ارزیابی نمی‌شود — یعنی حذفِ
+    `Optional` هیچ خطایی در import نمی‌دهد و تنها زمانی می‌شکند که کسی
+    `typing.get_type_hints` بزند. پس ناوردا باید ایستا سنجیده شود.
+    """
+    import ast as _ast
+    scripts = _f2_scripts_dir()
+    for name in _F2_PROD_MODULES:
+        path = os.path.join(scripts, name)
+        with open(path, encoding="utf-8") as handle:
+            source = handle.read()
+        tree = _ast.parse(source)
+        uses_optional = any(
+            isinstance(n, _ast.Subscript)
+            and isinstance(n.value, _ast.Name)
+            and n.value.id == "Optional"
+            for n in _ast.walk(tree))
+        if not uses_optional:
+            continue
+        imported = set()
+        for node in tree.body:
+            if isinstance(node, _ast.ImportFrom) and node.module == "typing":
+                imported.update(a.asname or a.name for a in node.names)
+        assert "Optional" in imported, (
+            f"{name} annotates with Optional[...] but does not import it "
+            f"from typing (imported: {sorted(imported)})")
+
+
+def test_zzz_f2_the_defaults_are_normalised_not_merely_annotated() -> None:
+    """
+    ★ مهم‌ترین آزمونِ F-2، و دلیلِ اینکه این بند «تغییرِ آرایشی» نیست.
+
+    حاشیه‌نویسی در پایتون هیچ اثرِ اجرایی ندارد؛ پس عوض‌کردنِ `int` به
+    `Optional[int]` به‌تنهاییِ خود هیچ چیزی را ایمن نمی‌کند. پرسشی که
+    واقعاً اهمیت دارد این است: «اگر با پیش‌فرض صدا زده شود، بدنه با آن
+    `None` چه می‌کند؟»
+
+    پیش از تغییر، هر ۲۰ مورد اجرا شد (نه خوانده شد):
+      • ۱۴ مورد در بدنه با `is None` / `is not None` / `or` عادی‌سازی
+        می‌شوند ⇒ حاشیه‌نویسی تنها **دروغ** می‌گفت
+      • ۶ مورد صرفاً به تابعِ دیگری **پاس** داده می‌شوند؛ هر شش گیرنده
+        خودش عادی‌سازی می‌کند:
+            resolve_binary  → `name = binary or XK_BIN`
+            build_argv      → `... if x is not None else <default>`
+            run_l3_round    → `if rounds is None: rounds = L3_ROUNDS`
+            build_buckets   → `if fast_ms is None: ...` / `if top_n is None: ...`
+      • صفر مورد `TypeError`/`AttributeError` داد
+
+    این آزمون همان را **رفتاری** قفل می‌کند: با پیش‌فرض صدا می‌زند و
+    می‌خواهد استثنا از جنسِ *دامنه* باشد، نه `TypeError`. اگر روزی کسی
+    نگهبانِ `is None` را بردارد، `None` به `int()`/مقایسه/`argv` می‌رسد و
+    این آزمون بلند می‌شکند.
+    """
+    # ۱) توابعِ خالص: باید بی‌استثنا کار کنند
+    assert reachability.headroom_warning(None) is None or isinstance(
+        reachability.headroom_warning(None), str), (
+        "headroom_warning(None) must normalise concurrency, not crash")
+
+    empty_l2 = reachability.check_endpoints([], None, None)
+    assert isinstance(empty_l2, dict) and "open" in empty_l2, (
+        "check_endpoints([], None, None) must normalise both defaults")
+
+    empty_round = {"delays": {}, "tls": {}, "stable": [], "ever_ok": [],
+                   "rounds": 1, "per_run_ok": [0], "flaky_pct": 0.0}
+    buckets = pipeline.build_buckets(dict(empty_round), None, None)
+    assert isinstance(buckets, dict) and "stats" in buckets, (
+        "build_buckets(round, None, None) must normalise fast_ms/top_n")
+
+    # ۲) `run_l3_round` با ورودیِ تهی: استثنا باید `EmptyInput` باشد.
+    #    اگر عادی‌سازیِ `rounds` برداشته شود، `rounds < 1` روی `None`
+    #    اول `TypeError` می‌دهد — یعنی *هویتِ* استثنا سنجهٔ ما است.
+    try:
+        pipeline.run_l3_round([], None)
+    except realtest.EmptyInput:
+        pass
+    except TypeError as exc:                      # pragma: no cover
+        raise AssertionError(
+            f"rounds=None reached the comparison unnormalised: {exc}") from exc
+    else:                                         # pragma: no cover
+        raise AssertionError("run_l3_round([]) must raise EmptyInput")
+
+    # ۳) `build_argv` با هر چهار پیش‌فرض: هیچ `None` نباید به خطِ فرمان برسد
+    argv = realtest.build_argv("in.txt", "out.csv", binary="xk",
+                               test_url=None, threads=None,
+                               mdelay_ms=None, timeout_ms=None)
+    assert all(isinstance(token, str) for token in argv), (
+        f"a non-str leaked into argv: {argv}")
+    assert not [t for t in argv if "None" in t], (
+        f"a literal 'None' leaked into the command line: {argv}")
+    # ضدِ خالی‌بودن: پرچم‌ها باید واقعاً با مقدارِ پیش‌فرض پر شده باشند
+    for flag in ("-t", "-d", "--timeout", "-u"):
+        assert flag in argv, f"{flag} missing from argv: {argv}"
+        value = argv[argv.index(flag) + 1]
+        assert value and value != "None", (
+            f"{flag} got an empty/None value: {value!r}")
+
+    # ۴) `resolve_binary(None)` باید به `XK_BIN` برگردد، نه `TypeError`
+    try:
+        realtest.resolve_binary(None)
+    except realtest.XrayKnifeMissing as exc:
+        assert "None" not in str(exc), (
+            f"binary=None was not normalised before the lookup: {exc}")
+    except TypeError as exc:                      # pragma: no cover
+        raise AssertionError(
+            f"resolve_binary(None) must normalise via `or XK_BIN`: {exc}"
+        ) from exc
+
+
 if __name__ == "__main__":
     sys.exit(_run_all())

@@ -336,8 +336,8 @@ async def _run_tcp(targets: Sequence[Tuple[Tuple[str, int], Tuple[str, ...]]],
 # ──────────────────────────────────────────────────────────────────────────────
 
 def check_endpoints(endpoints: Sequence[Tuple[str, int]],
-                    concurrency: int = None,
-                    timeout: float = None) -> Dict[str, Any]:
+                    concurrency: Optional[int] = None,
+                    timeout: Optional[float] = None) -> Dict[str, Any]:
     """
     L2 روی فهرستی از `(host, port)`.
 
@@ -455,7 +455,7 @@ def _soft_nofile() -> int:
         return -1
 
 
-def headroom_warning(concurrency: int = None) -> Optional[str]:
+def headroom_warning(concurrency: Optional[int] = None) -> Optional[str]:
     """اگر conc به سقفِ fd نزدیک باشد، متنِ هشدار؛ وگرنه None."""
     conc = int(concurrency or CONCURRENCY)
     soft = _soft_nofile()
