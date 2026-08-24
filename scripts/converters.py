@@ -1000,6 +1000,53 @@ _CLASH_NETWORK_MAP: Dict[str, str] = {
 _SINGBOX_TRANSPORTS: frozenset = frozenset({"ws", "grpc", "http", "httpupgrade", "quic"})
 
 
+# ──────────────────────────────────────────────────────────────────────────────
+# ترمیمِ percent-escapeِ ناقص در `path`ِ transport
+# ──────────────────────────────────────────────────────────────────────────────
+#
+# حادثهٔ واقعی (۲۰۲۶-۰۸-۲۴، ۱۸:۱۴ UTC تا ۱۹:۳۸ UTC — ۹ اجرای پشت‌سرهم fail):
+#   FATAL initialize outbound[6284]: create client transport:
+#         ws: parse path: invalid URL escape "%"
+# یک نود از ۸٬۷۷۵ نود، `path=%` داشت (منبعِ بالادست `path=%25` فرستاده بود و
+# `parse_qs` آن را — درست و مطابق RFC — به `%` تک‌بایتی decode می‌کرد).
+#
+# چرا این یک نود کلِ خروجی را زمین می‌زد: در sing-box، `ws`/`httpupgrade`/`http`
+# مسیر را با `url.Parse` می‌خوانند و Go هر `%` که دو رقمِ hex پس از خود نداشته
+# باشد را `invalid URL escape` می‌داند. این خطا **در زمانِ بارگذاری** رخ می‌دهد،
+# پس `sing-box check` کلِ سند را رد می‌کند و ۸٬۷۷۴ نودِ سالمِ دیگر هم با آن
+# می‌روند. دروازهٔ اعتبارسنجی (عامدانه fail-CLOSED) هم انتشار را می‌بست ⇒ مخزن
+# ۱ ساعت و ۲۴ دقیقه بی‌به‌روزرسانی ماند.
+#
+# چرا «ترمیم» و نه «حذفِ نود» — سنجشِ زنده با هر دو باینریِ پین‌شده:
+#   • sing-box 1.13.14 : `path:"%"` → FATAL در load (کلِ فایل رد)
+#   • mihomo v1.19.29  : `mihomo -t` **قبول** می‌کند، ولی در زمانِ اتصال
+#       «connect error: parse url % error: invalid URL escape "%"» می‌دهد
+#       ⇒ نود در mihomo هم عملاً مرده است، فقط بی‌صدا.
+# پس این نود امروز در **هیچ** کلاینتی کار نمی‌کند و ترمیم چیزی را خراب نمی‌کند؛
+# فقط یک نودِ مرده را زنده و ۸٬۷۷۴ نودِ سالم را از گروگان آزاد می‌کند.
+#
+# قاعده: `%` که دو رقمِ hex در پی ندارد → `%25` (خودِ percent، مطابق RFC 3986
+# §2.1). این تبدیل **بی‌اتلاف و idempotent** است: کلاینت با unquote دقیقاً همان
+# بایتِ `%`ِ اصلی را بازمی‌سازد، و اجرای دوباره روی خروجی آن را تغییر نمی‌دهد
+# (چون `%25` خودش یک escapeِ معتبر است). `%2F`، `%20`، `%41` و هر escapeِ
+# معتبرِ دیگر **دست‌نخورده** می‌مانند — یعنی مسیرهای سالم بایت‌به‌بایت ثابتند.
+#
+# سنجشِ زنده روی همان پیکرهٔ ۸٬۷۷۵ نودیِ خطاساز (artifactِ اجرای ۳۲۷۶۸۸۸۶۸۸۰):
+# تنها ۱ مسیر ترمیم شد و پس از آن `sing-box check` کلِ سند را با rc=0 پذیرفت.
+# هر ۱۸ مسیرِ نمونه (معتبر و ناقص) پس از ترمیم در ws/httpupgrade/http در
+# sing-box و در mihomo قبول شدند.
+_BAD_PCT_ESCAPE_RE = re.compile(r"%(?![0-9A-Fa-f]{2})")
+
+
+def _safe_transport_path(raw: Any) -> str:
+    """`path`ِ transport را به یک URL-pathِ معتبر برای Go تبدیل می‌کند.
+
+    هر `%`ِ بدونِ دو رقمِ hex به `%25` بازنویسی می‌شود. بی‌اتلاف و idempotent؛
+    مسیرهایی که از قبل معتبرند بدونِ هیچ تغییری برمی‌گردند.
+    """
+    return _BAD_PCT_ESCAPE_RE.sub("%25", raw if isinstance(raw, str) else "")
+
+
 def _clash_network(raw: str) -> str:
     return _CLASH_NETWORK_MAP.get((raw or "").lower(), "tcp")
 
@@ -1031,7 +1078,10 @@ def _clash_transport_opts(p: Dict[str, Any], out: Dict[str, Any]) -> None:
     raw = (p.get("network") or "").lower()
     net = _clash_network(raw)
     host = p.get("host") or p.get("sni") or ""
-    path = p.get("path") or "/"
+    # قرینهٔ sing-box. mihomo این را در `-t` قبول می‌کند ولی در زمانِ اتصال
+    # «parse url % error: invalid URL escape» می‌دهد ⇒ نودِ بی‌صدا مرده. پس همان
+    # ترمیم این‌جا هم لازم است، وگرنه Clash نودی را منتشر می‌کند که وصل نمی‌شود.
+    path = _safe_transport_path(p.get("path")) or "/"
     out["network"] = net
 
     if net == "ws":
@@ -1350,7 +1400,10 @@ def _singbox_transport(p: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     """
     raw = (p.get("network") or "").lower()
     host = p.get("host") or p.get("sni") or ""
-    path = p.get("path") or "/"
+    # ترمیمِ percent-escapeِ ناقص: در sing-box، ws/httpupgrade/http مسیر را با
+    # `url.Parse` می‌خوانند و یک `%`ِ تنها **کلِ سند** را رد می‌کند (نه فقط این
+    # نود را). توضیحِ کاملِ حادثه و سنجش‌ها بالای `_safe_transport_path`.
+    path = _safe_transport_path(p.get("path")) or "/"
 
     if raw in ("", "tcp", "raw", "none"):
         return None                      # بدون transport

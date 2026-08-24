@@ -20,6 +20,7 @@ from __future__ import annotations
 import base64
 import json
 import os
+import re
 import sys
 import urllib.parse
 
@@ -12676,6 +12677,87 @@ def test_zzz_f2_the_defaults_are_normalised_not_merely_annotated() -> None:
         raise AssertionError(
             f"resolve_binary(None) must normalise via `or XK_BIN`: {exc}"
         ) from exc
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# رگرسیونِ حادثهٔ ۲۰۲۶-۰۸-۲۴ — `%`ِ تنها در `path` کلِ خروجی را زمین می‌زد
+# ══════════════════════════════════════════════════════════════════════════════
+#
+# چه شد: ۹ اجرای پشت‌سرهم fail شد و مخزن ۱ ساعت و ۲۴ دقیقه به‌روزرسانی نشد،
+# چون **یک** نود از ۸٬۷۷۵ نود `path=%` داشت و sing-box کلِ سند را رد می‌کرد:
+#     FATAL initialize outbound[6284]: create client transport:
+#           ws: parse path: invalid URL escape "%"
+# در Go هر `%` که دو رقمِ hex در پی نداشته باشد، `url.Parse` را می‌شکند؛ و چون
+# این خطا در **بارگذاری** رخ می‌دهد، ۸٬۷۷۴ نودِ سالمِ دیگر هم گروگان می‌شدند.
+
+
+def test_zzz_incident_20260824_lone_percent_in_path_cannot_sink_the_document():
+    """`%`ِ ناقص باید ترمیم شود (نه نودِ سالم را با خود ببرد)، در هر دو خروجی."""
+    # ── ۱) ترمیم بی‌اتلاف و idempotent است ──────────────────────────────────
+    for raw, want in (
+        ("%", "%25"),            # همان حادثهٔ واقعی
+        ("/a%", "/a%25"),
+        ("/a%2", "/a%252"),      # escapeِ نصفه
+        ("%%", "%25%25"),
+        ("100%", "100%25"),
+        ("/50%off", "/50%25off"),
+        ("/a%GG", "/a%25GG"),    # دو نویسهٔ غیرِ hex
+        # escapeهای **معتبر** باید بایت‌به‌بایت دست‌نخورده بمانند
+        ("%25", "%25"), ("%2F", "%2F"), ("%41", "%41"), ("/a%20b", "/a%20b"),
+        ("/a%2fb", "/a%2fb"), ("/", "/"), ("", ""), ("/ws?ed=2048", "/ws?ed=2048"),
+    ):
+        got = converters._safe_transport_path(raw)
+        assert got == want, f"{raw!r} → {got!r}، انتظار {want!r}"
+        assert converters._safe_transport_path(got) == got, \
+            f"ترمیم idempotent نیست: {raw!r} → {got!r} → " \
+            f"{converters._safe_transport_path(got)!r}"
+    # ورودیِ غیرِ رشته نباید استثنا بدهد
+    assert converters._safe_transport_path(None) == ""
+
+    # ── ۲) هیچ transportِ sing-boxی نباید `%`ِ ناقص بیرون بدهد ──────────────
+    for net in ("ws", "websocket", "httpupgrade", "h2", "http"):
+        tr = converters._singbox_transport({"network": net, "path": "%"})
+        assert tr, f"{net} → {tr!r}"
+        paths = tr["path"] if isinstance(tr["path"], list) else [tr["path"]]
+        for pv in paths:
+            assert not _BAD_PCT.search(pv), f"{net} مسیرِ خراب داد: {pv!r}"
+
+    # ── ۳) قرینهٔ Clash: mihomo این را در `-t` قبول می‌کند ولی هنگامِ اتصال
+    #      «parse url % error: invalid URL escape» می‌دهد ⇒ نودِ بی‌صدا مرده.
+    for net, key in (("ws", "ws-opts"), ("httpupgrade", "ws-opts"),
+                     ("h2", "h2-opts"), ("http", "http-opts")):
+        out: dict = {}
+        converters._clash_transport_opts({"network": net, "path": "%"}, out)
+        pv = out[key]["path"]
+        for one in (pv if isinstance(pv, list) else [pv]):
+            assert not _BAD_PCT.search(one), f"clash/{net} مسیرِ خراب داد: {one!r}"
+
+    # ── ۴) آزمونِ سرتاسری روی همان خطِ واقعیِ حادثه ─────────────────────────
+    # منبعِ بالادست `path=%25` می‌فرستد و `parse_qs` آن را به `%` decode می‌کند —
+    # یعنی این خط بی‌هیچ دست‌کاری، دقیقاً همان بحران را بازتولید می‌کند.
+    line = ("vless://f798a2c4-c51b-409d-b349-ca8455b36796@188.114.97.4:8443"
+            "?type=ws&security=tls&sni=chopin.adaspoloandco.com&path=%25"
+            "#CA%20%F0%9F%87%A8%F0%9F%87%A6%20%7C%20%40Raydikalx")
+    doc = json.loads(converters.build_singbox_json([line]))
+    ws_paths = [o["transport"]["path"] for o in doc["outbounds"]
+                if isinstance(o.get("transport"), dict)
+                and "path" in o["transport"]]
+    assert ws_paths, "نودِ حادثه از خروجیِ sing-box افتاد — نباید حذف شود"
+    for pv in ws_paths:
+        assert not _BAD_PCT.search(pv), f"مسیرِ خراب به sing-box رسید: {pv!r}"
+    # و نود باید در Clash هم حاضر و سالم باشد (نه حذف، نه خراب)
+    clash = yaml.safe_load(converters.build_clash_yaml([line]))
+    ws_nodes = [px for px in clash["proxies"] if px.get("network") == "ws"]
+    assert ws_nodes, "نودِ حادثه از خروجیِ Clash افتاد — نباید حذف شود"
+    for px in ws_nodes:
+        assert not _BAD_PCT.search(px["ws-opts"]["path"]), \
+            f"مسیرِ خراب به Clash رسید: {px['ws-opts']['path']!r}"
+
+
+#: همان قاعدهٔ Go: `%` که دو رقمِ hex در پی ندارد. عامدانه این‌جا **مستقل** از
+#: پیاده‌سازی بازنویسی شده تا اگر رجکسِ `converters` روزی سهواً شل شود، آزمون
+#: همراهش شل نشود (یک آزمون که از خودِ کدِ زیرِ آزمون قرض بگیرد، هیچ نمی‌سنجد).
+_BAD_PCT = re.compile(r"%(?![0-9A-Fa-f]{2})")
 
 
 if __name__ == "__main__":
