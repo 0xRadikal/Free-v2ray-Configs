@@ -95,7 +95,7 @@ https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/verified/con
 | 🔐 **`secure`** | `verified` **и** forward secrecy, **и** ссылка не отключает проверку сертификата | [txt](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/secure/configs.txt) | [b64](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/secure/configs_base64.txt) | [yaml](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/secure/clash.yaml) | [json](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/secure/singbox.json) |
 | 🌐 **`all`** | всё, с дедупликацией — самый большой список, в основном непроверенный | [txt](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/all/configs.txt) | [b64](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/all/configs_base64.txt) | [yaml](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/all/clash.yaml) | [json](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/all/singbox.json) |
 | 📦 **`heavy`** | только 14 объёмных источников | [txt](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/heavy/configs.txt) | [b64](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/heavy/configs_base64.txt) | [yaml](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/heavy/clash.yaml) | [json](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/heavy/singbox.json) |
-| ⭐ **`light`** | только 7 отобранных источников, прошедших тест скорости | [txt](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/light/configs.txt) | [b64](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/light/configs_base64.txt) | [yaml](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/light/clash.yaml) | [json](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/light/singbox.json) |
+| ⭐ **`light`** | только 5 отобранных источников, прошедших тест скорости | [txt](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/light/configs.txt) | [b64](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/light/configs_base64.txt) | [yaml](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/light/clash.yaml) | [json](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/light/singbox.json) |
 
 **Какой формат?** `configs_base64.txt` — классический формат подписки и самый безопасный
 выбор по умолчанию. `configs.txt` — тот же список без кодирования. `clash.yaml` — готовый
@@ -362,7 +362,7 @@ fast/       configs.txt · configs_base64.txt · clash.yaml · singbox.json   ve
 secure/     configs.txt · configs_base64.txt · clash.yaml · singbox.json   verified + forward secrecy
 all/        configs.txt · configs_base64.txt · clash.yaml · singbox.json   light + heavy, с дедупликацией
 heavy/      configs.txt · configs_base64.txt · clash.yaml · singbox.json   14 объёмных источников
-light/      configs.txt · configs_base64.txt · clash.yaml · singbox.json   7 отобранных источников
+light/      configs.txt · configs_base64.txt · clash.yaml · singbox.json   5 отобранных источников
 protocols/  vless.txt · vmess.txt · trojan.txt · … (+ *_base64.txt)        выделено из all/
 archive/    all_broken.txt · heavy_broken.txt (+ _base64)                  что было отвергнуто
 top100.txt  100 verified-конфигов с наименьшей задержкой
@@ -510,7 +510,7 @@ https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/index.json
 https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/health.json
 ```
 
-Пересоздаётся при каждом запуске. Для каждого из 21 источника записываются `status`
+Пересоздаётся при каждом запуске. Для каждого из 19 источников записываются `status`
 (`ok` / `empty` / `fail`), код HTTP, число попыток, задержка, количество выданных
 конфигов и последняя ошибка — поэтому мёртвый или изменившийся источник виден сразу, а не
 молча уменьшает вывод.
@@ -563,7 +563,7 @@ https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/health.json
 
 # ⚙️ Как это работает
 
-1. **Загрузка** — 21 источник скачивается параллельно, с автоопределением base64/простого
+1. **Загрузка** — 19 источников скачиваются параллельно, с автоопределением base64/простого
    текста. Повторы при временных ошибках, но быстрый отказ на 4xx, чтобы мёртвый URL был
    *отражён в отчёте*, а не молча опрашивался вечно.
 2. **Очистка** — отбрасываются пустышки и структурно битые записи (нулевой UUID,

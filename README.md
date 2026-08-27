@@ -91,7 +91,7 @@ pool, filtered by how much evidence there is that a config actually works**.
 | 🔐 **`secure`** | `verified` **and** forward secrecy, **and** the link does not disable cert validation | [txt](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/secure/configs.txt) | [b64](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/secure/configs_base64.txt) | [yaml](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/secure/clash.yaml) | [json](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/secure/singbox.json) |
 | 🌐 **`all`** | everything, deduplicated — largest list, mostly untested | [txt](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/all/configs.txt) | [b64](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/all/configs_base64.txt) | [yaml](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/all/clash.yaml) | [json](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/all/singbox.json) |
 | 📦 **`heavy`** | the 14 high-volume upstreams only | [txt](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/heavy/configs.txt) | [b64](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/heavy/configs_base64.txt) | [yaml](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/heavy/clash.yaml) | [json](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/heavy/singbox.json) |
-| ⭐ **`light`** | the 7 curated / speed-tested upstreams only | [txt](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/light/configs.txt) | [b64](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/light/configs_base64.txt) | [yaml](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/light/clash.yaml) | [json](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/light/singbox.json) |
+| ⭐ **`light`** | the 5 curated / speed-tested upstreams only | [txt](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/light/configs.txt) | [b64](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/light/configs_base64.txt) | [yaml](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/light/clash.yaml) | [json](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/light/singbox.json) |
 
 **Which format?** `configs_base64.txt` is the classic subscription format and the safest
 default. `configs.txt` is the same list unencoded. `clash.yaml` is a full mihomo/Clash
@@ -351,7 +351,7 @@ fast/       configs.txt · configs_base64.txt · clash.yaml · singbox.json   ve
 secure/     configs.txt · configs_base64.txt · clash.yaml · singbox.json   verified + forward secrecy
 all/        configs.txt · configs_base64.txt · clash.yaml · singbox.json   light + heavy, deduplicated
 heavy/      configs.txt · configs_base64.txt · clash.yaml · singbox.json   14 high-volume upstreams
-light/      configs.txt · configs_base64.txt · clash.yaml · singbox.json   7 curated upstreams
+light/      configs.txt · configs_base64.txt · clash.yaml · singbox.json   5 curated upstreams
 protocols/  vless.txt · vmess.txt · trojan.txt · … (+ *_base64.txt)        split out of all/
 archive/    all_broken.txt · heavy_broken.txt (+ _base64)                  what was rejected
 top100.txt  the 100 lowest-latency verified configs
@@ -504,7 +504,7 @@ exist.
 https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/health.json
 ```
 
-Regenerated every run. For each of the 21 sources it records `status`
+Regenerated every run. For each of the 19 sources it records `status`
 (`ok` / `empty` / `fail`), HTTP code, attempt count, latency, the yielded config count and
 the last error — so a dead or changed upstream is visible immediately instead of silently
 shrinking the output.
@@ -558,7 +558,7 @@ and falls back to the jsDelivr mirror automatically if raw is unreachable.
 
 # ⚙️ How it works
 
-1. **Fetch** — 21 sources downloaded concurrently, with automatic base64/plain detection.
+1. **Fetch** — 19 sources downloaded concurrently, with automatic base64/plain detection.
    Retries on transient errors, but fails fast on 4xx so a dead URL is *reported*, not
    silently retried forever.
 2. **Clean** — drop dummy and structurally broken entries (zero UUID,
