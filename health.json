@@ -1,8 +1,8 @@
 {
   "brand": "@Raydikalx",
-  "checked_at": "2026-08-27T16:00:03.672446+00:00",
-  "checked_at_unix": 1787846403,
-  "elapsed_seconds": 20.9,
+  "checked_at": "2026-08-27T16:12:36.805715+00:00",
+  "checked_at_unix": 1787847156,
+  "elapsed_seconds": 20.5,
   "summary": {
     "total": 19,
     "ok": 8,
@@ -18,7 +18,7 @@
       "count": 244,
       "http_code": 200,
       "attempts": 1,
-      "latency_ms": 256
+      "latency_ms": 329
     },
     {
       "url": "https://raw.githubusercontent.com/4n0nymou3/multi-proxy-config-fetcher/refs/heads/main/configs/proxy_configs.txt",
@@ -28,7 +28,7 @@
       "count": 456,
       "http_code": 200,
       "attempts": 1,
-      "latency_ms": 133
+      "latency_ms": 172
     },
     {
       "url": "https://raw.githubusercontent.com/mahsanet/MahsaFreeConfig/refs/heads/main/mci/sub_1.txt",
@@ -52,7 +52,7 @@
       "count": 1300,
       "http_code": 200,
       "attempts": 1,
-      "latency_ms": 233
+      "latency_ms": 392
     },
     {
       "url": "https://raw.githubusercontent.com/roosterkid/openproxylist/refs/heads/main/V2RAY_RAW.txt",
@@ -62,7 +62,7 @@
       "count": 150,
       "http_code": 200,
       "attempts": 1,
-      "latency_ms": 204
+      "latency_ms": 300
     },
     {
       "url": "https://raw.githubusercontent.com/barry-far/V2ray-Config/refs/heads/main/All_Configs_base64_Sub.txt",
@@ -72,7 +72,7 @@
       "count": 6965,
       "http_code": 200,
       "attempts": 1,
-      "latency_ms": 631
+      "latency_ms": 657
     },
     {
       "url": "https://raw.githubusercontent.com/V2RAYCONFIGSPOOL/V2RAY_SUB/refs/heads/main/v2ray_configs_no1.txt",
@@ -117,7 +117,7 @@
       "count": 10,
       "http_code": 200,
       "attempts": 1,
-      "latency_ms": 253
+      "latency_ms": 316
     },
     {
       "url": "https://raw.githubusercontent.com/V2RAYCONFIGSPOOL/V2RAY_SUB/refs/heads/main/v2ray_configs_no7.txt",
@@ -148,7 +148,7 @@
       "count": 85,
       "http_code": 200,
       "attempts": 1,
-      "latency_ms": 231
+      "latency_ms": 301
     },
     {
       "url": "https://raw.githubusercontent.com/Delta-Kronecker/V2ray-Config/refs/heads/main/config/all_configs.txt",
@@ -158,7 +158,7 @@
       "count": 4505,
       "http_code": 200,
       "attempts": 1,
-      "latency_ms": 1261
+      "latency_ms": 2514
     },
     {
       "url": "https://raw.githubusercontent.com/Epodonios/v2ray-configs/main/All_Configs_Sub.txt",
@@ -328,23 +328,23 @@
     "db_loaded": 1,
     "by_ip_literal": 3520,
     "unknown_ip_literal": 2,
-    "by_dns": 1281,
+    "by_dns": 1282,
     "dns_failed": 306,
     "unknown_after_dns": 2,
     "skipped_no_db": 0,
-    "hosts_resolved": 4801,
+    "hosts_resolved": 4802,
     "hosts_unknown": 310
   },
   "cascade": {
     "exit_country": {
-      "colo": "SJC",
+      "colo": "LAX",
       "loc": "US",
       "source": "https://cp.cloudflare.com/cdn-cgi/trace"
     },
     "layers": {
       "l0_l1": {
-        "in": 8648,
-        "out": 8515,
+        "in": 8649,
+        "out": 8516,
         "dropped": {
           "unparsable": 116,
           "invalid_port": 3,
@@ -352,44 +352,44 @@
           "unroutable_server": 11,
           "invalid_server": 3
         },
-        "endpoints_unique": 5706,
-        "dedup_saving_pct": 32.99,
-        "seconds": 0.42
+        "endpoints_unique": 5707,
+        "dedup_saving_pct": 32.98,
+        "seconds": 0.31
       },
       "l2": {
-        "in": 8515,
-        "out": 6651,
-        "open_pct": 78.11,
-        "open_pct_of_raw_input": 76.91,
+        "in": 8516,
+        "out": 6650,
+        "open_pct": 78.09,
+        "open_pct_of_raw_input": 76.89,
         "dns_failed": 312,
-        "dns_seconds": 12.15,
-        "tcp_seconds": 6.56,
+        "dns_seconds": 20.48,
+        "tcp_seconds": 6.48,
         "fd_before": 6,
         "fd_after": 6,
-        "seconds": 19.17
+        "seconds": 27.31
       },
       "l3": {
-        "in": 6651,
+        "in": 6650,
         "rounds": 3,
         "per_run_ok": [
-          1522,
-          1454,
-          1465
+          1472,
+          1425,
+          1482
         ],
-        "ever_ok": 1696,
-        "stable": 1236,
-        "flaky_pct": 27.12,
-        "seconds": 203.57
+        "ever_ok": 1669,
+        "stable": 1243,
+        "flaky_pct": 25.52,
+        "seconds": 208.33
       }
     },
     "buckets": {
-      "verified": 1236,
-      "fast": 917,
-      "secure": 741,
+      "verified": 1243,
+      "fast": 946,
+      "secure": 766,
       "top": 100,
       "top_short_by": 0,
       "fast_threshold_ms": 800
     },
-    "total_seconds": 223.96
+    "total_seconds": 236.56
   }
 }
