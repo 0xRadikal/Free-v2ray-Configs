@@ -359,7 +359,7 @@ jobs:
       - name: 🌍 Restore GeoIP database cache
         if: steps.gate.outputs.should_run == 'true'
         id: geoip_cache
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: .cache/dbip-country-lite.mmdb
           key: dbip-country-lite-${{ steps.geoip_key.outputs.ym }}
@@ -549,7 +549,7 @@ jobs:
       # می‌کند و هیچ گامِ دستی‌ای فراموش نمی‌شود.
       - name: 📦 Restore xray-knife cache
         if: steps.gate.outputs.should_run == 'true'
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: .cache/xray-knife
           # نسخه و checksum هر دو در کلید هستند: اگر یکی عوض شود، cacheِ
