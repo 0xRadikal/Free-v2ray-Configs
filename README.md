@@ -604,11 +604,22 @@ periods. To hold a steady cadence anyway, this repository uses **three layers**:
 
 ## 🙌 Sources
 
-Thanks to every upstream maintainer — mahdibland, peasoft, mahsanet, barry-far,
-roosterkid, 4n0nymou3, ALIILAPRO, Epodonios, V2RAYCONFIGSPOOL, ShadowException,
-w1770946466 and others. This repository only aggregates, deduplicates, validates and
-tests publicly available configs. The full, current list with per-source health lives in
-[`health.json`](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/health.json).
+Thanks to every upstream maintainer. The **19 sources currently aggregated** come from
+iampedii, 4n0nymou3, mahsanet, ALIILAPRO, roosterkid, barry-far, V2RAYCONFIGSPOOL,
+ShadowException, Delta-Kronecker and Epodonios.
+
+Equally sincere thanks to the maintainers whose feeds this repository **used to** include
+— mahdibland, peasoft and w1770946466. They were retired on 2026-08-27 purely on
+measured marginal value (exclusive *stable* configs contributed to the final buckets), not
+on quality or good faith; the full method, raw numbers and controls are published in
+[`docs/source-audit-20260827.md`](docs/source-audit-20260827.md). Their entries are kept
+commented — not deleted — in [`scripts/sources.py`](scripts/sources.py), so any future
+re-measurement can restore them with a one-line change.
+
+This repository only aggregates, deduplicates, validates and tests publicly available
+configs. The authoritative, always-current list with per-source health lives in
+[`health.json`](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/health.json)
+— trust that file over any name written here.
 
 ## 📜 Disclaimer
 
