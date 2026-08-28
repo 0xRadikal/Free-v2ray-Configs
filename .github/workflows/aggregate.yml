@@ -874,12 +874,13 @@ jobs:
           #    این‌ها اختیاری‌اند (آبشار `continue-on-error` است) و منطقِ
           #    «فقط مسیرهای موجود stage می‌شوند» همان پایین از نبودشان
           #    عبور می‌کند.
-          OUTPUT_PATHS="all heavy light protocols archive index.json health.json verified fast secure top100.txt state.json"
+          OUTPUT_PATHS="all heavy light protocols archive index.json health.json verified fast secure top100.txt state.json Countries"
 
           is_output_path() {
             case "$1" in
               all/*|heavy/*|light/*|protocols/*|archive/*|index.json|health.json) return 0 ;;
               verified/*|fast/*|secure/*|top100.txt|state.json) return 0 ;;
+              Countries/*) return 0 ;;
               *) return 1 ;;
             esac
           }
