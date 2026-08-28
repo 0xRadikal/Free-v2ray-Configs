@@ -2154,6 +2154,185 @@ def test_workflow_never_uses_maxmind_which_requires_a_licence_key():
     assert "download.db-ip.com" in runs, "the executable step must fetch DB-IP"
 
 
+# ══════════════════════════════════════════════════════════════════════════
+# C1-b — تقسیمِ restore/save و راستی‌آزماییِ محتوایی
+#
+# چرا این بخش اضافه شد: `test_workflow_downloads_and_caches_the_geoip_database`
+# سبز می‌ماند حتی اگر **کلِ** مرحلهٔ cacheِ GeoIP حذف شود. سنجیده شد: یک نسخهٔ
+# جهش‌یافته از ورک‌فلو با آن مرحلهٔ حذف‌شده ساخته شد و آن تست `PASS` داد. علتش
+# این است که `actions/cache` در جای دیگری از همین ورک‌فلو هم استفاده می‌شود
+# (cacheِ xray-knife)، پس `assert caches` با آن یکی هم راست می‌شود و ادعا هرگز
+# دربارهٔ GeoIP نبوده. تست‌های زیر همان شکاف را می‌بندند و — مهم‌تر — ثابت
+# می‌کنند نقصِ «cacheِ مسموم» برنگشته است.
+#
+# نقصی که بسته شده: `actions/cache` (نسخهٔ یکجا) یک post-step دارد که هرگاه
+# `cache-hit != true` باشد، محتوایِ فعلیِ مسیر را زیرِ **کلیدِ اصلی** ذخیره
+# می‌کند. اگر پایگاهِ داده از راهِ `restore-keys` از ماهِ **پیش** بازیابی شده
+# باشد (یعنی روزِ اولِ ماه که فایلِ ماهِ جاری هنوز منتشر نشده)، همان بایت‌های
+# کهنه زیرِ کلیدِ ماهِ جاری ذخیره می‌شوند. کلیدهای cache در GitHub تغییرناپذیرند،
+# پس یک بار وقوع، کلِ ماه را مسموم می‌کند. سنجیده شد: پنجرهٔ انتشار حدودِ
+# ۰۶:۳۰–۰۶:۴۵ UTCِ روزِ اول است (~۶٫۶ ساعت پاسخِ 404) و این ورک‌فلو با
+# `cron: */5` اجرا می‌شود، پس برخورد قطعی است. اثرِ سنجیده‌شده روی دادهٔ واقعی:
+# ۱۴۳ از ۳۱۱۹ میزبان (۴٫۵۸۵٪) با پایگاهِ دادهٔ یک‌ماه‌کهنه برچسبِ غلط گرفتند.
+# ══════════════════════════════════════════════════════════════════════════
+def _c1b_geoip_steps() -> list:
+    """گام‌هایی از ورک‌فلو که به پایگاهِ دادهٔ GeoIP مربوط‌اند — از YAMLِ پارس‌شده.
+
+    شناسه‌محور است، نه نام‌محور: نامِ گام متنِ نمایشی است و آزادانه عوض می‌شود،
+    اما `id` بخشی از گرافِ وابستگیِ ورک‌فلو است و عوض‌کردنش خودِ ورک‌فلو را
+    می‌شکند — پس گره‌زدن به `id` هم پایدارتر است و هم معنادارتر.
+    """
+    doc = yaml.safe_load(_workflow_text())
+    job = doc["jobs"][next(iter(doc["jobs"]))]
+    return [s for s in (job.get("steps") or [])
+            if "dbip-country-lite" in json.dumps(s, ensure_ascii=False)]
+
+
+def _c1b_cache_actions() -> dict:
+    """نگاشتِ `نامِ اکشنِ cache → لیستِ گام‌ها`، محدود به گام‌های GeoIP.
+
+    فقط بخشِ پیش از `@` نگه داشته می‌شود تا این ادعا — مانندِ همسایه‌اش — به
+    نگارشِ نسخه گره نخورد. دلیلش در کامنتِ بالای
+    `test_workflow_downloads_and_caches_the_geoip_database` ثبت است: نسخهٔ
+    پیشینِ آن تست به رشتهٔ `actions/cache@v4` گره خورده بود و درست در لحظه‌ای
+    شکست که ورک‌فلو *امن‌تر* شد (پین‌شدنِ اکشن‌ها به SHA).
+    """
+    out: dict = {}
+    for step in _c1b_geoip_steps():
+        uses = step.get("uses")
+        if isinstance(uses, str) and "actions/cache" in uses:
+            out.setdefault(uses.split("@", 1)[0], []).append(step)
+    return out
+
+
+def test_zzz_c1b_geoip_step_detector_finds_the_real_steps():
+    """خود-آزمونِ سنجه: سنجه‌ای که همه‌چیز (یا هیچ‌چیز) را برگرداند، سنجه نیست.
+
+    این ادعا لازم است چون همهٔ ادعاهای بعدی روی `_c1b_geoip_steps()` سوارند.
+    اگر آن تابع روزی لیستِ خالی برگرداند، هر `assert not …`ِ پایین‌دستی الکی
+    سبز می‌شود — همان تله‌ای که این بخش برای بستنش نوشته شد.
+    """
+    steps = _c1b_geoip_steps()
+    # ① لیست نه خالی است و نه «همهٔ گام‌های ورک‌فلو».
+    doc = yaml.safe_load(_workflow_text())
+    job = doc["jobs"][next(iter(doc["jobs"]))]
+    total = len(job.get("steps") or [])
+    assert steps, "هیچ گامِ GeoIPای پیدا نشد ⇒ سنجه شکسته یا مرحله حذف شده"
+    assert len(steps) < total, (
+        f"سنجه هر {total} گام را «GeoIP» شمرد ⇒ فیلتر کار نمی‌کند")
+    # ② گامِ cacheِ xray-knife نباید در این لیست باشد؛ همان گامی که تستِ
+    #    قدیمی را الکی سبز نگه می‌داشت.
+    for step in steps:
+        blob = json.dumps(step, ensure_ascii=False).lower()
+        assert "xray-knife" not in blob, (
+            f"گامِ xray-knife اشتباهاً GeoIP شمرده شد: {step.get('name')!r}")
+    # ③ و مرحله باید هم دانلود داشته باشد هم راستی‌آزمایی.
+    joined = "\n".join(s.get("run") or "" for s in steps)
+    assert "download.db-ip.com" in joined, (
+        "گام‌های GeoIP هیچ دانلودی ندارند ⇒ سنجه گام‌های غلطی را گرفته")
+
+
+def test_zzz_c1b_geoip_cache_uses_restore_and_save_separately():
+    """`actions/cache`ِ یکجا cacheِ GeoIP را ماهانه مسموم می‌کند.
+
+    سنجشِ رفتاری (شبیه‌سازِ کاملِ backendِ cache، ۱۴ سناریو): با نسخهٔ یکجا،
+    اجرا در روزِ اولِ ماه بایت‌های ماهِ پیش را زیرِ کلیدِ ماهِ جاری ذخیره کرد و
+    تا پایانِ آن ماه — حتی پس از انتشارِ فایلِ درست و پس از ۲۰ اجرا — کهنه
+    ماند. با تقسیمِ restore/save، همان سناریو ذخیره را رد کرد و در اجرایِ
+    بعدی خود را درمان کرد.
+
+    این ادعا به «نبودنِ `actions/cache`» گره خورده و نه به رشتهٔ خام، چون
+    `actions/cache/restore` هم زیررشتهٔ `actions/cache` را در خود دارد.
+    """
+    actions = _c1b_cache_actions()
+    # ① گاردِ پارسر: نگاشتِ خالی هم «هیچ اکشنِ یکجایی نیست» را راست می‌کند.
+    assert actions, "هیچ اکشنِ cacheای در گام‌های GeoIP پیدا نشد"
+    assert "actions/cache" not in actions, (
+        "cacheِ GeoIP از `actions/cache`ِ یکجا استفاده می‌کند. post-stepِ آن "
+        "هرگاه `cache-hit != true` باشد زیرِ کلیدِ اصلی ذخیره می‌کند — از جمله "
+        "محتوایی که با `restore-keys` از ماهِ پیش آمده. کلیدها تغییرناپذیرند، "
+        "پس یک بار وقوع کلِ ماه را مسموم می‌کند. باید به "
+        "`actions/cache/restore` + `actions/cache/save` تقسیم شود")
+    assert "actions/cache/restore" in actions, (
+        "گامِ بازیابی غایب است ⇒ پایگاهِ داده ۹۶ بار در روز دانلود می‌شود")
+    assert "actions/cache/save" in actions, (
+        "گامِ ذخیره غایب است ⇒ فایلِ دانلودشده هرگز cache نمی‌شود")
+    # ② هر کدام دقیقاً یک بار، تا `save`ِ بی‌شرطِ دومی از قلم نیفتد.
+    for name in ("actions/cache/restore", "actions/cache/save"):
+        assert len(actions[name]) == 1, (
+            f"`{name}` باید دقیقاً یک گام باشد، {len(actions[name])} پیدا شد")
+
+
+def test_zzz_c1b_geoip_cache_is_saved_only_after_a_verified_download():
+    """کلیدِ ذخیره باید از «چیزی که واقعاً دانلود و تأیید شد» بیاید.
+
+    اگر کلیدِ `save` از ماهِ *تقویمی* بیاید (`geoip_key.outputs.ym`) به‌جای
+    ماهِ *دانلودشده*، تقسیمِ restore/save بی‌فایده است: فایلِ ماهِ پیش باز هم
+    زیرِ کلیدِ ماهِ جاری می‌نشیند و همان نقص با یک لایه واسطه برمی‌گردد.
+    سنجیده شد (سناریو S10): وقتی مخزنِ بالادست بایت‌های تیر را روی آدرسِ مرداد
+    سرو کرد، نسخهٔ درست از ذخیره‌کردن زیرِ کلیدِ مرداد امتناع کرد.
+    """
+    actions = _c1b_cache_actions()
+    # گاردِ پیام: بدونِ این، غیبتِ گامِ `save` به `KeyError` تبدیل می‌شود که
+    # «چه چیزی خراب است» را نمی‌گوید. سنجیده شد: روی نسخهٔ پیشِ اصلاحِ ورک‌فلو،
+    # این تست با `KeyError: 'actions/cache/save'` می‌مرد به‌جای پیامِ روشن.
+    assert "actions/cache/save" in actions, (
+        "گامِ `actions/cache/save` غایب است. اگر ورک‌فلو هنوز `actions/cache`ِ "
+        "یکجا را به کار می‌برد، ابتدا آزمونِ "
+        "`test_zzz_c1b_geoip_cache_uses_restore_and_save_separately` را ببینید؛ "
+        f"اکشن‌های cacheِ یافته‌شده: {sorted(actions)}")
+    save = actions["actions/cache/save"][0]
+    key = str((save.get("with") or {}).get("key", ""))
+    assert key, "گامِ `save` هیچ `key`ای ندارد"
+    assert "geoip_dl.outputs.got" in key, (
+        f"کلیدِ ذخیره از گامِ دانلود مشتق نشده: {key!r}. کلیدی که از ماهِ "
+        "تقویمی بیاید، فایلِ ماهِ پیش را زیرِ کلیدِ ماهِ جاری می‌نشاند و نقصِ "
+        "مسمومیت را برمی‌گرداند")
+    # ذخیره باید شرطی باشد: دانلودِ ناموفق نباید چیزی cache کند.
+    cond = str(save.get("if", ""))
+    assert "geoip_dl.outputs.got" in cond, (
+        f"گامِ ذخیره به موفقیتِ دانلود شرطی نشده: if={cond!r}")
+    # و بازیابی باید `restore-keys` داشته باشد، وگرنه در پنجرهٔ ۴۰۴ِ روزِ اول
+    # هیچ پایگاهِ داده‌ای در دست نیست.
+    assert "actions/cache/restore" in actions, (
+        f"گامِ `actions/cache/restore` غایب است؛ یافته‌شده: {sorted(actions)}")
+    restore_with = actions["actions/cache/restore"][0].get("with") or {}
+    assert "restore-keys" in restore_with, (
+        "بدونِ `restore-keys`، اجرا در پنجرهٔ انتشارِ روزِ اولِ ماه بدونِ هیچ "
+        "پایگاهِ داده‌ای می‌ماند و برچسب‌گذاری به تحلیلِ remark برمی‌گردد")
+
+
+def test_zzz_c1b_restored_database_is_validated_by_content_not_by_its_key():
+    """نامِ کلید ادعای مخزنِ cache است، نه واقعیتِ بایت‌ها.
+
+    یک کلیدِ مسمومِ از پیش موجود («۲۰۲۶-۰۸» که بایت‌های ۲۰۲۶-۰۷ دارد) فقط
+    وقتی درمان می‌شود که ورک‌فلو **محتوا** را بسنجد. سنجیده شد: راستی‌آزما
+    `build_epoch`ِ خودِ فایل را می‌خواند — ۱۷۸۲۸۶۹۹۹۶ → `2026-07` و
+    ۱۷۸۵۵۴۸۲۲۹ → `2026-08` — پس ماهِ واقعیِ فایل قابلِ اثبات است. گاردِ
+    اندازه (`-lt 1000000`) برای این کار کافی نیست: یک آرشیوِ بریده در ۲
+    مگابایت، ۳٫۷۷ مگابایت خروجی می‌دهد که از گارد رد می‌شود ولی خواندنش
+    `InvalidDatabaseError` می‌دهد.
+    """
+    steps = _c1b_geoip_steps()
+    runs = "\n".join(s.get("run") or "" for s in steps)
+    assert "geoip_probe.py" in runs, (
+        "هیچ راستی‌آزمایی محتوایی در گام‌های GeoIP نیست ⇒ ورک‌فلو به نامِ "
+        "کلیدِ cache اعتماد می‌کند و یک کلیدِ مسموم هرگز درمان نمی‌شود")
+    # راستی‌آزما باید وجود داشته باشد؛ ادعایی که به فایلِ غایب اشاره کند بی‌معناست.
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    probe = os.path.join(root, "scripts", "geoip_probe.py")
+    assert os.path.isfile(probe), f"{probe} وجود ندارد ولی ورک‌فلو صدایش می‌زند"
+    # و دانلود باید به وضعیتِ محتوایی شرطی شود، نه به `cache-hit`.
+    dl = [s for s in steps if s.get("id") == "geoip_dl"]
+    assert len(dl) == 1, f"باید دقیقاً یک گامِ `geoip_dl` باشد، {len(dl)} پیدا شد"
+    cond = str(dl[0].get("if", ""))
+    assert "geoip_have.outputs.status" in cond, (
+        f"دانلود به راستی‌آزماییِ محتوایی شرطی نشده: if={cond!r}")
+    assert "cache-hit" not in cond, (
+        "دانلود به `cache-hit` شرطی شده؛ یک کلیدِ مسموم `cache-hit=true` "
+        "می‌دهد و ورک‌فلو هرگز خود را درمان نمی‌کند")
+
+
 def test_geoip_cache_directory_is_gitignored():
     """اگر نبود، هر اجرا ۸ مگابایت commit می‌کرد — همان الگوی رشدی که حذف شد."""
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
