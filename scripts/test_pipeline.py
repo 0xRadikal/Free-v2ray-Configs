@@ -38,6 +38,8 @@ import validate  # noqa: E402
 import sources  # noqa: E402
 import state  # noqa: E402
 import aggregate  # noqa: E402
+import countries  # noqa: E402
+import geo  # noqa: E402
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -2150,6 +2152,185 @@ def test_workflow_never_uses_maxmind_which_requires_a_licence_key():
     assert "license_key" not in runs and "licence_key" not in runs
     # و آدرسِ واقعیِ دانلود باید همان DB-IP باشد
     assert "download.db-ip.com" in runs, "the executable step must fetch DB-IP"
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# C1-b — تقسیمِ restore/save و راستی‌آزماییِ محتوایی
+#
+# چرا این بخش اضافه شد: `test_workflow_downloads_and_caches_the_geoip_database`
+# سبز می‌ماند حتی اگر **کلِ** مرحلهٔ cacheِ GeoIP حذف شود. سنجیده شد: یک نسخهٔ
+# جهش‌یافته از ورک‌فلو با آن مرحلهٔ حذف‌شده ساخته شد و آن تست `PASS` داد. علتش
+# این است که `actions/cache` در جای دیگری از همین ورک‌فلو هم استفاده می‌شود
+# (cacheِ xray-knife)، پس `assert caches` با آن یکی هم راست می‌شود و ادعا هرگز
+# دربارهٔ GeoIP نبوده. تست‌های زیر همان شکاف را می‌بندند و — مهم‌تر — ثابت
+# می‌کنند نقصِ «cacheِ مسموم» برنگشته است.
+#
+# نقصی که بسته شده: `actions/cache` (نسخهٔ یکجا) یک post-step دارد که هرگاه
+# `cache-hit != true` باشد، محتوایِ فعلیِ مسیر را زیرِ **کلیدِ اصلی** ذخیره
+# می‌کند. اگر پایگاهِ داده از راهِ `restore-keys` از ماهِ **پیش** بازیابی شده
+# باشد (یعنی روزِ اولِ ماه که فایلِ ماهِ جاری هنوز منتشر نشده)، همان بایت‌های
+# کهنه زیرِ کلیدِ ماهِ جاری ذخیره می‌شوند. کلیدهای cache در GitHub تغییرناپذیرند،
+# پس یک بار وقوع، کلِ ماه را مسموم می‌کند. سنجیده شد: پنجرهٔ انتشار حدودِ
+# ۰۶:۳۰–۰۶:۴۵ UTCِ روزِ اول است (~۶٫۶ ساعت پاسخِ 404) و این ورک‌فلو با
+# `cron: */5` اجرا می‌شود، پس برخورد قطعی است. اثرِ سنجیده‌شده روی دادهٔ واقعی:
+# ۱۴۳ از ۳۱۱۹ میزبان (۴٫۵۸۵٪) با پایگاهِ دادهٔ یک‌ماه‌کهنه برچسبِ غلط گرفتند.
+# ══════════════════════════════════════════════════════════════════════════
+def _c1b_geoip_steps() -> list:
+    """گام‌هایی از ورک‌فلو که به پایگاهِ دادهٔ GeoIP مربوط‌اند — از YAMLِ پارس‌شده.
+
+    شناسه‌محور است، نه نام‌محور: نامِ گام متنِ نمایشی است و آزادانه عوض می‌شود،
+    اما `id` بخشی از گرافِ وابستگیِ ورک‌فلو است و عوض‌کردنش خودِ ورک‌فلو را
+    می‌شکند — پس گره‌زدن به `id` هم پایدارتر است و هم معنادارتر.
+    """
+    doc = yaml.safe_load(_workflow_text())
+    job = doc["jobs"][next(iter(doc["jobs"]))]
+    return [s for s in (job.get("steps") or [])
+            if "dbip-country-lite" in json.dumps(s, ensure_ascii=False)]
+
+
+def _c1b_cache_actions() -> dict:
+    """نگاشتِ `نامِ اکشنِ cache → لیستِ گام‌ها`، محدود به گام‌های GeoIP.
+
+    فقط بخشِ پیش از `@` نگه داشته می‌شود تا این ادعا — مانندِ همسایه‌اش — به
+    نگارشِ نسخه گره نخورد. دلیلش در کامنتِ بالای
+    `test_workflow_downloads_and_caches_the_geoip_database` ثبت است: نسخهٔ
+    پیشینِ آن تست به رشتهٔ `actions/cache@v4` گره خورده بود و درست در لحظه‌ای
+    شکست که ورک‌فلو *امن‌تر* شد (پین‌شدنِ اکشن‌ها به SHA).
+    """
+    out: dict = {}
+    for step in _c1b_geoip_steps():
+        uses = step.get("uses")
+        if isinstance(uses, str) and "actions/cache" in uses:
+            out.setdefault(uses.split("@", 1)[0], []).append(step)
+    return out
+
+
+def test_zzz_c1b_geoip_step_detector_finds_the_real_steps():
+    """خود-آزمونِ سنجه: سنجه‌ای که همه‌چیز (یا هیچ‌چیز) را برگرداند، سنجه نیست.
+
+    این ادعا لازم است چون همهٔ ادعاهای بعدی روی `_c1b_geoip_steps()` سوارند.
+    اگر آن تابع روزی لیستِ خالی برگرداند، هر `assert not …`ِ پایین‌دستی الکی
+    سبز می‌شود — همان تله‌ای که این بخش برای بستنش نوشته شد.
+    """
+    steps = _c1b_geoip_steps()
+    # ① لیست نه خالی است و نه «همهٔ گام‌های ورک‌فلو».
+    doc = yaml.safe_load(_workflow_text())
+    job = doc["jobs"][next(iter(doc["jobs"]))]
+    total = len(job.get("steps") or [])
+    assert steps, "هیچ گامِ GeoIPای پیدا نشد ⇒ سنجه شکسته یا مرحله حذف شده"
+    assert len(steps) < total, (
+        f"سنجه هر {total} گام را «GeoIP» شمرد ⇒ فیلتر کار نمی‌کند")
+    # ② گامِ cacheِ xray-knife نباید در این لیست باشد؛ همان گامی که تستِ
+    #    قدیمی را الکی سبز نگه می‌داشت.
+    for step in steps:
+        blob = json.dumps(step, ensure_ascii=False).lower()
+        assert "xray-knife" not in blob, (
+            f"گامِ xray-knife اشتباهاً GeoIP شمرده شد: {step.get('name')!r}")
+    # ③ و مرحله باید هم دانلود داشته باشد هم راستی‌آزمایی.
+    joined = "\n".join(s.get("run") or "" for s in steps)
+    assert "download.db-ip.com" in joined, (
+        "گام‌های GeoIP هیچ دانلودی ندارند ⇒ سنجه گام‌های غلطی را گرفته")
+
+
+def test_zzz_c1b_geoip_cache_uses_restore_and_save_separately():
+    """`actions/cache`ِ یکجا cacheِ GeoIP را ماهانه مسموم می‌کند.
+
+    سنجشِ رفتاری (شبیه‌سازِ کاملِ backendِ cache، ۱۴ سناریو): با نسخهٔ یکجا،
+    اجرا در روزِ اولِ ماه بایت‌های ماهِ پیش را زیرِ کلیدِ ماهِ جاری ذخیره کرد و
+    تا پایانِ آن ماه — حتی پس از انتشارِ فایلِ درست و پس از ۲۰ اجرا — کهنه
+    ماند. با تقسیمِ restore/save، همان سناریو ذخیره را رد کرد و در اجرایِ
+    بعدی خود را درمان کرد.
+
+    این ادعا به «نبودنِ `actions/cache`» گره خورده و نه به رشتهٔ خام، چون
+    `actions/cache/restore` هم زیررشتهٔ `actions/cache` را در خود دارد.
+    """
+    actions = _c1b_cache_actions()
+    # ① گاردِ پارسر: نگاشتِ خالی هم «هیچ اکشنِ یکجایی نیست» را راست می‌کند.
+    assert actions, "هیچ اکشنِ cacheای در گام‌های GeoIP پیدا نشد"
+    assert "actions/cache" not in actions, (
+        "cacheِ GeoIP از `actions/cache`ِ یکجا استفاده می‌کند. post-stepِ آن "
+        "هرگاه `cache-hit != true` باشد زیرِ کلیدِ اصلی ذخیره می‌کند — از جمله "
+        "محتوایی که با `restore-keys` از ماهِ پیش آمده. کلیدها تغییرناپذیرند، "
+        "پس یک بار وقوع کلِ ماه را مسموم می‌کند. باید به "
+        "`actions/cache/restore` + `actions/cache/save` تقسیم شود")
+    assert "actions/cache/restore" in actions, (
+        "گامِ بازیابی غایب است ⇒ پایگاهِ داده ۹۶ بار در روز دانلود می‌شود")
+    assert "actions/cache/save" in actions, (
+        "گامِ ذخیره غایب است ⇒ فایلِ دانلودشده هرگز cache نمی‌شود")
+    # ② هر کدام دقیقاً یک بار، تا `save`ِ بی‌شرطِ دومی از قلم نیفتد.
+    for name in ("actions/cache/restore", "actions/cache/save"):
+        assert len(actions[name]) == 1, (
+            f"`{name}` باید دقیقاً یک گام باشد، {len(actions[name])} پیدا شد")
+
+
+def test_zzz_c1b_geoip_cache_is_saved_only_after_a_verified_download():
+    """کلیدِ ذخیره باید از «چیزی که واقعاً دانلود و تأیید شد» بیاید.
+
+    اگر کلیدِ `save` از ماهِ *تقویمی* بیاید (`geoip_key.outputs.ym`) به‌جای
+    ماهِ *دانلودشده*، تقسیمِ restore/save بی‌فایده است: فایلِ ماهِ پیش باز هم
+    زیرِ کلیدِ ماهِ جاری می‌نشیند و همان نقص با یک لایه واسطه برمی‌گردد.
+    سنجیده شد (سناریو S10): وقتی مخزنِ بالادست بایت‌های تیر را روی آدرسِ مرداد
+    سرو کرد، نسخهٔ درست از ذخیره‌کردن زیرِ کلیدِ مرداد امتناع کرد.
+    """
+    actions = _c1b_cache_actions()
+    # گاردِ پیام: بدونِ این، غیبتِ گامِ `save` به `KeyError` تبدیل می‌شود که
+    # «چه چیزی خراب است» را نمی‌گوید. سنجیده شد: روی نسخهٔ پیشِ اصلاحِ ورک‌فلو،
+    # این تست با `KeyError: 'actions/cache/save'` می‌مرد به‌جای پیامِ روشن.
+    assert "actions/cache/save" in actions, (
+        "گامِ `actions/cache/save` غایب است. اگر ورک‌فلو هنوز `actions/cache`ِ "
+        "یکجا را به کار می‌برد، ابتدا آزمونِ "
+        "`test_zzz_c1b_geoip_cache_uses_restore_and_save_separately` را ببینید؛ "
+        f"اکشن‌های cacheِ یافته‌شده: {sorted(actions)}")
+    save = actions["actions/cache/save"][0]
+    key = str((save.get("with") or {}).get("key", ""))
+    assert key, "گامِ `save` هیچ `key`ای ندارد"
+    assert "geoip_dl.outputs.got" in key, (
+        f"کلیدِ ذخیره از گامِ دانلود مشتق نشده: {key!r}. کلیدی که از ماهِ "
+        "تقویمی بیاید، فایلِ ماهِ پیش را زیرِ کلیدِ ماهِ جاری می‌نشاند و نقصِ "
+        "مسمومیت را برمی‌گرداند")
+    # ذخیره باید شرطی باشد: دانلودِ ناموفق نباید چیزی cache کند.
+    cond = str(save.get("if", ""))
+    assert "geoip_dl.outputs.got" in cond, (
+        f"گامِ ذخیره به موفقیتِ دانلود شرطی نشده: if={cond!r}")
+    # و بازیابی باید `restore-keys` داشته باشد، وگرنه در پنجرهٔ ۴۰۴ِ روزِ اول
+    # هیچ پایگاهِ داده‌ای در دست نیست.
+    assert "actions/cache/restore" in actions, (
+        f"گامِ `actions/cache/restore` غایب است؛ یافته‌شده: {sorted(actions)}")
+    restore_with = actions["actions/cache/restore"][0].get("with") or {}
+    assert "restore-keys" in restore_with, (
+        "بدونِ `restore-keys`، اجرا در پنجرهٔ انتشارِ روزِ اولِ ماه بدونِ هیچ "
+        "پایگاهِ داده‌ای می‌ماند و برچسب‌گذاری به تحلیلِ remark برمی‌گردد")
+
+
+def test_zzz_c1b_restored_database_is_validated_by_content_not_by_its_key():
+    """نامِ کلید ادعای مخزنِ cache است، نه واقعیتِ بایت‌ها.
+
+    یک کلیدِ مسمومِ از پیش موجود («۲۰۲۶-۰۸» که بایت‌های ۲۰۲۶-۰۷ دارد) فقط
+    وقتی درمان می‌شود که ورک‌فلو **محتوا** را بسنجد. سنجیده شد: راستی‌آزما
+    `build_epoch`ِ خودِ فایل را می‌خواند — ۱۷۸۲۸۶۹۹۹۶ → `2026-07` و
+    ۱۷۸۵۵۴۸۲۲۹ → `2026-08` — پس ماهِ واقعیِ فایل قابلِ اثبات است. گاردِ
+    اندازه (`-lt 1000000`) برای این کار کافی نیست: یک آرشیوِ بریده در ۲
+    مگابایت، ۳٫۷۷ مگابایت خروجی می‌دهد که از گارد رد می‌شود ولی خواندنش
+    `InvalidDatabaseError` می‌دهد.
+    """
+    steps = _c1b_geoip_steps()
+    runs = "\n".join(s.get("run") or "" for s in steps)
+    assert "geoip_probe.py" in runs, (
+        "هیچ راستی‌آزمایی محتوایی در گام‌های GeoIP نیست ⇒ ورک‌فلو به نامِ "
+        "کلیدِ cache اعتماد می‌کند و یک کلیدِ مسموم هرگز درمان نمی‌شود")
+    # راستی‌آزما باید وجود داشته باشد؛ ادعایی که به فایلِ غایب اشاره کند بی‌معناست.
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    probe = os.path.join(root, "scripts", "geoip_probe.py")
+    assert os.path.isfile(probe), f"{probe} وجود ندارد ولی ورک‌فلو صدایش می‌زند"
+    # و دانلود باید به وضعیتِ محتوایی شرطی شود، نه به `cache-hit`.
+    dl = [s for s in steps if s.get("id") == "geoip_dl"]
+    assert len(dl) == 1, f"باید دقیقاً یک گامِ `geoip_dl` باشد، {len(dl)} پیدا شد"
+    cond = str(dl[0].get("if", ""))
+    assert "geoip_have.outputs.status" in cond, (
+        f"دانلود به راستی‌آزماییِ محتوایی شرطی نشده: if={cond!r}")
+    assert "cache-hit" not in cond, (
+        "دانلود به `cache-hit` شرطی شده؛ یک کلیدِ مسموم `cache-hit=true` "
+        "می‌دهد و ورک‌فلو هرگز خود را درمان نمی‌کند")
 
 
 def test_geoip_cache_directory_is_gitignored():
@@ -12759,6 +12940,1453 @@ def test_zzz_incident_20260824_lone_percent_in_path_cannot_sink_the_document():
 #: همراهش شل نشود (یک آزمون که از خودِ کدِ زیرِ آزمون قرض بگیرد، هیچ نمی‌سنجد).
 _BAD_PCT = re.compile(r"%(?![0-9A-Fa-f]{2})")
 
+
+# ──────────────────────────────────────────────────────────────────────────────
+# 🌍 `Countries/` — تفکیکِ کانفیگ‌های تأییدشده بر پایهٔ کشور
+# ──────────────────────────────────────────────────────────────────────────────
+# چرا این بخش این‌قدر تست دارد: `Countries/` تنها خروجی‌ای در این مخزن است که
+# **تعدادِ فایل‌هایش متغیر** است. بقیهٔ پوشه‌ها همیشه همان چهار فایل را دارند،
+# ولی این‌جا مجموعهٔ فایل‌ها با هر دور عوض می‌شود — و ماشینِ انتشار (که درخت را
+# از ANCHOR می‌سازد و بعد `git add -A` می‌زند) فایلی را که این دور نوشته نشود
+# **تا ابد** بازمنتشر می‌کند. پس «نوشتنِ درست» کافی نیست؛ «نوشتنِ درست + حذفِ
+# درست» باید قفل شود.
+
+
+def _cty_line(code: str, ip: str = "1.2.3.4", port: int = 443,
+              tag: str = "AAA111") -> str:
+    """یک سطرِ برندشدهٔ نمونه با برچسبِ کشورِ دلخواه.
+
+    شکلِ برچسب عیناً همان است که `core` می‌سازد (`core.py` ۱۲۷۳/۱۲۹۶):
+    `CODE FLAG | @Raydikalx | tag`.
+    """
+    flag = geo.flag_of(code) if code != "Global" else "🌐"
+    return (f"ss://YWVzLTI1Ni1nY206cGFzcw==@{ip}:{port}"
+            f"#{code} {flag} | {core.BRAND_CHANNEL} | {tag}")
+
+
+def test_zzz_cty_reads_the_country_from_the_remark_not_from_the_network() -> None:
+    """کدِ کشور از برچسبِ خودِ سطر خوانده می‌شود، نه با پرس‌وجویِ شبکه.
+
+    چرا این قاعده مهم است: `aggregate.py` پیش از `pipeline.py` اجرا می‌شود
+    (گامِ ۴۴۴ در برابرِ ۶۵۴ ورک‌فلو) و برچسب را نوشته. اگر این‌جا مکان را
+    از نو می‌سنجیدیم، یک جابه‌جاییِ DNS بینِ دو گام می‌توانست کانفیگی را
+    در `all/` آلمان و در `Countries/` فرانسه نشان دهد — و کاربر هرگز
+    نمی‌فهمید کدام درست است.
+    """
+    assert countries.country_code_of(_cty_line("DE")) == "DE"
+    assert countries.country_code_of(_cty_line("Global")) == "Global"
+    # میزبانی که DNS‌اش قطعاً به آلمان نمی‌رسد، ولی برچسبش DE است:
+    # خروجی باید DE بماند، یعنی شبکه پرسیده نشده.
+    line = _cty_line("DE", ip="203.0.113.7")   # TEST-NET-3، مسیریابی‌نشدنی
+    assert countries.country_code_of(line) == "DE"
+
+
+def test_zzz_cty_label_parser_rejects_everything_that_is_not_a_country() -> None:
+    """هر برچسبِ ناجور باید `None` شود — این خطِ دفاعیِ نامِ فایل است.
+
+    این رشته در نهایت به `os.path.join` می‌رسد. اگر تجزیه‌کننده شل باشد،
+    یک remarkِ خصمانه می‌تواند به نامِ فایل تبدیل شود. همهٔ این موارد روی
+    دادهٔ واقعی هم سنجیده شدند (۲۰٬۷۵۵ سطر، صفر موردِ تجزیه‌نشده).
+    """
+    bad = [
+        "ss://x@1.2.3.4:1#../../etc/passwd | @Raydikalx | t",
+        "ss://x@1.2.3.4:1#DE/../.. | @Raydikalx | t",
+        "ss://x@1.2.3.4:1#de 🇩🇪 | @Raydikalx | t",      # حروفِ کوچک
+        "ss://x@1.2.3.4:1#DEU 🇩🇪 | @Raydikalx | t",     # سه‌حرفی
+        "ss://x@1.2.3.4:1#ＤＥ 🇩🇪 | @Raydikalx | t",     # یونیکدِ تمام‌عرض
+        "ss://x@1.2.3.4:1#DE 🇩🇪",                        # بی‌جداکننده
+        "ss://x@1.2.3.4:1#",                              # فرگمنتِ خالی
+        "ss://x@1.2.3.4:1",                               # بی‌فرگمنت
+        "",
+        "# a comment",
+    ]
+    for line in bad:
+        got = countries.country_code_of(line)
+        assert got is None, f"برچسبِ ناجور پذیرفته شد: {line!r} → {got!r}"
+
+
+def test_zzz_cty_slug_can_never_escape_the_output_directory() -> None:
+    """`slug_for` لیستِ سفید است، نه لیستِ سیاه — پس فرار از پوشه ناممکن است.
+
+    لیستِ سیاه («این کاراکترها را حذف کن») همیشه سوراخ دارد؛ لیستِ سفید
+    («تنها این کاراکترها بمانند») ندارد. سنجش روی هر ۲۵۱ نامِ انگلیسیِ
+    پایگاه‌داده: صفر نامِ ناایمن، صفر برخوردِ نام.
+    """
+    hostile = ["../../etc/passwd", "..", "/", "C:\\Windows", "Germany/../../x",
+               "\x00evil", "  ", "日本", "a/b/c", "....//....//x"]
+    for name in hostile:
+        s = countries.slug_for(name)
+        assert "/" not in s and "\\" not in s, f"جداکننده در slug ماند: {s!r}"
+        assert ".." not in s, f"پیمایشِ مسیر در slug ماند: {s!r}"
+        assert countries.is_safe_slug(s) or s == "", \
+            f"slugِ ناایمن ولی پذیرفته‌شده: {s!r}"
+    # نام‌های واقعیِ پایگاه‌داده که شکل عوض می‌کنند — هر سه باید خوانا بمانند
+    assert countries.slug_for("Guinea-Bissau") == "Guinea_Bissau"
+    assert countries.slug_for("U.S. Virgin Islands") == "U_S_Virgin_Islands"
+    assert countries.slug_for("Bonaire, Saint Eustatius and Saba ") == \
+        "Bonaire_Saint_Eustatius_and_Saba"
+    # نامِ لاتینِ با نشانه باید ASCII شود، نه حذف
+    assert countries.slug_for("Åland Islands") == "Aland_Islands"
+
+
+def test_zzz_cty_grouping_keeps_every_config_exactly_once() -> None:
+    """گروه‌بندی نه کانفیگی گم می‌کند و نه تکراری می‌سازد.
+
+    این حساب باید سر برسد، وگرنه کاربرِ یک کشور کانفیگی را نمی‌بیند که
+    در `verified/` هست. روی دادهٔ زندهٔ ۱۲۴۶ سطری سنجیده شد: ۱۲۴۶ ورودی،
+    ۱۲۴۶ خروجی، صفر گم‌شده، صفر تکراری.
+    """
+    lines = ([_cty_line("DE", ip=f"1.1.1.{i}") for i in range(5)] +
+             [_cty_line("FR", ip=f"2.2.2.{i}") for i in range(3)] +
+             [_cty_line("US", ip="3.3.3.3")])
+    groups = countries.group_by_country(lines)
+    assert sorted(groups) == ["DE", "FR", "US"]
+    assert [len(groups[c]) for c in ("DE", "FR", "US")] == [5, 3, 1]
+    flat = [x for c in groups for x in groups[c]]
+    assert len(flat) == len(lines), "گروه‌بندی تعداد را عوض کرد"
+    assert len(set(flat)) == len(set(lines)), "گروه‌بندی تکراری ساخت"
+
+
+def test_zzz_cty_global_never_becomes_a_country_file() -> None:
+    """«Global» یک کشور نیست و فایلی به نامِ کشور نمی‌سازد.
+
+    روی `verified/` عملاً صفر موردِ Global هست (چون کانفیگی که واقعاً وصل
+    شده، نشانیِ قابلِ مکان‌یابی دارد) — ولی این تست آن واقعیت را به
+    *قاعده* تبدیل می‌کند، تا اگر روزی منبع عوض شد، `Global.txt` بی‌صدا
+    ظاهر نشود.
+    """
+    groups = countries.group_by_country(
+        [_cty_line("Global"), _cty_line("Global", ip="9.9.9.9"),
+         _cty_line("DE")])
+    assert "Global" not in groups
+    assert sorted(groups) == ["DE"]
+
+    out = _tmpdir("cty_glob_")
+    countries.write_countries(out, [_cty_line("Global")])
+    base = os.path.join(out, countries.COUNTRIES_DIR)
+    present = sorted(os.listdir(base)) if os.path.isdir(base) else []
+    assert "Global.txt" not in present
+    assert not [p for p in present if p.endswith(".txt")], \
+        f"از ورودیِ تماماً Global فایل ساخته شد: {present}"
+
+
+def test_zzz_cty_every_config_survives_a_real_write() -> None:
+    """نوشتنِ واقعی: ورودی و مجموعِ فایل‌ها باید دقیقاً برابر باشند."""
+    lines = ([_cty_line("DE", ip=f"5.5.5.{i}") for i in range(7)] +
+             [_cty_line("JP", ip=f"6.6.6.{i}") for i in range(2)])
+    out = _tmpdir("cty_write_")
+    stats = countries.write_countries(out, lines)
+    assert stats["countries"] == 2, stats
+    assert stats["configs"] == 9, stats
+    assert stats["failed"] == {}, stats
+
+    base = os.path.join(out, countries.COUNTRIES_DIR)
+    written = []
+    for name in sorted(os.listdir(base)):
+        if not name.endswith(".txt"):
+            continue
+        with open(os.path.join(base, name), encoding="utf-8") as fh:
+            written += [ln.rstrip("\n") for ln in fh
+                        if ln.strip() and not ln.startswith("#")]
+    assert len(written) == len(lines), \
+        f"ورودی {len(lines)} ولی خروجی {len(written)}"
+    assert set(written) == set(lines), "محتوا در نوشتن عوض شد"
+
+
+def test_zzz_cty_header_is_inside_the_hiddify_window() -> None:
+    """سرآیند باید در ۲۹ خطِ نخست جا شود و بلوکِ Hiddify **اول** باشد.
+
+    Hiddify تنها ۲۹ خطِ نخستِ فایل را برای یافتنِ کلیدهای پروفایل
+    می‌خواند؛ اگر بلوک پایین‌تر بیفتد، عنوان و بازهٔ به‌روزرسانی خوانده
+    نمی‌شود و کاربر یک اشتراکِ بی‌نام می‌بیند.
+    """
+    out = _tmpdir("cty_hdr_")
+    countries.write_countries(out, [_cty_line("DE")])
+    path = os.path.join(out, countries.COUNTRIES_DIR, "Germany.txt")
+    assert os.path.isfile(path), os.listdir(
+        os.path.join(out, countries.COUNTRIES_DIR))
+    with open(path, encoding="utf-8") as fh:
+        lines = fh.read().split("\n")
+    assert lines[0].startswith("#profile-title:"), lines[0]
+    assert core.BRAND_CHANNEL in lines[0]
+    for key in ("#profile-update-interval:", "#subscription-userinfo:",
+                "#support-url:", "#profile-web-page-url:"):
+        hits = [i for i, ln in enumerate(lines[:29]) if ln.startswith(key)]
+        assert hits, f"کلیدِ {key} در پنجرهٔ ۲۹ خطیِ Hiddify نیست"
+    first_cfg = next(i for i, ln in enumerate(lines)
+                     if ln and not ln.startswith("#"))
+    assert first_cfg < 29, f"نخستین کانفیگ در خطِ {first_cfg} — بیرونِ پنجره"
+    # معیار باید **در خودِ فایل** توضیح داده شده باشد، نه فقط در README:
+    # کاربری که فقط لینک را دارد باید بداند این فهرست چه چیزی را تضمین می‌کند.
+    head = "\n".join(lines[:29])
+    assert "verified" in head, "منبعِ داده در سرآیند توضیح داده نشده"
+
+
+def test_zzz_cty_a_vanished_country_is_swept_not_republished() -> None:
+    """★ فایلِ کشوری که این دور تولید نمی‌شود باید **حذف** شود.
+
+    این مهم‌ترین تستِ این بخش است. ماشینِ انتشار درخت را از ANCHOR
+    می‌سازد و بعد `git add -A` می‌زند، و `actions/checkout` فایل‌های دورِ
+    قبل را روی دیسک برگردانده — پس فایلی که این دور نوشته نشود تا ابد
+    بازمنتشر می‌شود و کاربر دادهٔ **کهنه** را تازه می‌پندارد.
+
+    و این خطر نظری نیست: سنجش نشان داد ۲۳ کد در `all/` هستند که در
+    `verified/` نیستند، یعنی مجموعهٔ کشورها واقعاً بینِ دورها می‌چرخد.
+    """
+    out = _tmpdir("cty_sweep_")
+    countries.write_countries(out, [_cty_line("DE"), _cty_line("KE")])
+    base = os.path.join(out, countries.COUNTRIES_DIR)
+    before = set(os.listdir(base))
+    assert "Kenya.txt" in before, before
+
+    # دورِ دوم: کنیا از verified/ بیرون رفته
+    stats = countries.write_countries(out, [_cty_line("DE")])
+    after = set(os.listdir(base))
+    assert "Kenya.txt" not in after, "فایلِ کشورِ رفته باقی ماند (بازانتشارِ کهنه)"
+    assert "Germany.txt" in after
+    assert "Kenya.txt" in stats["pruned"], stats["pruned"]
+
+
+def test_zzz_cty_sweep_only_touches_its_own_txt_files() -> None:
+    """جارو نباید چیزی بیرون از قلمروِ خودش را لمس کند.
+
+    یک تابعِ حذف‌کننده که دامنه‌اش دقیق نباشد، خطرناک‌تر از فایلِ کهنه
+    است. این تست هم فایلِ غیر-txt در همان پوشه و هم پوشه‌های منبع را
+    می‌گذارد و بررسی می‌کند دست‌نخورده بمانند.
+    """
+    out = _tmpdir("cty_scope_")
+    base = os.path.join(out, countries.COUNTRIES_DIR)
+    os.makedirs(base, exist_ok=True)
+    keep_md = os.path.join(base, "NOTES.md")
+    with open(keep_md, "w", encoding="utf-8") as fh:
+        fh.write("keep me\n")
+    subdir = os.path.join(base, "sub")
+    os.makedirs(subdir, exist_ok=True)
+    nested = os.path.join(subdir, "Nested.txt")
+    with open(nested, "w", encoding="utf-8") as fh:
+        fh.write("nested\n")
+    src_dir = os.path.join(out, "verified")
+    os.makedirs(src_dir, exist_ok=True)
+    src_file = os.path.join(src_dir, "configs.txt")
+    with open(src_file, "w", encoding="utf-8") as fh:
+        fh.write("source must survive\n")
+
+    countries.write_countries(out, [_cty_line("DE")])
+
+    assert os.path.isfile(keep_md), "فایلِ غیر-txt حذف شد"
+    assert os.path.isfile(nested), "جارو بازگشتی عمل کرد — نباید"
+    with open(src_file, encoding="utf-8") as fh:
+        assert fh.read().strip() == "source must survive", "پوشهٔ منبع لمس شد"
+
+
+def test_zzz_cty_an_empty_round_prunes_everything_including_the_index() -> None:
+    """دورِ بی‌کانفیگ: همه‌چیز جارو می‌شود و فهرست هم می‌رود.
+
+    چرا فهرست هم باید برود: اگر بماند، به فایل‌هایی اشاره می‌کند که همین
+    حالا حذف شده‌اند و کاربر برای هر کشور یک ۴۰۴ می‌گیرد.
+
+    و چرا «حذف» و نه «فایلِ خالی» — همان استدلالِ
+    `aggregate._remove_if_exists`: پاسخِ ۲۰۰ با بدنهٔ خالی باعث می‌شود
+    کلاینتِ اشتراک لیستش را با «هیچ» جانشین کند، ولی ۴۰۴ باعث می‌شود
+    لیستِ قبلی را نگه دارد.
+    """
+    out = _tmpdir("cty_empty_")
+    countries.write_countries(out, [_cty_line("DE"), _cty_line("FR")])
+    base = os.path.join(out, countries.COUNTRIES_DIR)
+    assert countries.INDEX_NAME in os.listdir(base)
+
+    stats = countries.write_countries(out, [])
+    assert stats["countries"] == 0 and stats["configs"] == 0, stats
+    left = sorted(os.listdir(base)) if os.path.isdir(base) else []
+    assert not [p for p in left if p.endswith(".txt")], f"فایلِ txt ماند: {left}"
+    assert countries.INDEX_NAME not in left, "فهرستِ کهنه ماند"
+    # و هیچ فایلِ خالی‌ای هم جایش نوشته نشده باشد
+    for name in left:
+        full = os.path.join(base, name)
+        if os.path.isfile(full):
+            assert os.path.getsize(full) > 0, f"فایلِ خالی منتشر شد: {name}"
+
+
+def test_zzz_cty_repeated_runs_are_byte_identical() -> None:
+    """دو اجرا روی یک ورودی باید فایل‌های یکسان بدهند (بی‌تعیّنی ممنوع).
+
+    چرا: هر بایتِ تغییرکرده یک blobِ تازه در تاریخِ git است و این خروجی
+    روزی ۹۶ بار منتشر می‌شود. اگر ترتیبِ سطرها یا نامِ فایل‌ها بینِ دو
+    اجرا بلرزد، مخزن بی‌دلیل باد می‌کند.
+    """
+    lines = [_cty_line("DE", ip=f"7.7.7.{i}") for i in range(4)] + \
+            [_cty_line("NL", ip=f"8.8.8.{i}") for i in range(3)]
+    out = _tmpdir("cty_idem_")
+
+    def snapshot() -> dict:
+        base = os.path.join(out, countries.COUNTRIES_DIR)
+        snap = {}
+        for name in sorted(os.listdir(base)):
+            if name == countries.INDEX_NAME:      # مُهرِ زمانی دارد
+                continue
+            with open(os.path.join(base, name), encoding="utf-8") as fh:
+                snap[name] = fh.read()
+        return snap
+
+    countries.write_countries(out, lines)
+    first = snapshot()
+    countries.write_countries(out, lines)
+    assert snapshot() == first, "اجرای دوم فایل‌های متفاوتی داد"
+    assert first, "هیچ فایلی نوشته نشد"
+
+
+def test_zzz_cty_index_only_advertises_files_that_exist() -> None:
+    """`Countries/index.json` تنها فایلِ **موجود** را تبلیغ می‌کند.
+
+    همان قراردادی که `aggregate.build_index` و `pipeline.merge_index`
+    دارند: تبلیغِ فایلِ ناموجود یعنی ۴۰۴ در دستِ کاربر.
+    """
+    lines = [_cty_line("DE"), _cty_line("FR", ip="4.4.4.4"),
+             _cty_line("FR", ip="4.4.4.5")]
+    out = _tmpdir("cty_idx_")
+    countries.write_countries(out, lines)
+    base = os.path.join(out, countries.COUNTRIES_DIR)
+    with open(os.path.join(base, countries.INDEX_NAME), encoding="utf-8") as fh:
+        doc = json.load(fh)
+
+    assert doc["source"] == "verified", doc.get("source")
+    assert doc["stats"]["configs"] == 3, doc["stats"]
+    assert doc["stats"]["countries"] == 2, doc["stats"]
+    for entry in doc["countries"]:
+        rel = entry["file"]
+        assert os.path.isfile(os.path.join(out, rel)), \
+            f"فهرست فایلِ ناموجود را تبلیغ کرد: {rel}"
+        assert entry["count"] > 0
+        assert entry["code"] and entry["flag"]
+    # مرتب‌سازی: پرشمارترین کشور اول — کاربر معمولاً همان را می‌خواهد
+    counts = [e["count"] for e in doc["countries"]]
+    assert counts == sorted(counts, reverse=True), counts
+    # جمعِ فهرست باید با جمعِ فایل‌ها بخواند
+    assert sum(counts) == doc["stats"]["configs"]
+
+
+def test_zzz_cty_falls_back_to_iso_codes_when_the_database_is_missing() -> None:
+    """بی پایگاه‌دادهٔ GeoIP هم باید کار کند — با نامِ کدِ ISO.
+
+    این حالت **واقعاً ممکن** است و نه فرضی: گامِ «Verify GeoIP» ورک‌فلو
+    warn-only است (هشدار می‌دهد و با `SystemExit(0)` رد می‌شود)، پس یک
+    اجرا با پایگاه‌دادهٔ غایب می‌تواند رخ دهد. در آن حالت باید
+    `Countries/DE.txt` بسازیم — کم‌تر خوانا ولی درست — نه این‌که کلِ
+    قابلیت بی‌صدا ناپدید شود.
+    """
+    out = _tmpdir("cty_nodb_")
+    saved_path = geo.MMDB_PATH
+    saved_reader = getattr(geo, "_reader", None)
+    saved_tried = getattr(geo, "_reader_tried", None)
+    try:
+        geo.MMDB_PATH = os.path.join(out, "definitely-absent.mmdb")
+        geo.reset()
+        if hasattr(geo, "_reader"):
+            geo._reader = None
+        if hasattr(geo, "_reader_tried"):
+            geo._reader_tried = False
+        assert not geo.database_available(), "پایگاه‌داده باید غایب باشد"
+        stats = countries.write_countries(
+            out, [_cty_line("DE"), _cty_line("FR", ip="4.4.4.4")])
+    finally:
+        geo.MMDB_PATH = saved_path
+        if saved_reader is not None or hasattr(geo, "_reader"):
+            geo._reader = saved_reader
+        if saved_tried is not None or hasattr(geo, "_reader_tried"):
+            geo._reader_tried = saved_tried
+        geo.reset()
+
+    assert stats["countries"] == 2, stats
+    base = os.path.join(out, countries.COUNTRIES_DIR)
+    txts = sorted(p for p in os.listdir(base) if p.endswith(".txt"))
+    assert txts == ["DE.txt", "FR.txt"], txts
+    assert stats["named_from_db"] == 0, stats
+
+
+def test_zzz_cty_name_scan_respects_its_time_budget() -> None:
+    """اسکنِ نام باید بودجهٔ زمانی داشته باشد، وگرنه دور را کند می‌کند.
+
+    اگر کدی در پایگاه‌داده **نباشد**، زودخروج هرگز رخ نمی‌دهد و اسکن تا
+    ته می‌رود. سنجش با کدِ ساختگیِ `QQ`: ۱۰٫۷۰ ثانیه و ۱٬۳۷۲٬۲۴۸ گام —
+    برای خطِ لوله‌ای که روزی ۹۶ بار اجرا می‌شود پذیرفتنی نیست. این تست
+    وجودِ سقف را قفل می‌کند، نه یک عددِ زمانیِ خاص را (که روی ماشینِ
+    کندتر می‌لرزد).
+    """
+    assert countries.NAME_SCAN_BUDGET > 0, "بودجه باید مثبت باشد"
+
+    class _NeverEndingReader:
+        """پایگاه‌دادهٔ بی‌پایان: اگر سقف کار نکند، این تست هرگز تمام نمی‌شود."""
+
+        def __init__(self) -> None:
+            self.steps = 0
+
+        def __iter__(self):
+            while True:
+                self.steps += 1
+                yield ("0.0.0.0/0", {"country": {"iso_code": "XX",
+                                                 "names": {"en": "Nowhere"}}})
+
+    reader = _NeverEndingReader()
+    found = countries._scan_names(["QQ"], reader, budget=0.01)
+    assert found == {}, found
+    assert reader.steps > 0, "اسکن اصلاً اجرا نشد"
+    assert reader.steps < 10_000_000, "سقفِ زمانی عمل نکرد"
+
+    # و برای کدی که واقعاً هست، زودخروج باید بزند (نه اسکنِ کامل)
+    reader2 = _NeverEndingReader()
+    found2 = countries._scan_names(["XX"], reader2, budget=5.0)
+    assert found2 == {"XX": "Nowhere"}, found2
+    assert reader2.steps == 1, f"زودخروج نزد: {reader2.steps} گام"
+
+
+def test_zzz_cty_a_wrong_geoip_record_never_produces_a_wrong_name() -> None:
+    """★ گاردِ `iso_code == code` — بی آن، نامِ فایل غلط می‌شود.
+
+    این با سنجش کشف شد نه با حدس: روی دادهٔ زنده، هدف‌گیریِ بی‌گارد ۴
+    نامِ غلط داد (`AE`→«United States»، `IR`→«Poland»، `PT`→«France»،
+    `SC`→«Netherlands»)، چون برچسبِ سطر با پایگاه‌دادهٔ ماهِ قبلِ کش‌شدهٔ
+    CI نوشته شده بود و نشانی در نسخهٔ تازه کشورش عوض شده.
+
+    یعنی «فایلِ AE.txt» می‌توانست «United_States.txt» نام بگیرد و با
+    فایلِ واقعیِ آمریکا قاطی شود. گارد باید رکوردِ ناهمخوان را **رد** کند.
+    """
+    class _LyingReader:
+        def get(self, ip):                     # noqa: D401
+            # هر پرس‌وجو کشورِ غلط برمی‌گرداند
+            return {"country": {"iso_code": "US",
+                                "names": {"en": "United States"}}}
+
+        def __iter__(self):
+            return iter(())                    # اسکنِ پشتیبان هیچ نمی‌یابد
+
+    groups = {"AE": [_cty_line("AE", ip="1.2.3.4")]}
+    got = countries._targeted_names(groups, _LyingReader())
+    assert got == {}, f"رکوردِ ناهمخوان پذیرفته شد: {got}"
+
+    # و در مسیرِ کامل، نتیجه باید به کدِ ISO برگردد نه نامِ غلط
+    names = {}
+    names.update(countries._targeted_names(groups, _LyingReader()))
+    for code in groups:
+        names.setdefault(code, code)
+    assert names == {"AE": "AE"}, names
+    assert countries.slug_for(names["AE"]) == "AE"
+
+
+def test_zzz_cty_filename_collisions_never_overwrite_another_country() -> None:
+    """دو کشور با یک slug نباید فایلِ همدیگر را بازنویسی کنند.
+
+    روی ۲۵۱ نامِ پایگاه‌دادهٔ امروز صفر برخورد سنجیده شد — ولی
+    «سنجیده‌شده صفر» با «ناممکن» یکی نیست: نسخهٔ آیندهٔ پایگاه‌داده
+    می‌تواند دو نام بدهد که به یک slug برسند. آن‌وقت یک کشور بی‌صدا
+    کانفیگ‌های کشورِ دیگر را نشان می‌دهد — بدترین نوعِ باگ: خاموش.
+    """
+    out = _tmpdir("cty_coll_")
+    real = countries.resolve_names
+
+    def _same_name(groups):
+        return {code: "Same Name" for code in groups}
+
+    countries.resolve_names = _same_name          # type: ignore[assignment]
+    try:
+        stats = countries.write_countries(
+            out, [_cty_line("DE"), _cty_line("FR", ip="4.4.4.4")])
+    finally:
+        countries.resolve_names = real            # type: ignore[assignment]
+
+    base = os.path.join(out, countries.COUNTRIES_DIR)
+    txts = sorted(p for p in os.listdir(base) if p.endswith(".txt"))
+    assert len(txts) == 2, f"برخوردِ نام یک فایل را خورد: {txts}"
+    assert stats["countries"] == 2, stats
+    assert stats["configs"] == 2, stats
+    # و محتوای دو فایل نباید یکی باشد
+    bodies = []
+    for name in txts:
+        with open(os.path.join(base, name), encoding="utf-8") as fh:
+            bodies.append([ln for ln in fh if ln.strip()
+                           and not ln.startswith("#")])
+    assert bodies[0] != bodies[1], "دو کشور محتوای یکسان گرفتند"
+
+
+def test_zzz_cty_output_lines_carry_no_forbidden_control_bytes() -> None:
+    """همان گاردِ بایتِ کنترلیِ بقیهٔ خروجی‌ها این‌جا هم برقرار است.
+
+    یک بایتِ کنترلی در فایلِ اشتراک باعث می‌شود کلاینت کلِ فایل را رد
+    کند — خرابیِ خاموشِ کلاسیک.
+    """
+    out = _tmpdir("cty_ctl_")
+    countries.write_countries(out, [_cty_line("DE"), _cty_line("FR",
+                                                              ip="4.4.4.4")])
+    base = os.path.join(out, countries.COUNTRIES_DIR)
+    for name in sorted(os.listdir(base)):
+        path = os.path.join(base, name)
+        with open(path, encoding="utf-8") as fh:
+            core.assert_no_control_bytes(path, fh.read())
+    # و فایلِ موقت نباید جا مانده باشد
+    assert not [p for p in os.listdir(base) if p.endswith(".tmp")], \
+        os.listdir(base)
+
+
+def test_zzz_cty_is_registered_in_the_publish_machinery() -> None:
+    """★ `Countries` باید در **هر دو** جای ورک‌فلو ثبت شده باشد.
+
+    این تست یک قفلِ ساختاری است، نه تشریفات. گامِ انتشار مسیرهای
+    تغییرکردهٔ ANCHOR..TIP را با `is_output_path` می‌سنجد و اگر مسیری رد
+    شود، کلِ دور را **لغو** می‌کند. شبیه‌سازی در یک مخزنِ gitِ واقعی:
+    بی این ثبت، هر سه فایلِ کشوری «تغییرِ منبع» شمرده شدند و انتشار
+    قفل شد. پس نبودِ این دو خط، قابلیت را «نیمه‌کاره» نمی‌کرد — کلِ
+    انتشار را می‌شکست.
+
+    و `MUST_EXIST` عامدانه دست‌نخورده می‌ماند: مجموعهٔ کشورها ثابت نیست
+    (۲۳ کد در `all/` از `verified/` غایب‌اند) و گامِ آبشار
+    `continue-on-error` است، پس دوری که هیچ فایلِ کشوری ندارد **مجاز**
+    است. آوردنِ `Countries` در آن فهرست، یک حالتِ طبیعی را به خرابیِ
+    انتشار تبدیل می‌کرد.
+    """
+    wf = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                      "..", ".github", "workflows", "aggregate.yml")
+    with open(wf, encoding="utf-8") as fh:
+        src = fh.read()
+
+    m = re.search(r'OUTPUT_PATHS="([^"]+)"', src)
+    assert m, "OUTPUT_PATHS پیدا نشد"
+    assert countries.COUNTRIES_DIR in m.group(1).split(), \
+        f"{countries.COUNTRIES_DIR} در OUTPUT_PATHS نیست: {m.group(1)}"
+
+    body = re.search(r"is_output_path\(\)\s*\{(.*?)\n          \}", src, re.S)
+    assert body, "بدنهٔ is_output_path پیدا نشد"
+    assert f"{countries.COUNTRIES_DIR}/*" in body.group(1), \
+        "شاخهٔ Countries/* در is_output_path نیست ⇒ انتشار قفل می‌شود"
+
+    # و **نباید** در MUST_EXIST باشد
+    must = re.search(r'MUST_EXIST="([^"]*)"', src, re.S)
+    assert must, "MUST_EXIST پیدا نشد"
+    assert countries.COUNTRIES_DIR not in must.group(1), \
+        "Countries در MUST_EXIST آمده ⇒ دورِ بی‌کشور، انتشار را می‌شکند"
+
+
+def test_zzz_cty_the_shell_function_really_classifies_countries_paths() -> None:
+    """بدنهٔ واقعیِ `is_output_path` را **اجرا** می‌کند، نه فقط می‌خواند.
+
+    خواندنِ متن ثابت نمی‌کند shell همان‌طور تفسیرش می‌کند. این تست همان
+    تابع را از فایل بیرون می‌کشد و زیرِ `bash` اجرا می‌کند — شاملِ
+    حساسیت به بزرگی/کوچکیِ حرف، که در نامِ `Countries` عمدی است.
+    """
+    import subprocess
+
+    wf = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                      "..", ".github", "workflows", "aggregate.yml")
+    with open(wf, encoding="utf-8") as fh:
+        src = fh.read()
+    body = re.search(r"is_output_path\(\)\s*\{(.*?)\n          \}", src, re.S)
+    assert body, "بدنهٔ is_output_path پیدا نشد"
+    func = "is_output_path() {" + body.group(1) + "\n}"
+
+    cases = [
+        ("Countries/Germany.txt", 0),
+        ("Countries/index.json", 0),
+        ("Countries/United_States.txt", 0),
+        ("all/configs.txt", 0),
+        ("verified/configs.txt", 0),
+        ("index.json", 0),
+        # این‌ها **نباید** خروجی شمرده شوند:
+        ("scripts/countries.py", 1),
+        ("README.md", 1),
+        ("countries/Germany.txt", 1),      # حرفِ کوچک ⇒ مسیرِ دیگری است
+        (".github/workflows/aggregate.yml", 1),
+    ]
+    script = func + "\n" + "\n".join(
+        f'is_output_path "{p}"; printf "%s\\n" "$?"' for p, _ in cases)
+    proc = subprocess.run(["bash", "-c", script], capture_output=True,
+                          text=True)
+    assert proc.returncode == 0, proc.stderr
+    got = [int(x) for x in proc.stdout.split()]
+    want = [rc for _, rc in cases]
+    assert got == want, f"طبقه‌بندیِ نادرست: {list(zip(cases, got))}"
+
+
+def test_zzz_cty_pipeline_wires_it_between_buckets_and_index() -> None:
+    """`pipeline` باید `Countries/` را بنویسد و از سبدِ `verified` بخورد.
+
+    ترتیب اهمیت دارد: ورودی‌اش در `write_buckets` ساخته می‌شود و
+    `merge_index` باید آمارش را ببیند. این تست جای فراخوانی را در متنِ
+    منبع قفل می‌کند، چون یک جابه‌جاییِ بی‌دقت آن را بی‌صدا از کار
+    می‌اندازد (آمار خالی می‌ماند و هیچ خطایی هم چاپ نمی‌شود).
+    """
+    src_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                            "pipeline.py")
+    with open(src_path, encoding="utf-8") as fh:
+        src = fh.read()
+
+    assert "import countries" in src, "pipeline ماژول را وارد نکرده"
+    i_write = src.index("paths = write_buckets(")
+    i_cty = src.index("countries.write_countries(")
+    i_idx = src.index("index = merge_index(")
+    assert i_write < i_cty < i_idx, \
+        "فراخوانیِ Countries باید بینِ write_buckets و merge_index باشد"
+    assert 'buckets["verified"]' in src[i_cty - 200:i_cty + 200], \
+        "Countries از سبدِ verified تغذیه نمی‌شود"
+
+    # و باید در `try` باشد: این قابلیت افزوده است و نباید انتشارِ
+    # ۸۵۰۰ کانفیگ را زمین بزند.
+    window = src[max(0, i_cty - 400):i_cty]
+    assert "try:" in window, "فراخوانی محافظتِ try ندارد"
+
+
+def test_zzz_cty_index_advert_never_outlives_the_files() -> None:
+    """تبلیغِ `Countries` در `index.json` با واقعیتِ دیسک هم‌گام است.
+
+    دو نیمه دارد و هر دو لازم است: وقتی فایل‌ها هستند تبلیغ باید بیاید،
+    و وقتی نیستند باید **برود**. نیمهٔ دوم همان باگی است که کاربر
+    می‌بیند: `index.json` آدرسی می‌دهد که ۴۰۴ است.
+
+    هم‌چنین `categories` نباید لمس شود — آن یک «جهانِ بسته» است که
+    تستِ دیگری همین فایل قید کرده است.
+    """
+    out = _tmpdir("cty_advert_")
+    with open(os.path.join(out, "index.json"), "w", encoding="utf-8") as fh:
+        json.dump({"primary_base": "https://cdn.example/b",
+                   "mirror_base": "https://mirror.example/b",
+                   "categories": {"all": {}, "heavy": {}, "light": {}}}, fh)
+
+    lines = [_cty_line("DE"), _cty_line("FR", ip="4.4.4.4")]
+    stats = countries.write_countries(out, lines)
+    buckets = {"verified": lines, "fast": [], "secure": [], "top": [],
+               "stats": {"countries": stats}}
+    assert pipeline.merge_index(out, buckets)
+    with open(os.path.join(out, "index.json"), encoding="utf-8") as fh:
+        doc = json.load(fh)
+
+    assert set(doc["categories"]) == {"all", "heavy", "light"}, \
+        "کلیدِ categories دست‌کاری شد"
+    block = doc.get("countries")
+    assert block, "تبلیغِ Countries نوشته نشد"
+    assert block["count"] == 2 and block["configs"] == 2, block
+    assert block["source"] == "verified", block
+    rel = block["index"].split("/b/", 1)[1]
+    assert os.path.isfile(os.path.join(out, rel)), \
+        f"تبلیغ به فایلِ ناموجود اشاره کرد: {rel}"
+
+    # دورِ بعد هیچ کشوری ندارد ⇒ تبلیغ باید حذف شود
+    stats2 = countries.write_countries(out, [])
+    buckets2 = {"verified": [], "fast": [], "secure": [], "top": [],
+                "stats": {"countries": stats2}}
+    assert pipeline.merge_index(out, buckets2)
+    with open(os.path.join(out, "index.json"), encoding="utf-8") as fh:
+        doc2 = json.load(fh)
+    assert "countries" not in doc2, "تبلیغِ کهنه ماند ⇒ کاربر ۴۰۴ می‌گیرد"
+    assert set(doc2["categories"]) == {"all", "heavy", "light"}
+
+
+def test_zzz_cty_a_broken_country_never_breaks_the_whole_round() -> None:
+    """خرابیِ نوشتنِ یک کشور، بقیه را زمین نمی‌زند و فایلِ نیم‌نوشته نمی‌گذارد.
+
+    همان سیاستِ `write_buckets` برای مبدل‌های شکسته. اگر یک فایل خطا
+    داد، بقیهٔ کشورها باید نوشته شوند و خطا در آمار ثبت شود — نه این‌که
+    کلِ `Countries/` بی‌صدا غیب شود.
+    """
+    out = _tmpdir("cty_partial_")
+    real = countries._write_text
+    calls = {"n": 0}
+
+    def _flaky(path, content):
+        calls["n"] += 1
+        if os.path.basename(path) == "France.txt":
+            raise OSError("simulated disk failure")
+        return real(path, content)
+
+    countries._write_text = _flaky                # type: ignore[assignment]
+    try:
+        stats = countries.write_countries(
+            out, [_cty_line("DE"), _cty_line("FR", ip="4.4.4.4"),
+                  _cty_line("JP", ip="5.5.5.5")])
+    finally:
+        countries._write_text = real              # type: ignore[assignment]
+
+    base = os.path.join(out, countries.COUNTRIES_DIR)
+    present = sorted(p for p in os.listdir(base) if p.endswith(".txt"))
+    assert "Germany.txt" in present and "Japan.txt" in present, present
+    assert "France.txt" not in present, "فایلِ نیم‌نوشته باقی ماند"
+    assert "FR" in stats["failed"], stats["failed"]
+    assert stats["countries"] == 2, stats
+    assert calls["n"] >= 3
+
+
+def test_zzz_cty_the_live_verified_bucket_splits_cleanly() -> None:
+    """روی دادهٔ **واقعیِ** همین مخزن: هیچ کانفیگی نباید بی‌کشور بماند.
+
+    این تست ادعاهای بالا را به دادهٔ زنده گره می‌زند، نه به نمونهٔ
+    ساختگی. اگر `verified/configs.txt` نبود (مخزنِ تازه‌کلون یا اجرای
+    محلی پیش از اولین دور)، تست بی‌صدا رد می‌شود — چون نبودنِ خروجی یک
+    وضعیتِ مجاز است، نه خرابی.
+    """
+    root = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
+    path = os.path.join(root, "verified", "configs.txt")
+    if not os.path.isfile(path):
+        return
+    with open(path, encoding="utf-8") as fh:
+        lines = [ln.strip() for ln in fh
+                 if ln.strip() and not ln.startswith("#")]
+    if not lines:
+        return
+
+    unlabelled = [ln for ln in lines if countries.country_code_of(ln) is None]
+    assert not unlabelled, (
+        f"{len(unlabelled)} سطرِ verified/ برچسبِ کشور ندارد؛ "
+        f"نمونه: {unlabelled[0][:80]!r}")
+
+    groups = countries.group_by_country(lines)
+    assert groups, "هیچ گروهی ساخته نشد"
+    assert sum(len(v) for v in groups.values()) == len(lines), \
+        "جمعِ گروه‌ها با تعدادِ سطرها نمی‌خواند"
+    # «Global» در verified/ نباید باشد: کانفیگی که واقعاً وصل شده،
+    # نشانیِ قابلِ مکان‌یابی دارد.
+    assert countries.GLOBAL_CODE not in groups, \
+        "verified/ سطرِ Global دارد — فرضِ طراحی نقض شد"
+    for code in groups:
+        assert re.fullmatch(r"[A-Z]{2}", code), f"کدِ نامعتبر: {code!r}"
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# فاز C15 — `Countries/`: سه نقصِ سنجیده‌شده در بازبینیِ خط‌به‌خط
+# ══════════════════════════════════════════════════════════════════════════════
+# این بلوک سه نقص را قفل می‌کند که هیچ‌کدام «خطا نمی‌دادند» — همان الگویِ
+# آشنای این مخزن: خروجی تولید می‌شد، فایل حجم داشت، سوئیت سبز بود.
+#
+#   نقصِ ۱ — شمارشِ سرآیند: `write_countries` عدد را از لیستِ **سپرخورده**
+#            می‌گرفت. `core.shield_unsupported_runs` پیش از هر دنبالهٔ
+#            scheme‌های ناپشتیبان یک خطِ `#` اضافه می‌کند، پس `len(body)` به
+#            اندازهٔ تعدادِ سپرها از تعدادِ واقعیِ کانفیگ‌ها بیشتر بود. یعنی
+#            سرآیندِ فایل و `count`ِ همان کشور در `index.json` — که از
+#            `len(group)` می‌آید — دو عددِ مختلف می‌دادند. سنجش روی دادهٔ
+#            زندهٔ همین مخزن: تنها سرآیند متورم بود؛ `index.json` و آمار
+#            درست بودند، پس تناقض واقعی بود، نه دو-خطایِ همسان.
+#            قراردادِ رسمیِ مخزن در `aggregate.write_category` نوشته شده:
+#            «شمارشِ سرآیند عمداً از `r.unique` گرفته می‌شود، نه از لیستِ
+#            سپرخورده — سپر «کانفیگ» نیست.» اصلاح، همین قرارداد را رعایت
+#            می‌کند. آزمونِ جهش (M9) نشان داد پیش از این تست‌ها هیچ آزمونی
+#            این عدد را نمی‌دید.
+#
+#   نقصِ ۲ — `*.tmp`ِ یتیم: `_write_text` با «بنویس در `.tmp` سپس
+#            `os.replace`» کار می‌کند. اگر دور وسطِ کار کشته شود (تایم‌اوتِ
+#            ۱۵ دقیقه‌ایِ ورک‌فلو، ENOSPC، SIGKILL) یا `os.replace` شکست
+#            بخورد، یک `.tmp`ِ نیمه‌نوشته می‌ماند. جاروی ماژول فقط `*.txt`
+#            را می‌دید. و مرحلهٔ انتشار با `git add -A -- $PATHS` (خطِ ۱۰۸۶
+#            در `aggregate.yml`) کلِ پوشه را stage می‌کند — با اجرای
+#            **الگوریتمِ واقعیِ انتشار** در یک مخزنِ یک‌بارمصرف دیده شد که
+#            `Countries/Germany.txt.tmp` وارد درختِ منتشرشده می‌شود.
+#
+#   نقصِ ۳ — متغیرهای محیطی: `COUNTRIES_NAME_BUDGET` و `COUNTRIES_MIN`
+#            بی هیچ اعتبارسنجی خوانده می‌شدند. `nan` و `inf` بی‌صدا گاردِ
+#            زمانی را **خاموش** می‌کنند، چون گارد `(time.time() - started) >
+#            budget` است و در پایتون هر مقایسه با `nan` نتیجهٔ `False` دارد و
+#            هیچ عددی از `inf` بزرگ‌تر نیست. اندازه‌گیریِ واقعی روی کدِ
+#            ناموجودِ `QQ`: budget=2.0 → ۲٫۰۳s ولی budget=nan → ۱۱٫۰۶s،
+#            یعنی ۵٫۴ برابر کندتر. `int("abc")` هم یک `ValueError`ِ درست
+#            وسطِ importِ ماژول می‌داد و کلِ خط‌لوله را زمین می‌زد.
+
+
+def _cty_scheme_line(code: str, ip: str, tag: str, scheme: str) -> str:
+    """مثلِ `_cty_line` ولی با scheme دلخواه — برای ساختنِ خطِ سپرخورده.
+
+    `ssr://` عامدانه انتخاب شده و با اجرا تأیید شد: بیرونِ
+    `core.RAY2SING_PREFIXES` است (پس سپر می‌خورد) ولی
+    `countries.country_code_of` برچسبش را کامل می‌خواند (پس در گروهِ
+    کشور می‌نشیند). این ترکیب همان چیزی است که نقصِ ۱ را آشکار می‌کند.
+    """
+    flag = geo.flag_of(code) if code != "Global" else "🌐"
+    return (f"{scheme}://YWVzLTI1Ni1nY206cGFzcw==@{ip}:443"
+            f"#{code} {flag} | {core.BRAND_CHANNEL} | {tag}")
+
+
+def _cty_header_count(text: str) -> int:
+    """عددِ نوشته‌شده در خطِ شمارشِ سرآیند را بیرون می‌کشد."""
+    m = re.search(r"—\s+(\d+)\s+configs", text)
+    assert m, f"خطِ شمارش در سرآیند پیدا نشد: {text[:200]!r}"
+    return int(m.group(1))
+
+
+def _cty_read(out: str, stats: dict, code: str) -> str:
+    """متنِ فایلِ یک کشور را از راهِ `stats["files"]` می‌خواند.
+
+    چرا نه با نامِ حدسی مثل `"Germany.txt"`: نامِ فایل به وجودِ
+    پایگاه‌دادهٔ GeoIP بسته است. `.cache/` در `.gitignore` است (خطِ
+    ۲۳)، پس در یک کلونِ تازه یا CIِ بی‌کش، نامِ فایل به کدِ ISO
+    برمی‌گردد و می‌شود `DE.txt`. این دام در همین بازبینی واقعاً
+    گرفتار شد: نسخهٔ اولِ این تست‌ها بی پایگاه‌داده با
+    `FileNotFoundError` می‌مرد — یعنی به‌جای سنجشِ آن‌چه ادعا کرده،
+    خطای محیط را گزارش می‌کرد. `stats["files"]` با **کدِ ISO** کلید
+    خورده و از این وابستگی آزاد است.
+    """
+    rel = stats["files"].get(code)
+    assert rel, f"کشورِ {code} نوشته نشد: {stats.get('files')}"
+    with open(os.path.join(out, rel), encoding="utf-8") as fh:
+        return fh.read()
+
+
+def _cty_config_lines(text: str) -> list:
+    """سطرهایی که واقعاً کانفیگ‌اند: ناتهی، **بی‌کامنت**، دارای `://`.
+
+    قیدِ «بی‌کامنت» از یک اشتباهِ واقعیِ همین بازبینی درس گرفته شده:
+    شمارشِ سادهٔ `"://" in line` خطوطِ `#support-url: https://t.me/...` و
+    `#profile-web-page-url: https://github.com/...` را هم می‌شمرد و
+    نتیجه‌اش یک «نقصِ» کاذب بود که بعد باید باطل می‌شد.
+    """
+    return [ln for ln in text.splitlines()
+            if ln.strip() and not ln.lstrip().startswith("#") and "://" in ln]
+
+
+def test_zzz_cty_the_header_count_excludes_the_shield_line() -> None:
+    """سرآیند تعدادِ **کانفیگ** را می‌گوید، نه تعدادِ سطرهای فایل.
+
+    نقصِ ۱، کوچک‌ترین بازتولیدِ ممکن: یک کشور با یک `ss://` (پشتیبان) و
+    یک `ssr://` (ناپشتیبان). سپر یک خط اضافه می‌کند، پس اگر عدد از
+    لیستِ سپرخورده گرفته شود «۳» می‌شود، در حالی که کاربر فقط ۲
+    کانفیگ دارد.
+    """
+    out = _tmpdir("cty_hdr_shield_")
+    stats = countries.write_countries(out, [
+        _cty_line("DE"),
+        _cty_scheme_line("DE", "2.2.2.2", "BBB222", "ssr"),
+    ])
+    text = _cty_read(out, stats, "DE")
+    assert core.SHIELD_LINE in text, \
+        "سپر اعمال نشد ⇒ این تست دیگر نقصِ ۱ را نمی‌سنجد"
+    assert _cty_header_count(text) == 2, (
+        f"سرآیند {_cty_header_count(text)} گفت ولی ۲ کانفیگ هست ⇒ "
+        f"عدد از لیستِ سپرخورده گرفته شده")
+    assert len(_cty_config_lines(text)) == 2
+    assert stats["configs"] == 2, stats
+
+
+def test_zzz_cty_the_header_count_survives_many_shield_runs() -> None:
+    """با چند دنبالهٔ ناپشتیبان هم عدد نباید تکان بخورد.
+
+    چرا فقط یک سپر بس نیست: `shield_unsupported_runs` برای **هر
+    دنباله** یک خط می‌گذارد، نه یکی برای کلِ فایل. با اجرا سنجیده شد
+    که چیدمانِ ss/ssr/ssr/ss/ssr دو سپر می‌سازد (۵ ⇒ ۷ سطر). اگر
+    اصلاح ناقص بود، خطا این‌جا ۲ واحد می‌شد و نه ۱ — پس این تست
+    تفاوتِ «عدد ثابت» و «عدد کمی کمتر» را هم می‌گیرد.
+    """
+    out = _tmpdir("cty_hdr_runs_")
+    group = [
+        _cty_line("DE"),
+        _cty_scheme_line("DE", "2.2.2.2", "T2", "ssr"),
+        _cty_scheme_line("DE", "3.3.3.3", "T3", "ssr"),
+        _cty_scheme_line("DE", "4.4.4.4", "T4", "ss"),
+        _cty_scheme_line("DE", "5.5.5.5", "T5", "ssr"),
+    ]
+    stats = countries.write_countries(out, group)
+    text = _cty_read(out, stats, "DE")
+    assert text.count(core.SHIELD_LINE) == 2, (
+        f"{text.count(core.SHIELD_LINE)} سپر دیده شد؛ این تست بر پایهٔ ۲ "
+        f"سپر ساخته شده ⇒ فرضش باید بازبینی شود")
+    assert _cty_header_count(text) == 5, (
+        f"سرآیند {_cty_header_count(text)} گفت، انتظار ۵")
+    assert len(_cty_config_lines(text)) == 5
+
+
+def test_zzz_cty_the_header_count_matches_the_index_and_the_disk() -> None:
+    """سه خروجیِ رسمی باید **یک** عدد بدهند: سرآیند، `index.json`، دیسک.
+
+    این همان تناقضی است که نقصِ ۱ می‌ساخت: `index.json` عدد را از
+    `len(group)` می‌گرفت و سرآیند از لیستِ سپرخورده، پس دو سندِ رسمیِ
+    یک پروژه دو عددِ مختلف اعلام می‌کردند و کاربر نمی‌فهمید کدام درست
+    است. چهار سناریو پوشش داده می‌شود: بی‌سپر، یک‌سپر، دوسپر، و
+    کشوری که **همهٔ** کانفیگ‌هایش ناپشتیبان‌اند (بدترین حالت).
+    """
+    out = _tmpdir("cty_hdr_index_")
+    lines = [
+        # DE: بی سپر
+        _cty_line("DE"), _cty_line("DE", ip="1.1.1.2", tag="D2"),
+        # FR: یک سپر
+        _cty_line("FR", ip="3.3.3.1", tag="F1"),
+        _cty_scheme_line("FR", "3.3.3.2", "F2", "ssr"),
+        # JP: دو سپر
+        _cty_scheme_line("JP", "5.5.5.1", "J1", "ssr"),
+        _cty_line("JP", ip="5.5.5.2", tag="J2"),
+        _cty_scheme_line("JP", "5.5.5.3", "J3", "ssr"),
+        # NL: همه ناپشتیبان
+        _cty_scheme_line("NL", "6.6.6.1", "N1", "ssr"),
+        _cty_scheme_line("NL", "6.6.6.2", "N2", "ssr"),
+    ]
+    stats = countries.write_countries(out, lines)
+    base = os.path.join(out, countries.COUNTRIES_DIR)
+    with open(os.path.join(base, countries.INDEX_NAME), encoding="utf-8") as fh:
+        index = json.load(fh)
+    assert index["countries"], "فهرست تهی است"
+    total = 0
+    for entry in index["countries"]:
+        text = open(os.path.join(out, entry["file"]), encoding="utf-8").read()
+        header = _cty_header_count(text)
+        disk = len(_cty_config_lines(text))
+        assert header == entry["count"] == disk, (
+            f"{entry['file']}: سرآیند={header} · index={entry['count']} · "
+            f"دیسک={disk} ⇒ سه عدد یکی نیستند")
+        total += disk
+    assert total == stats["configs"] == len(lines), (
+        f"جمعِ دیسک={total} · آمار={stats['configs']} · ورودی={len(lines)}")
+
+
+def test_zzz_cty_an_orphan_tmp_never_survives_the_round() -> None:
+    """`*.tmp`ِ جامانده از دورِ کشته‌شده باید جارو شود، حتی وقتی کشور رفته.
+
+    ★ چرا «حتی وقتی کشور رفته» قیدِ حیاتیِ این تست است: اگر همان کشور
+    این دور هم نوشته شود، `_write_text` خودش همان مسیرِ `.tmp` را
+    می‌سازد و بی‌درنگ با `os.replace` مصرف می‌کند — پس یتیم بی‌صدا ناپدید
+    می‌شود و تست **کاذباً** سبز می‌ماند. این دام در همین بازبینی واقعاً
+    گرفتار شد: نسخهٔ اول سناریو با `Germany` نوشته شده بود و نقص را
+    بازتولید نکرد. این نسخه کشورِ یتیم را از ورودی حذف می‌کند.
+
+    اهمیتِ عملی: `git add -A -- $PATHS` در گامِ انتشار کلِ پوشه را stage
+    می‌کند، پس یک `.txt.tmp`ِ نیمه‌نوشته عیناً منتشر می‌شود و کلاینتِ
+    اشتراک می‌تواند آن را بخواند.
+    """
+    out = _tmpdir("cty_orphan_")
+    base = os.path.join(out, countries.COUNTRIES_DIR)
+    os.makedirs(base, exist_ok=True)
+    for name, body in (("Germany.txt.tmp", "ss://half-written"),
+                       ("Germany.txt", "# stale round\n"),
+                       ("Freedonia.txt.tmp", "ss://never-completed")):
+        with open(os.path.join(base, name), "w", encoding="utf-8") as fh:
+            fh.write(body)
+    # آلمان عامدانه در ورودی **نیست**.
+    stats = countries.write_countries(out, [_cty_line("US", ip="9.9.9.9")])
+    left = sorted(os.listdir(base))
+    assert not [f for f in left if f.endswith(".tmp")], (
+        f"`.tmp`ِ یتیم زنده ماند ⇒ منتشر می‌شود: {left}")
+    assert "Germany.txt" not in left, "فایلِ کهنهٔ آلمان جارو نشد"
+    assert "US" in stats["files"], stats.get("files")
+    for name in ("Germany.txt.tmp", "Germany.txt", "Freedonia.txt.tmp"):
+        assert name in stats["pruned"], (name, stats["pruned"])
+
+
+def test_zzz_cty_the_sweep_only_touches_txt_and_tmp() -> None:
+    """جارو نباید از قلمروِ خودش بیرون بزند.
+
+    حذفِ بی‌قیدِ `.tmp` تنها وقتی بی‌خطر است که دامنه‌اش تنگ بماند. اگر
+    روزی کسی جارو را به «هر چیزی که این دور نوشته نشد» گشاد کند،
+    `index.json` (که **پس از** جارو نوشته می‌شود) و هر فایلِ دستیِ
+    مالک قربانی می‌شوند. این تست آن مرز را قفل می‌کند.
+    """
+    out = _tmpdir("cty_scope_")
+    base = os.path.join(out, countries.COUNTRIES_DIR)
+    os.makedirs(base, exist_ok=True)
+    keepers = ("README.md", "Germany.txt.bak", "notes.json", "LICENSE")
+    for name in keepers:
+        with open(os.path.join(base, name), "w", encoding="utf-8") as fh:
+            fh.write("owner content\n")
+    stats = countries.write_countries(out, [_cty_line("US", ip="9.9.9.9")])
+    left = set(os.listdir(base))
+    for name in keepers:
+        assert name in left, f"جارو «{name}» را خورد — بیرون از قلمروش"
+        assert name not in stats["pruned"], (name, stats["pruned"])
+    assert countries.INDEX_NAME in left, "فهرست پس از جارو نوشته نشد"
+
+
+def test_zzz_cty_write_text_never_abandons_its_tmp() -> None:
+    """اگر `os.replace` شکست بخورد، `.tmp` نباید رها شود.
+
+    ریشهٔ نقصِ ۲ همین‌جاست: پیش از اصلاح، `_write_text` هیچ
+    `try/except`ی گردِ نوشتن نداشت، پس خطای `os.replace` (مثلاً
+    EXDEV یا EACCES) فایلِ موقت را برای همیشه روی دیسک می‌گذاشت — و
+    گامِ انتشار آن را stage می‌کرد.
+    """
+    out = _tmpdir("cty_wt_replace_")
+    path = os.path.join(out, countries.COUNTRIES_DIR, "X.txt")
+    real = os.replace
+
+    def _boom(src, dst):
+        raise OSError("simulated replace failure")
+
+    os.replace = _boom                            # type: ignore[assignment]
+    try:
+        raised = False
+        try:
+            countries._write_text(path, "ss://payload\n")
+        except OSError:
+            raised = True
+    finally:
+        os.replace = real                         # type: ignore[assignment]
+    assert raised, "خطا باید بالا برود — پنهان‌کردنش فایلِ ناقص می‌سازد"
+    parent = os.path.dirname(path)
+    left = sorted(os.listdir(parent)) if os.path.isdir(parent) else []
+    assert not [f for f in left if f.endswith(".tmp")], \
+        f"`.tmp` رها شد: {left}"
+    assert not os.path.exists(path), "فایلِ نهایی نباید ساخته شده باشد"
+
+
+def test_zzz_cty_write_text_cleans_up_on_base_exception_too() -> None:
+    """پاک‌سازی با `BaseException` بسته می‌شود، نه با `Exception`.
+
+    چرا این تفاوت واقعی است: تایم‌اوتِ ۱۵ دقیقه‌ایِ ورک‌فلو و
+    `KeyboardInterrupt` هیچ‌کدام زیرِ `Exception` نمی‌آیند. اگر بندِ
+    پاک‌سازی `except Exception` بود، دقیقاً در سناریویی که این اصلاح
+    برای آن نوشته شده (کشته‌شدنِ دور) کار نمی‌کرد.
+    """
+    out = _tmpdir("cty_wt_base_")
+    path = os.path.join(out, "Y.txt")
+    real = os.replace
+
+    def _interrupt(src, dst):
+        raise KeyboardInterrupt()
+
+    os.replace = _interrupt                       # type: ignore[assignment]
+    try:
+        raised = False
+        try:
+            countries._write_text(path, "ss://payload\n")
+        except KeyboardInterrupt:
+            raised = True
+    finally:
+        os.replace = real                         # type: ignore[assignment]
+    assert raised, "`KeyboardInterrupt` باید بالا برود، نه بلعیده شود"
+    assert not [f for f in os.listdir(out) if f.endswith(".tmp")], \
+        f"`.tmp` پس از وقفه رها شد: {sorted(os.listdir(out))}"
+
+
+def test_zzz_cty_a_control_byte_leaves_no_tmp_behind() -> None:
+    """گاردِ بایتِ کنترلی پیش از ساختنِ `.tmp` شلیک می‌کند.
+
+    این مسیر عمداً جدا سنجیده می‌شود: خطا این‌جا **پیش از** `open`
+    رخ می‌دهد، پس شرطِ درستی «هیچ `.tmp`ی ساخته نشود» است، نه
+    «`.tmp` پاک شود». اگر روزی ترتیبِ این دو عوض شود، فایلِ موقتِ
+    حاوی بایتِ کنترلی می‌تواند منتشر شود.
+    """
+    out = _tmpdir("cty_wt_ctrl_")
+    path = os.path.join(out, "Z.txt")
+    raised = False
+    try:
+        countries._write_text(path, "ss://ok\nbad\x00byte\n")
+    except core.ControlByteInOutput:
+        raised = True
+    assert raised, "گاردِ بایتِ کنترلی شلیک نکرد"
+    assert sorted(os.listdir(out)) == [], \
+        f"چیزی روی دیسک ماند: {sorted(os.listdir(out))}"
+
+
+def test_zzz_cty_invalid_env_values_never_raise() -> None:
+    """ورودیِ بدِ محیطی هرگز استثنا نمی‌دهد؛ به پیش‌فرض برمی‌گردد.
+
+    نقصِ ۳ پیش از اصلاح: `int(os.environ[...])` روی `"abc"` یک
+    `ValueError` می‌داد **وسطِ importِ ماژول**، و چون `pipeline.py`
+    این ماژول را در سطحِ بالا import می‌کند، کلِ خط‌لوله زمین می‌خورد.
+    یک قابلیتِ فرعی حق ندارد انتشار را متوقف کند.
+
+    نکتهٔ سنجیده‌شده که در فهرست **نیست**: رقم‌های عربی‑هندی تنها به
+    نظر نامعتبرند. `int("١٢")` در پایتون واقعاً `12` می‌دهد (سنجیده شد)
+    چون `int`/`float` هر رقمی با `Unicode Nd` را می‌پذیرند. پس آن‌ها
+    ورودیِ **معتبر**اند و ادعای «باید به پیش‌فرض برگردند» غلط بود؛
+    این‌جا فقط رشته‌هایی می‌آیند که واقعاً تجزیه نمی‌شوند.
+    """
+    keys = ("COUNTRIES_TEST_I", "COUNTRIES_TEST_F")
+    saved = {k: os.environ.get(k) for k in keys}
+    try:
+        for raw in ("abc", "3.7", "", "   ", "0x10", "nan", "inf",
+                    "1,5", "١٢٣abc", "12 34", "None", "true"):
+            os.environ["COUNTRIES_TEST_I"] = raw
+            assert countries._int_env("COUNTRIES_TEST_I", 7, 1) in (7, 1), raw
+        for raw in ("abc", "", "  ", "1,5", "1.2.3", "None", "٣x"):
+            os.environ["COUNTRIES_TEST_F"] = raw
+            assert countries._float_env("COUNTRIES_TEST_F", 2.0, 0.1) == 2.0, raw
+        # متغیرِ تعریف‌نشده هم باید بی‌صدا پیش‌فرض بدهد.
+        for k in keys:
+            os.environ.pop(k, None)
+        assert countries._int_env("COUNTRIES_TEST_I", 7, 1) == 7
+        assert countries._float_env("COUNTRIES_TEST_F", 2.0, 0.1) == 2.0
+    finally:
+        for k, v in saved.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
+
+
+def test_zzz_cty_a_non_finite_budget_is_rejected() -> None:
+    """`nan`/`inf` بودجهٔ زمانی را **خاموش** می‌کنند، پس رد می‌شوند.
+
+    این با اندازه‌گیری ثابت شد، نه با استدلال: گارد به‌شکلِ
+    `(time.time() - started) > budget` است؛ در پایتون هر مقایسه با
+    `nan` نتیجهٔ `False` می‌دهد و هیچ عددی از `inf` بزرگ‌تر نیست، پس
+    هر دو گارد را کاملاً بی‌اثر می‌کنند. سنجشِ واقعی روی کدِ ناموجودِ
+    `QQ`: budget=2.0 → ۲٫۰۳s در برابر budget=nan → ۱۱٫۰۶s (۵٫۴ برابر).
+    `1e400` هم افزوده شده چون `float()` آن را بی خطا به `inf` می‌برد —
+    یعنی راهی برای دورزدنِ همین گارد با یک رشتهٔ ظاهراً عددی.
+    """
+    key = "COUNTRIES_TEST_NF"
+    saved = os.environ.get(key)
+    try:
+        for raw in ("nan", "NaN", "-nan", "inf", "-inf", "Infinity",
+                    "-Infinity", "1e400", "-1e400"):
+            os.environ[key] = raw
+            value = countries._float_env(key, 2.0, 0.1)
+            assert value == 2.0, f"{raw!r} → {value!r} به‌جای پیش‌فرض"
+            assert value == value, f"{raw!r} یک nan رد کرد"
+            assert value not in (float("inf"), float("-inf")), raw
+    finally:
+        if saved is None:
+            os.environ.pop(key, None)
+        else:
+            os.environ[key] = saved
+    # و ثابتِ زندهٔ ماژول هم باید همیشه متناهی باشد.
+    budget = countries.NAME_SCAN_BUDGET
+    assert budget == budget and budget not in (float("inf"), float("-inf")), \
+        f"NAME_SCAN_BUDGET نامتناهی است: {budget!r}"
+    assert budget >= 0.1, budget
+    assert isinstance(countries.MIN_PER_COUNTRY, int)
+    assert countries.MIN_PER_COUNTRY >= 1, countries.MIN_PER_COUNTRY
+
+
+def test_zzz_cty_out_of_range_env_values_are_clamped() -> None:
+    """مقدارِ خارج از بازه به کرانه بریده می‌شود، نه پذیرفته.
+
+    چرا بریدن و نه پذیرفتن: `COUNTRIES_MIN=0` یا منفی همان خروجیِ `1`
+    را می‌دهد (چون شرط `len(v) < MIN` است) ولی عددِ بی‌معنایش در
+    `stats["min_per_country"]` و از آن‌جا در `index.json` منتشر
+    می‌شد. و `COUNTRIES_NAME_BUDGET=0` گاردِ زمانی را در همان اولین
+    نگاه به ساعت می‌بُراند، پس نامِ **هیچ** کشوری از پایگاه‌داده در
+    نمی‌آمد — یک خروجیِ بی‌صدا خراب، که از خطا بدتر است.
+    """
+    ikey, fkey = "COUNTRIES_TEST_LOW_I", "COUNTRIES_TEST_LOW_F"
+    saved = {ikey: os.environ.get(ikey), fkey: os.environ.get(fkey)}
+    try:
+        for raw in ("0", "-1", "-999"):
+            os.environ[ikey] = raw
+            assert countries._int_env(ikey, 5, 1) == 1, raw
+        for raw in ("0", "0.0", "-3", "0.05"):
+            os.environ[fkey] = raw
+            assert countries._float_env(fkey, 2.0, 0.1) == 0.1, raw
+        # درونِ بازه دست‌نخورده می‌ماند.
+        os.environ[ikey] = "12"
+        assert countries._int_env(ikey, 5, 1) == 12
+        os.environ[fkey] = "0.1"
+        assert countries._float_env(fkey, 2.0, 0.1) == 0.1
+        os.environ[fkey] = "7.5"
+        assert countries._float_env(fkey, 2.0, 0.1) == 7.5
+    finally:
+        for k, v in saved.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
+
+
+def test_zzz_cty_an_invalid_env_value_warns_instead_of_being_silent() -> None:
+    """ورودیِ بد باید **هشدار** بدهد؛ بی‌صدا رد شدن بدترین حالت است.
+
+    ‌`sys.stderr` عامدانه به‌کار می‌رود و نه `log()`: این توابع در
+    خطوطِ ~۱۱۲ تا ~۱۶۰ اجرا می‌شوند و `log` پایین‌تر (خطِ ~۲۳۶) تعریف
+    شده، پس آن‌جا هنوز وجود ندارد. این تست هم همان قرارداد را قفل
+    می‌کند و هم اثبات می‌کند هشدار قابلِ گرفتن است (`file=sys.stderr`
+    در زمانِ فراخوانی ارزیابی می‌شود، پس جانشین‌کردنِ `sys.stderr`
+    کار می‌کند).
+    """
+    import io
+
+    key = "COUNTRIES_TEST_WARN"
+    saved = os.environ.get(key)
+    real_err = sys.stderr
+    try:
+        os.environ[key] = "not-a-number"
+        buf = io.StringIO()
+        sys.stderr = buf
+        try:
+            value = countries._int_env(key, 4, 1)
+        finally:
+            sys.stderr = real_err
+        assert value == 4, value
+        out = buf.getvalue()
+        assert key in out and "not-a-number" in out, repr(out)
+        # هشدار نباید روی stdout برود: خروجیِ استاندارد جای دادهٔ ماشین‌خوان است.
+        buf2 = io.StringIO()
+        sys.stderr = buf2
+        try:
+            os.environ[key] = "-40"
+            countries._int_env(key, 4, 2)
+        finally:
+            sys.stderr = real_err
+        assert "minimum" in buf2.getvalue(), repr(buf2.getvalue())
+    finally:
+        sys.stderr = real_err
+        if saved is None:
+            os.environ.pop(key, None)
+        else:
+            os.environ[key] = saved
+
+
+def test_zzz_cty_env_overrides_really_reach_the_module_constants() -> None:
+    """اعتبارسنجی باید در **زمانِ import** هم کار کند، نه فقط در تابع.
+
+    چرا فرآیندِ جدا لازم است: `NAME_SCAN_BUDGET` و `MIN_PER_COUNTRY`
+    ثابت‌های سطحِ ماژول‌اند و تنها یک بار — هنگامِ import — ارزیابی
+    می‌شوند. تستِ درون‌فرآیندی هرگز آن مسیر را نمی‌بیند، و دقیقاً همان
+    مسیری است که پیش از اصلاح می‌توانست کلِ `pipeline.py` را با یک
+    `ValueError` زمین بزند. پس یک فرآیندِ تازه با محیطِ آلوده اجرا
+    می‌شود و ادعا این است: کدِ خروج صفر باشد و مقادیر بریده/سالم.
+    """
+    import subprocess
+
+    here = os.path.dirname(os.path.abspath(__file__))
+    probe = (
+        "import countries as c\n"
+        "b = c.NAME_SCAN_BUDGET\n"
+        "print(repr(b), b == b and b not in (float('inf'), float('-inf')),\n"
+        "      repr(c.MIN_PER_COUNTRY))\n"
+    )
+    env = dict(os.environ)
+    env["PYTHONPATH"] = here + os.pathsep + env.get("PYTHONPATH", "")
+    cases = {
+        # مقدارِ محیطی → (بودجهٔ انتظاری، کمینهٔ انتظاری)
+        ("nan", "abc"): (2.0, 1),
+        ("inf", "0"): (2.0, 1),
+        ("1e400", "-9"): (2.0, 1),
+        ("0", "3"): (0.1, 3),
+        ("0.5", "2"): (0.5, 2),
+    }
+    for (budget_raw, min_raw), (want_budget, want_min) in cases.items():
+        env["COUNTRIES_NAME_BUDGET"] = budget_raw
+        env["COUNTRIES_MIN"] = min_raw
+        proc = subprocess.run([sys.executable, "-c", probe], env=env,
+                              capture_output=True, text=True, timeout=120)
+        assert proc.returncode == 0, (
+            f"importِ ماژول با COUNTRIES_NAME_BUDGET={budget_raw!r} "
+            f"COUNTRIES_MIN={min_raw!r} شکست ⇒ کلِ خط‌لوله زمین می‌خورد:\n"
+            f"{proc.stderr[-800:]}")
+        parts = proc.stdout.strip().split()
+        assert len(parts) == 3, repr(proc.stdout)
+        got_budget, finite, got_min = float(parts[0]), parts[1], int(parts[2])
+        assert finite == "True", f"بودجهٔ نامتناهی از سرِ import گذشت: {parts}"
+        assert got_budget == want_budget, (budget_raw, got_budget, want_budget)
+        assert got_min == want_min, (min_raw, got_min, want_min)
+
+
+def test_zzz_cty_a_hostile_env_still_produces_a_correct_round() -> None:
+    """با محیطِ کاملاً آلوده، یک دورِ واقعی باید سالم و درست تمام شود.
+
+    آزمونِ سرجمعِ سه اصلاح: محیط بدترین مقادیر را دارد
+    (`COUNTRIES_MIN=abc`، `COUNTRIES_NAME_BUDGET=nan`)، پوشه یک
+    `.tmp`ِ یتیم دارد، و ورودی کانفیگِ سپرخورده دارد. انتظار: نه
+    استثنا، نه `.tmp`ِ جامانده، و سرآیند/فهرست/دیسک هر سه یک عدد.
+    """
+    import subprocess
+
+    here = os.path.dirname(os.path.abspath(__file__))
+    out = _tmpdir("cty_hostile_")
+    base = os.path.join(out, countries.COUNTRIES_DIR)
+    os.makedirs(base, exist_ok=True)
+    with open(os.path.join(base, "Freedonia.txt.tmp"), "w",
+              encoding="utf-8") as fh:
+        fh.write("ss://orphan-from-a-killed-round")
+    lines = [
+        _cty_line("DE"),
+        _cty_scheme_line("DE", "2.2.2.2", "T2", "ssr"),
+        _cty_line("FR", ip="3.3.3.3", tag="T3"),
+    ]
+    script = (
+        "import json, os, re, sys\n"
+        "import countries\n"
+        "out = sys.argv[1]\n"
+        "lines = json.loads(sys.argv[2])\n"
+        "stats = countries.write_countries(out, lines)\n"
+        "print(json.dumps(stats, ensure_ascii=False))\n"
+    )
+    env = dict(os.environ)
+    env["PYTHONPATH"] = here + os.pathsep + env.get("PYTHONPATH", "")
+    env["COUNTRIES_MIN"] = "abc"
+    env["COUNTRIES_NAME_BUDGET"] = "nan"
+    proc = subprocess.run(
+        [sys.executable, "-c", script, out, json.dumps(lines)],
+        env=env, capture_output=True, text=True, timeout=300)
+    assert proc.returncode == 0, f"دور با محیطِ آلوده شکست:\n{proc.stderr[-800:]}"
+    stats = json.loads(proc.stdout.strip().splitlines()[-1])
+    assert stats["min_per_country"] == 1, stats["min_per_country"]
+    assert stats["countries"] == 2, stats
+    assert stats["configs"] == 3, stats
+    left = sorted(os.listdir(base))
+    assert not [f for f in left if f.endswith(".tmp")], left
+    assert "Freedonia.txt.tmp" in stats["pruned"], stats["pruned"]
+    with open(os.path.join(base, countries.INDEX_NAME), encoding="utf-8") as fh:
+        index = json.load(fh)
+    for entry in index["countries"]:
+        text = open(os.path.join(out, entry["file"]), encoding="utf-8").read()
+        assert _cty_header_count(text) == entry["count"] == \
+            len(_cty_config_lines(text)), entry
+
+
+# ─────────────────────────────────────────────────────────────────────
+# نقصِ ۳ — عبور از symlink روی مسیرِ `.tmp`
+#
+# ریشه، سنجیده‌شده و نه حدسی: `_sweep` با `os.path.isfile` تصمیم
+# می‌گرفت، و `isfile` symlink را **دنبال می‌کند**. برای یک symlinkِ
+# **معلق** (هدفش وجود ندارد) پاسخ `False` است، پس آن لینک از جارو جان
+# سالم می‌برد؛ بعد `_write_text` با `open(f"{path}.tmp", "w")` از همان
+# لینک **عبور می‌کرد** و محتوا **بیرون از `Countries/`** نوشته می‌شد.
+# جدولِ سنجیده‌شده روی همین کرنل:
+#
+#   نوعِ مسیر            isfile  exists  lexists  islink
+#   symlinkِ زنده→فایل    True    True    True     True
+#   symlinkِ معلق         False   False   True     True
+#   فایلِ معمولی          True    True    True     False
+#
+# دو جایگاهِ فرار پیدا شد و نه یکی: `<Country>.txt.tmp` و
+# `index.json.tmp`. اصلاح سه لایه دارد و هر سه مستقل‌اند:
+#   ۱) `_remove_if_exists`: `exists` → `lexists`
+#   ۲) `_sweep`: `isfile` → `islink or isfile`
+#   ۳) `_write_text`: `open(...,"w")` → `os.open(..., O_NOFOLLOW)`
+# لایهٔ سوم لازم است چون لایه‌های ۱ و ۲ حالتِ TOCTOU را نمی‌بندند: اگر
+# لینک **پس از** جارو ساخته شود، تنها هسته با `ELOOP` جلویش را می‌گیرد
+# (سنجیده شد: بی این لایه، فرار رخ می‌دهد).
+#
+# پنج تستِ زیر پیش از نوشتن روی **هر دو** نسخه اجرا شدند و هر پنج روی
+# نسخهٔ اصلاح‌نشده شکست می‌خورند و روی نسخهٔ اصلاح‌شده قبول می‌شوند —
+# یعنی هیچ‌کدام گاردِ توخالی نیست.
+# ─────────────────────────────────────────────────────────────────────
+
+
+def _cty_filename_for(code: str) -> str:
+    """نامِ فایلی که یک دورِ واقعی برای این کد **می‌سازد**.
+
+    عمداً از همان کمک‌تابع‌های عمومیِ `countries` استفاده می‌کند که
+    خودِ `write_countries` به کار می‌برد. اگر پایگاهِ GeoIP حاضر باشد
+    `DE` به `Germany.txt` می‌رسد و اگر نباشد به `DE.txt` — پس تست در
+    هر دو حالت نامِ **درست** را می‌گیرد.
+
+    چرا مهم است: نسخهٔ اولِ همین تست لینک را روی `DE.txt.tmp` کاشت،
+    ولی دورِ واقعی `Germany.txt` می‌نوشت، پس لینک هرگز سرِ راه نبود و
+    تست روی نسخهٔ **اصلاح‌نشده** هم قبول می‌شد — یک گاردِ توخالی.
+    """
+    names = countries.resolve_names({code: ["x"]})
+    return countries.slug_for(names.get(code, code)) + ".txt"
+
+
+def test_zzz_cty_the_sweep_sees_a_dangling_symlink() -> None:
+    """جارو باید symlinkِ معلق را هم ببیند، نه فقط فایلِ معمولی را.
+
+    این دقیقاً همان تصمیمی است که نقص را می‌ساخت: `isfile` روی
+    symlinkِ معلق `False` می‌دهد. docstringِ خودِ `_sweep` می‌گوید
+    «هر `.tmp` بی‌قید حذف می‌شود» — پیش از اصلاح، این حرف با
+    اندازه‌گیری نقض می‌شد.
+    """
+    out = _tmpdir("cty_symsweep_")
+    base = os.path.join(out, countries.COUNTRIES_DIR)
+    os.makedirs(base, exist_ok=True)
+    link = os.path.join(base, "Germany.txt.tmp")
+    os.symlink(os.path.join(out, "NOWHERE.txt"), link)
+    assert not os.path.isfile(link), "پیش‌فرضِ تست: لینک باید معلق باشد"
+    assert os.path.lexists(link), "پیش‌فرضِ تست: لینک باید موجود باشد"
+
+    pruned = countries._sweep(base, keep={"Germany.txt"})
+
+    assert "Germany.txt.tmp" in pruned, \
+        f"symlinkِ معلق از جارو جان سالم برد: pruned={pruned}"
+    assert not os.path.lexists(link), "لینک هنوز سرِ جایش است"
+
+
+def test_zzz_cty_remove_if_exists_sees_a_dangling_symlink() -> None:
+    """`_remove_if_exists` نباید با `exists` کور شود.
+
+    `exists` symlink را دنبال می‌کند، پس لینکِ معلق را «نبود» می‌دید و
+    یتیم رهایش می‌کرد — و گامِ انتشار با `git add -A` همان یتیم را
+    منتشر می‌کرد.
+    """
+    out = _tmpdir("cty_symrm_")
+    link = os.path.join(out, "L.txt")
+    os.symlink(os.path.join(out, "NOWHERE"), link)
+
+    assert countries._remove_if_exists(link) is True, \
+        "`_remove_if_exists` symlinkِ معلق را ندید"
+    assert not os.path.lexists(link), "لینک پاک نشد"
+
+
+def test_zzz_cty_remove_if_exists_never_follows_a_live_symlink() -> None:
+    """حذفِ لینک باید **خودِ لینک** را بردارد، نه هدفش را.
+
+    مکملِ تستِ قبلی است: اگر روزی کسی برای «دیدنِ» لینکِ معلق سراغِ
+    باز کردن یا خالی‌کردنِ هدف برود، دادهٔ مالک قربانی می‌شود.
+    """
+    out = _tmpdir("cty_symrm2_")
+    target = os.path.join(out, "TARGET.txt")
+    with open(target, "w", encoding="utf-8") as fh:
+        fh.write("owner data\n")
+    link = os.path.join(out, "L.txt")
+    os.symlink(target, link)
+
+    assert countries._remove_if_exists(link) is True
+    assert not os.path.lexists(link), "لینک پاک نشد"
+    assert os.path.isfile(target), "هدفِ لینک پاک شد — نباید می‌شد"
+    with open(target, encoding="utf-8") as fh:
+        assert fh.read() == "owner data\n", "هدفِ لینک دست خورد"
+
+
+def test_zzz_cty_write_text_refuses_to_follow_a_symlink() -> None:
+    """`_write_text` حتی اگر لینک **پس از** جارو کاشته شود باید رد کند.
+
+    این حالتِ TOCTOU است و تنها لایهٔ `O_NOFOLLOW` می‌بندد؛ اصلاحِ
+    شرطِ جارو به‌تنهایی این‌جا کاری نمی‌تواند بکند. انتظار: خطای
+    `OSError`ِ هسته (`ELOOP`) و **دست‌نخوردگیِ** فایلِ قربانی.
+    """
+    out = _tmpdir("cty_symwt_")
+    base = os.path.join(out, countries.COUNTRIES_DIR)
+    os.makedirs(base, exist_ok=True)
+    victim = os.path.join(out, "VICTIM.txt")
+    with open(victim, "w", encoding="utf-8") as fh:
+        fh.write("owner data\n")
+    path = os.path.join(base, "X.txt")
+    os.symlink(victim, path + ".tmp")
+
+    raised = False
+    try:
+        countries._write_text(path, "ss://payload\n")
+    except OSError:
+        raised = True
+
+    assert raised, "`_write_text` از symlink عبور کرد و خطا نداد"
+    with open(victim, encoding="utf-8") as fh:
+        assert fh.read() == "owner data\n", "فایلِ قربانی بازنویسی شد"
+    assert not os.path.exists(path), "فایلِ نهایی نباید ساخته شده باشد"
+
+
+def test_zzz_cty_a_round_never_writes_through_a_planted_symlink() -> None:
+    """آزمونِ سرجمع: یک دورِ کامل با لینک‌های کاشته‌شده روی مسیرِ `.tmp`.
+
+    هر دو جایگاهِ فرارِ سنجیده‌شده هم‌زمان پوشش داده می‌شود:
+    `<Country>.txt.tmp` (یکی معلق و یکی زنده) و `index.json.tmp`.
+    انتظار: نه فایلی بیرون از `Countries/` ساخته شود، نه دادهٔ مالک
+    بازنویسی شود، و دور همچنان خروجیِ درست بدهد.
+    """
+    out = _tmpdir("cty_symround_")
+    base = os.path.join(out, countries.COUNTRIES_DIR)
+    os.makedirs(base, exist_ok=True)
+    victim = os.path.join(out, "VICTIM.txt")
+    with open(victim, "w", encoding="utf-8") as fh:
+        fh.write("owner data\n")
+
+    de = _cty_filename_for("DE")
+    fr = _cty_filename_for("FR")
+    os.symlink(os.path.join(out, "ESCAPED.txt"),
+               os.path.join(base, de + ".tmp"))            # معلق
+    os.symlink(victim, os.path.join(base, fr + ".tmp"))     # زنده
+    os.symlink(os.path.join(out, "IDX_ESCAPED.json"),
+               os.path.join(base, countries.INDEX_NAME + ".tmp"))
+
+    stats = countries.write_countries(out, [
+        _cty_line("DE"),
+        _cty_line("FR", ip="3.3.3.3", tag="T3"),
+    ])
+
+    assert not os.path.exists(os.path.join(out, "ESCAPED.txt")), \
+        f"نوشتن از دلِ symlinkِ معلق بیرون زد (نام: {de})"
+    assert not os.path.exists(os.path.join(out, "IDX_ESCAPED.json")), \
+        "نوشتنِ فهرست از دلِ symlink بیرون زد"
+    with open(victim, encoding="utf-8") as fh:
+        assert fh.read() == "owner data\n", "فایلِ قربانی بازنویسی شد"
+    assert sorted(os.listdir(out)) == [countries.COUNTRIES_DIR,
+                                       "VICTIM.txt"], \
+        f"چیزی بیرون از Countries/ ساخته شد: {sorted(os.listdir(out))}"
+    left = sorted(os.listdir(base))
+    assert not [f for f in left if f.endswith(".tmp")], \
+        f"`.tmp` رها شد: {left}"
+    assert stats["countries"] == 2, stats
+    assert stats["configs"] == 2, stats
 
 if __name__ == "__main__":
     sys.exit(_run_all())

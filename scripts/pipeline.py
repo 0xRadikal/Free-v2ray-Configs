@@ -72,6 +72,7 @@ import reachability  # noqa: E402
 import filters  # noqa: E402
 import converters  # noqa: E402
 import core  # noqa: E402
+import countries  # noqa: E402
 
 # ──────────────────────────────────────────────────────────────────────────────
 # ثابت‌ها
@@ -627,6 +628,41 @@ def merge_index(out_dir: str, buckets: Dict[str, Any]) -> Optional[str]:
             top_block["url_mirror"] = f"{mirror}/{top_name}"
         doc["top100"] = top_block
 
+    # ── تبلیغِ `Countries/` ────────────────────────────────────────────────
+    #
+    # چرا یک کلیدِ **جدا** و نه یک عضو در `doc["categories"]`:
+    # قراردادِ `categories` یک «جهانِ بسته» است و تستِ
+    # `test_zzz_idx_merges_without_touching_aggregate_keys` صریحاً
+    # `set(doc["categories"]) == {"all","heavy","light"}` را قید می‌کند.
+    # `Countries/` هم ساختارِ آن دسته‌ها را ندارد (چهار فرمت در هر پوشه)
+    # بلکه یک فایلِ txt به‌ازای هر کشور است. پس در کلیدِ خودش می‌آید.
+    #
+    # همان قراردادِ بقیهٔ این تابع: تنها چیزی تبلیغ می‌شود که **واقعاً روی
+    # دیسک است**. `Countries/index.json` خودش سیاههٔ کامل را دارد، پس
+    # این‌جا فقط به آن اشاره می‌کنیم و سیاهه را دو جا تکرار نمی‌کنیم —
+    # وگرنه دو نسخه‌ای می‌شود که می‌توانند واگرا شوند.
+    countries_index = os.path.join(out_dir, countries.COUNTRIES_DIR,
+                                   countries.INDEX_NAME)
+    if os.path.exists(countries_index):
+        rel = _rel(countries.COUNTRIES_DIR, countries.INDEX_NAME)
+        cstats = buckets.get("stats", {}).get("countries") or {}
+        countries_block: Dict[str, Any] = {
+            "count": cstats.get("countries", 0),
+            "configs": cstats.get("configs", 0),
+            "source": "verified",
+            "criterion": ("verified configs grouped by the server's country "
+                          "(GeoIP); one .txt per country"),
+            "index": f"{primary}/{rel}",
+        }
+        if mirror:
+            countries_block["index_mirror"] = f"{mirror}/{rel}"
+        doc["countries"] = countries_block
+    else:
+        # این دور هیچ فایلِ کشوری ساخته نشد ⇒ تبلیغِ دورِ قبل هم باید برود،
+        # وگرنه `index.json` به فایلی اشاره می‌کند که همین حالا جارو شده
+        # (۴۰۴ در دستِ کاربر). همان سیاستِ «تنها چیزی که روی دیسک است».
+        doc.pop("countries", None)
+
     tmp = path + ".tmp"
     with open(tmp, "w", encoding="utf-8") as fh:
         json.dump(doc, fh, ensure_ascii=False, indent=2)
@@ -678,6 +714,29 @@ def run_pipeline(lines: Iterable[str], out_dir: str,
     st = buckets["stats"]
     st["l2"] = l2["stats"]
     buckets["paths"] = paths
+
+    # `Countries/` — تفکیکِ همان سبدِ `verified` بر پایهٔ کشور.
+    #
+    # چرا **این‌جا**، پس از `write_buckets` و پیش از `merge_index`:
+    # ورودی‌اش `buckets["verified"]` است که همین بالا ساخته شد، و
+    # `merge_index` باید بتواند آمارش را ببیند.
+    #
+    # چرا `verified` و نه `all`: «تأییدشده» یعنی کانفیگ در همهٔ اجراهای
+    # L3 یک درخواستِ واقعیِ پروکسی‌شده را رد کرد. کاربری که فایلِ
+    # کشورش را برمی‌دارد، کانفیگِ **کارکن** می‌خواهد نه فهرستِ خام.
+    #
+    # چرا در `try`: `Countries/` یک قابلیتِ **افزوده** است. همان
+    # استدلالِ `write_buckets` برای مبدل‌های شکسته و همان سیاستِ
+    # `merge_health`/`merge_index` — زمین انداختنِ انتشارِ ۸۵۰۰ کانفیگ
+    # به‌خاطرِ یک قابلیتِ فرعی، معامله‌ای زیان‌ده است. خطا خورده
+    # می‌شود ولی **پنهان** نمی‌شود: در stderr می‌آید و در آمار ثبت
+    # می‌شود.
+    try:
+        st["countries"] = countries.write_countries(
+            out_dir, buckets["verified"])
+    except Exception as exc:  # pragma: no cover - گاردِ آخر
+        print(f"⚠️ Countries/: {exc}", file=sys.stderr)
+        st["countries"] = {"error": str(exc)}
 
     total_s = round(time.time() - t_all, 2)
     cascade = {

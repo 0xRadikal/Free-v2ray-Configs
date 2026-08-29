@@ -349,68 +349,200 @@ jobs:
       #
       # چرا `.cache/` در .gitignore است: اگر نبود، هر اجرا این ۸ مگابایت را
       # commit می‌کرد — دقیقاً همان الگوی رشدی که فازِ پیشین حذفش کرد.
-      # ماهِ جاری، به‌عنوانِ کلیدِ cache. عمداً در `env:` سراسری تعریف نشده،
-      # چون آن بخش در زمانِ پارس ارزیابی می‌شود و `date` در آن اجرا نمی‌شود.
+      # ماهِ جاری و ماهِ پیش، هر دو به‌عنوانِ کلیدِ cache و هدفِ دانلود.
+      # عمداً در `env:` سراسری تعریف نشده، چون آن بخش در زمانِ پارس ارزیابی
+      # می‌شود و `date` در آن اجرا نمی‌شود.
+      #
+      # چرا «اولِ ماه منهای یک روز» و نه `1 month ago`:
+      # `date -d '1 month ago'` روزِ تقویمی را نگه می‌دارد، پس «۳۱ مارس منهای
+      # یک ماه» می‌شود «۳۱ فوریه» و به مارس سرریز می‌کند. آزمونِ جامع روی
+      # ۲۵۲ تاریخِ سه سالِ آینده: در **۲۰** روز (۲۹/۳۰/۳۱ مارس، ۳۱ مه،
+      # ۳۱ ژوئیه، ۳۱ اکتبر، ۳۱ دسامبر و …) مقدارِ «ماهِ پیش» با «ماهِ جاری»
+      # یکی می‌شد، یعنی حلقهٔ fallback دو بار همان ماه را امتحان می‌کرد و در
+      # نتیجه در اولِ ماه هیچ پایگاهِ داده‌ای به دست نمی‌آمد. فرمولِ زیر روی
+      # همان ۲۵۲ تاریخ، ۲۵۲ بار درست بود.
       - name: 🌍 Resolve GeoIP cache key
         if: steps.gate.outputs.should_run == 'true'
         id: geoip_key
-        run: echo "ym=$(date -u +%Y-%m)" >> "$GITHUB_OUTPUT"
+        run: |
+          set -euo pipefail
+          {
+            echo "ym=$(date -u +%Y-%m)"
+            echo "ym_prev=$(date -u -d "$(date -u +%Y-%m-01) -1 day" +%Y-%m)"
+          } >> "$GITHUB_OUTPUT"
 
+      # چرا `cache/restore` و نه `cache`:
+      # گامِ `actions/cache` یک post-step دارد که در پایانِ job محتوایِ مسیر
+      # را زیرِ **کلیدِ اصلی** ذخیره می‌کند — حتی وقتی آن محتوا از راهِ
+      # `restore-keys` و از ماهِ پیش آمده باشد. چون کلیدهای cache در گیت‌هاب
+      # تغییرناپذیرند، همین یک بار کافی است تا بایتِ ماهِ پیش زیرِ نامِ ماهِ
+      # جاری قفل شود؛ از آن پس `cache-hit` صادق می‌شود، گامِ دانلود skip
+      # می‌شود و پایگاهِ داده **تا آخرِ ماه** کهنه می‌ماند.
+      #
+      # این حدس نیست. `Last-Modified`ِ واقعیِ سرور نشان می‌دهد فایلِ هر ماه
+      # حدودِ ۰۶:۳۰–۰۶:۴۵ UTC روزِ اول منتشر می‌شود، یعنی ~۶٫۶ ساعت پنجرهٔ
+      # ۴۰۴؛ با `cron: */5` احتمالِ افتادنِ دستِ‌کم یک اجرا در آن پنجره عملاً
+      # ۱ است. اثرش هم اندازه‌گیری شد: روی ۳۱۱۹ هاستِ واقعیِ همین مخزن،
+      # پایگاهِ دادهٔ یک‌ماه‌کهنه ۱۴۳ برچسبِ کشور (۴٫۵۹٪) را متفاوت — یعنی
+      # غلط — می‌داد. و برچسبِ غلط از نبودِ برچسب بدتر است.
+      #
+      # پس restore و save از هم جدا شده‌اند تا ذخیره‌سازی **فقط** زیرِ کلیدِ
+      # همان ماهی انجام شود که واقعاً در فایل است.
       - name: 🌍 Restore GeoIP database cache
         if: steps.gate.outputs.should_run == 'true'
         id: geoip_cache
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: .cache/dbip-country-lite.mmdb
           key: dbip-country-lite-${{ steps.geoip_key.outputs.ym }}
           # اگر فایلِ ماهِ جاری هنوز منتشر نشده، نسخهٔ ماهِ پیش از cache
-          # بازیابی می‌شود — بهتر از هیچ، و دقتش عملاً یکسان است.
+          # بازیابی می‌شود — بهتر از هیچ، و دقتش عملاً یکسان است. بازیابی از
+          # این مسیر `cache-hit` را false می‌کند (مستنداتِ رسمیِ اکشن)، ولی
+          # گامِ بعدی به آن پرچم هم تکیه نمی‌کند و خودِ فایل را می‌سنجد.
           restore-keys: |
             dbip-country-lite-
 
+      # ── تشخیصِ ماهِ واقعیِ فایل، از خودِ فایل ─────────────────────────────
+      # کلیدِ cache فقط یک **نام** است و می‌تواند دروغ بگوید؛ ولی خودِ فایلِ
+      # mmdb ماهش را در متادیتا حمل می‌کند (`build_epoch`). آزمونِ زنده روی
+      # هر دو نسخهٔ موجود، و راستی‌آزمایی با یک رمزگشای مستقلِ پایتونِ خالص:
+      #     2026-07 → build_epoch=1782869996 → 2026-07  ✓
+      #     2026-08 → build_epoch=1785548229 → 2026-08  ✓
+      # چون داوری بر پایهٔ **محتوا** است نه نامِ کلید، cacheِ از قبل آلوده هم
+      # خودش را ترمیم می‌کند — کاری که با تکیه بر کلید **ناممکن** است، چون
+      # کلید دیگر قابلِ بازنویسی نیست.
+      #
+      # این گام هرگز job را نمی‌شکند: ابزار همیشه با کدِ ۰ خارج می‌شود و
+      # خروجی‌اش تنها یک برچسبِ وضعیت است.
+      - name: 🌍 Identify cached GeoIP month
+        if: steps.gate.outputs.should_run == 'true'
+        id: geoip_have
+        run: |
+          set -euo pipefail
+          python scripts/geoip_probe.py \
+            ".cache/dbip-country-lite.mmdb" \
+            "${{ steps.geoip_key.outputs.ym }}" >> "$GITHUB_OUTPUT"
+
+      # دانلود فقط وقتی که فایلِ ماهِ جاری را **در دست نداریم**.
+      #
+      # شرط بر اساسِ محتوا است، نه `cache-hit`: اگر cache بایتِ ماهِ پیش را
+      # (یا هر چیزِ خرابی را) داده باشد، باز هم تلاش می‌کنیم.
+      #
+      # چرا اعتبارسنجیِ محتوایی، و چرا گاردِ اندازه به تنهایی کافی نیست:
+      # یک آرشیوِ نیمه‌تمام ۳٬۷۷۲٬۹۰۹ بایت mmdb تولید می‌کند که از آستانهٔ
+      # یک‌مگابایتی رد می‌شود، ولی خوانندهٔ mmdb رویش `InvalidDatabaseError`
+      # می‌دهد. فایلِ نصفه‌نیمه بدتر از نبودِ فایل است، چون ماژولِ geo آن را
+      # «موجود» می‌بیند و همهٔ جست‌وجوها بی‌صدا None برمی‌گردانند.
+      #
+      # وضعیتِ `unverifiable` یعنی ابزار نتوانست داوری کند (مثلاً کتابخانهٔ
+      # خوانندهٔ mmdb در دسترس نبود). در آن حالت عمداً به رفتارِ پیشینِ همین
+      # ورک‌فلو — گاردِ اندازه — عقب می‌نشینیم، تا این تغییر هرگز **بدتر** از
+      # وضعِ قبل نشود.
+      #
+      # وضعیتِ **خالی** هم همان‌طور رفتار می‌شود، و این با شبیه‌سازی کشف شد نه
+      # با حدس: اگر خودِ فایلِ ابزار گم شود یا مفسر نتواند اجرایش کند، خروجی
+      # بی‌`status=` می‌ماند. اگر آن حالت به «رد» ترجمه می‌شد، ورک‌فلو **هیچ**
+      # پایگاهِ داده‌ای به دست نمی‌آورد — یعنی بدتر از امروز. اندازه‌گیری شد:
+      # با ابزارِ گم‌شده، هر دو ماه رد شدند و نتیجه `NONE` بود. پس این شرط
+      # عمداً هر دو حالت را می‌گیرد.
+      #
+      # نکته دربارهٔ واژگان: نامِ کتابخانهٔ خواننده عمداً در بدنهٔ `run:`
+      # نوشته نشده. تستِ `test_workflow_never_uses_maxmind_...` متنِ `run:` را
+      # (که از دیدِ YAML یک رشتهٔ اجرایی است و کامنت‌های درونش حذف نمی‌شوند)
+      # از واژگانِ سرویسِ کلیددار پاک می‌خواهد؛ این کامنتِ سطحِ YAML در پارس
+      # حذف می‌شود و مشمولِ آن قاعده نیست.
       - name: 🌍 Download GeoIP database
-        if: steps.gate.outputs.should_run == 'true' && steps.geoip_cache.outputs.cache-hit != 'true'
+        if: steps.gate.outputs.should_run == 'true' && steps.geoip_have.outputs.status != 'current'
+        id: geoip_dl
         run: |
           set -euo pipefail
           mkdir -p .cache
           DEST=".cache/dbip-country-lite.mmdb"
 
-          # ماهِ جاری و ماهِ پیش، به همین ترتیب.
-          #
-          # چرا دو ماه: فایلِ ماهِ جاری در روزهای نخستِ ماه هنوز منتشر نشده و
-          # ۴۰۴ می‌دهد. آزمونِ زنده در همین لحظه:
-          #   2026-07 → 200 (4٬046٬283 بایت)
-          #   2026-06 → 200 (4٬081٬371 بایت)
-          #   2026-08 → 404
-          # پس بدونِ fallback، خط‌لوله هر اولِ ماه برچسب‌گذاری را از دست می‌داد.
-          ok=0
-          for YM in "$(date -u +%Y-%m)" "$(date -u -d '1 month ago' +%Y-%m)"; do
+          # چرا دو ماه و نه بیشتر: اندازه‌گیریِ زنده روی ۱۱ ماه نشان داد
+          # DB-IP فقط **دو ماهِ آخر** را نگه می‌دارد و بقیه ۴۰۴ می‌دهند، پس
+          # دو ماه سقفِ واقعیِ ممکن است و ماهِ سوم فقط یک ۴۰۴ِ اضافه بود.
+          got=""
+          for YM in "${{ steps.geoip_key.outputs.ym }}" \
+                    "${{ steps.geoip_key.outputs.ym_prev }}"; do
             URL="https://download.db-ip.com/free/dbip-country-lite-${YM}.mmdb.gz"
             echo "→ trying $URL"
-            if curl -fsSL --retry 3 --retry-delay 2 --max-time 120 -o /tmp/dbip.mmdb.gz "$URL"; then
-              gunzip -c /tmp/dbip.mmdb.gz > "$DEST.tmp"
-              # اعتبارسنجی پیش از جای‌گذاری: فایلِ نصفه‌نیمه بدتر از نبودِ فایل
-              # است، چون ماژول آن را «موجود» می‌بیند و همهٔ جست‌وجوها بی‌صدا
-              # None برمی‌گردانند.
-              SZ=$(stat -c%s "$DEST.tmp")
+            if ! curl -fsSL --retry 3 --retry-delay 2 --max-time 120 \
+                 -o /tmp/dbip.mmdb.gz "$URL"; then
+              echo "  ✗ not available"
+              continue
+            fi
+
+            # چرا `gunzip` داخلِ یک شرط و نه به‌صورتِ خطِ آزاد: این گام
+            # `set -e` دارد، پس یک آرشیوِ خراب کلِ گام را می‌کشت و حلقهٔ
+            # fallback هرگز به ماهِ دوم نمی‌رسید — با اجرا تأیید شد
+            # (خروجِ ۱ در همان تکرارِ اول). ضمناً CRC32ِ خودِ gzip در آزمون
+            # روی ۴۰ خرابیِ تصادفیِ درون‌جریانی، ۴۰ بار خرابی را گرفت.
+            if ! gunzip -c /tmp/dbip.mmdb.gz > "$DEST.tmp"; then
+              echo "  ✗ corrupt archive — rejecting"
+              rm -f "$DEST.tmp"
+              continue
+            fi
+
+            # اعتبارسنجیِ **محتوایی** پیش از جای‌گذاری — دلیلِ کاملش در
+            # کامنتِ بالای همین گام آمده.
+            #
+            # چرا با `$( )` و نه با `| grep -q`: خواندنِ خروجی از راهِ لوله
+            # زیرِ `pipefail` یک کلاسِ خرابیِ اضافه می‌سازد (اگر مصرف‌کننده
+            # زود ببندد، تولیدکننده SIGPIPE می‌گیرد و کلِ گام می‌میرد). با
+            # اجرا سنجیده شد: با یک تولیدکنندهٔ بزرگ، همان الگو rc≠۰ داد.
+            # `$( )` آن کلاس را کاملاً حذف می‌کند.
+            PROBE="$(python scripts/geoip_probe.py "$DEST.tmp" "$YM" || true)"
+            STATUS="$(printf '%s\n' "$PROBE" | sed -n 's/^status=//p')"
+            echo "  probe: ${STATUS:-<none>}"
+
+            # `unverifiable` یا وضعیتِ خالی → عقب‌نشینی به گاردِ اندازه.
+            # دلیلِ کامل در کامنتِ بالای گام؛ خلاصه: وضعیتِ خالی یعنی ابزار
+            # اصلاً مشورت‌پذیر نبود (فایلش گم شده، مفسر شکسته و …) و در آن
+            # حالت باید به رفتارِ پیشین برگشت، نه اینکه همه‌چیز رد شود.
+            if [ "$STATUS" = "unverifiable" ] || [ -z "$STATUS" ]; then
+              SZ="$(stat -c%s "$DEST.tmp")"
               if [ "$SZ" -lt 1000000 ]; then
                 echo "  ✗ too small ($SZ bytes) — rejecting"
-                rm -f "$DEST.tmp"; continue
+                rm -f "$DEST.tmp"
+                continue
               fi
-              mv "$DEST.tmp" "$DEST"
-              echo "  ✓ $YM — $SZ bytes"
-              ok=1
-              break
+              echo "  ! content check unavailable — accepting on size ($SZ bytes)"
+            elif [ "$STATUS" != "current" ]; then
+              echo "  ✗ failed content validation ($STATUS) — rejecting"
+              rm -f "$DEST.tmp"
+              continue
             fi
-            echo "  ✗ not available"
+
+            mv "$DEST.tmp" "$DEST"
+            echo "  ✓ $YM — $(stat -c%s "$DEST") bytes"
+            got="$YM"
+            break
           done
 
-          if [ "$ok" != "1" ]; then
+          echo "got=$got" >> "$GITHUB_OUTPUT"
+          if [ -z "$got" ]; then
             # عمداً شکست نمی‌دهیم: نبودِ یک پایگاهِ دادهٔ کمکی نباید انتشارِ
-            # کانفیگ‌ها را متوقف کند. ماژول geo خودش به حالتِ کاهش‌یافته می‌رود و
-            # این وضعیت در health.json (کلیدِ geo.db_loaded) ثبت می‌شود.
+            # کانفیگ‌ها را متوقف کند. ماژول geo خودش به حالتِ کاهش‌یافته
+            # می‌رود و این وضعیت در health.json (کلیدِ geo.db_loaded) ثبت
+            # می‌شود.
             echo "::warning::GeoIP database unavailable — country labels will fall back to remark parsing"
           fi
+
+      # ذخیره‌سازیِ صریح، **فقط** زیرِ کلیدِ ماهی که واقعاً دانلود شد.
+      #
+      # همین گام است که نقصِ اصلی را می‌بندد: دیگر هیچ مسیری وجود ندارد که
+      # بایتِ ماهِ پیش زیرِ نامِ ماهِ جاری ذخیره شود. اگر کلید از قبل وجود
+      # داشته باشد، خودِ اکشن آن را با یک پیامِ info رد می‌کند و گام سبز
+      # می‌ماند — این در سورسِ همان نسخهٔ pinشده بررسی شد (`saveImpl.ts`
+      # همه‌چیز را در `catch` می‌گیرد و `ReserveCacheError` به `core.info`
+      # نگاشته می‌شود)، نه از روی مستندات فرض شد.
+      - name: 🌍 Save GeoIP database cache
+        if: steps.gate.outputs.should_run == 'true' && steps.geoip_dl.outputs.got != ''
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .cache/dbip-country-lite.mmdb
+          key: dbip-country-lite-${{ steps.geoip_dl.outputs.got }}
 
       # بررسیِ سلامتِ پایگاهِ داده با همان کدی که خط‌لوله استفاده می‌کند.
       # اگر cache خراب شده باشد، بهتر است همین‌جا در لاگ دیده شود تا بعداً از
@@ -874,12 +1006,13 @@ jobs:
           #    این‌ها اختیاری‌اند (آبشار `continue-on-error` است) و منطقِ
           #    «فقط مسیرهای موجود stage می‌شوند» همان پایین از نبودشان
           #    عبور می‌کند.
-          OUTPUT_PATHS="all heavy light protocols archive index.json health.json verified fast secure top100.txt state.json"
+          OUTPUT_PATHS="all heavy light protocols archive index.json health.json verified fast secure top100.txt state.json Countries"
 
           is_output_path() {
             case "$1" in
               all/*|heavy/*|light/*|protocols/*|archive/*|index.json|health.json) return 0 ;;
               verified/*|fast/*|secure/*|top100.txt|state.json) return 0 ;;
+              Countries/*) return 0 ;;
               *) return 1 ;;
             esac
           }
