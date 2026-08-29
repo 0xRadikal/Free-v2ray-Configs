@@ -478,8 +478,16 @@ def _remove_if_exists(path: str) -> bool:
     همان استدلالِ `aggregate._remove_if_exists`: «۴۰۴ بهتر از دادهٔ
     کهنه، و دادهٔ کهنه بهتر از فایلِ خالی» — پاسخِ ۲۰۰ با بدنهٔ خالی
     باعث می‌شود کلاینتِ اشتراک لیستش را با «هیچ» جانشین کند.
+
+    ★ `os.path.lexists` و نه `os.path.exists`: دومی symlink را **دنبال
+    می‌کند**، پس برای یک symlinkِ **معلق** (هدفش نیست) پاسخِ `False`
+    می‌دهد و آن لینک پاک **نمی‌شود** — سنجیده شد:
+    `exists(معلق)=False` ولی `lexists(معلق)=True`. `os.remove` روی
+    خودِ لینک کار می‌کند و هدف را دست نمی‌زند (سنجیده شد: لینک رفت،
+    هدف سالم ماند)، پس این تغییر تنها «دیدنِ» لینکِ معلق را اضافه
+    می‌کند و رفتارِ فایلِ معمولی را عوض نمی‌کند.
     """
-    if os.path.exists(path):
+    if os.path.lexists(path):
         try:
             os.remove(path)
             return True
@@ -536,7 +544,13 @@ def _sweep(base: str, keep: Iterable[str]) -> List[str]:
         else:
             continue
         target = os.path.join(base, entry)
-        if os.path.isfile(target) and _remove_if_exists(target):
+        # ★ `isfile` symlink را دنبال می‌کند، پس یک symlinkِ **معلق** را
+        # «فایل نیست» می‌دید و از جارو جان سالم می‌برد؛ سپس
+        # `open(f"{path}.tmp", "w")` دنبالش می‌رفت و خروجی **بیرون از
+        # `Countries/`** نوشته می‌شد. شرطِ درست «فایلِ معمولی **یا** هر
+        # symlink» است — پوشهٔ واقعی همچنان دست‌نخورده می‌ماند.
+        if (os.path.islink(target)
+                or os.path.isfile(target)) and _remove_if_exists(target):
             pruned.append(entry)
     return pruned
 
@@ -555,14 +569,24 @@ def _write_text(path: str, content: str) -> None:
     # و `*.txt.tmp` را نمی‌گرفت — با شبیه‌سازیِ گیتِ واقعی دیده شد که
     # `Countries/Germany.txt.tmp` وارد درختِ منتشرشده می‌شود.
     try:
-        with open(tmp, "w", encoding="utf-8") as fh:
+        # ★ `O_NOFOLLOW`: اگر روی مسیرِ `.tmp` یک symlink باشد، هسته با
+        # `ELOOP` رد می‌کند و **هرگز** از آن عبور نمی‌کند. جارو هم همین
+        # را می‌گیرد، ولی این لایه از جارو مستقل است: اگر لینک **پس از**
+        # جارو ساخته شود (TOCTOU)، تنها همین لایه جلویش را می‌گیرد.
+        # `O_TRUNC` هست تا رفتارِ `open(..., "w")` عیناً حفظ شود و
+        # `0o666` با umask به همان `0o644`ِ قبلی می‌رسد (سنجیده شد).
+        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC
+                     | os.O_NOFOLLOW, 0o666)
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
             fh.write(content)
         os.replace(tmp, path)
     except BaseException:
         # `BaseException` تا KeyboardInterrupt/SystemExit هم پاک‌سازی شود.
         # خطای پاک‌سازی، خطای اصلی را نمی‌پوشاند.
         try:
-            if os.path.exists(tmp):
+            # `lexists` تا اگر آن `.tmp` خودش یک symlinkِ معلق بود هم
+            # پاک شود؛ `exists` آن را نمی‌دید و یتیم رهایش می‌کرد.
+            if os.path.lexists(tmp):
                 os.remove(tmp)
         except OSError:
             pass

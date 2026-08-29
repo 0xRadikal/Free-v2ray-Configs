@@ -14212,5 +14212,181 @@ def test_zzz_cty_a_hostile_env_still_produces_a_correct_round() -> None:
             len(_cty_config_lines(text)), entry
 
 
+# ─────────────────────────────────────────────────────────────────────
+# نقصِ ۳ — عبور از symlink روی مسیرِ `.tmp`
+#
+# ریشه، سنجیده‌شده و نه حدسی: `_sweep` با `os.path.isfile` تصمیم
+# می‌گرفت، و `isfile` symlink را **دنبال می‌کند**. برای یک symlinkِ
+# **معلق** (هدفش وجود ندارد) پاسخ `False` است، پس آن لینک از جارو جان
+# سالم می‌برد؛ بعد `_write_text` با `open(f"{path}.tmp", "w")` از همان
+# لینک **عبور می‌کرد** و محتوا **بیرون از `Countries/`** نوشته می‌شد.
+# جدولِ سنجیده‌شده روی همین کرنل:
+#
+#   نوعِ مسیر            isfile  exists  lexists  islink
+#   symlinkِ زنده→فایل    True    True    True     True
+#   symlinkِ معلق         False   False   True     True
+#   فایلِ معمولی          True    True    True     False
+#
+# دو جایگاهِ فرار پیدا شد و نه یکی: `<Country>.txt.tmp` و
+# `index.json.tmp`. اصلاح سه لایه دارد و هر سه مستقل‌اند:
+#   ۱) `_remove_if_exists`: `exists` → `lexists`
+#   ۲) `_sweep`: `isfile` → `islink or isfile`
+#   ۳) `_write_text`: `open(...,"w")` → `os.open(..., O_NOFOLLOW)`
+# لایهٔ سوم لازم است چون لایه‌های ۱ و ۲ حالتِ TOCTOU را نمی‌بندند: اگر
+# لینک **پس از** جارو ساخته شود، تنها هسته با `ELOOP` جلویش را می‌گیرد
+# (سنجیده شد: بی این لایه، فرار رخ می‌دهد).
+#
+# پنج تستِ زیر پیش از نوشتن روی **هر دو** نسخه اجرا شدند و هر پنج روی
+# نسخهٔ اصلاح‌نشده شکست می‌خورند و روی نسخهٔ اصلاح‌شده قبول می‌شوند —
+# یعنی هیچ‌کدام گاردِ توخالی نیست.
+# ─────────────────────────────────────────────────────────────────────
+
+
+def _cty_filename_for(code: str) -> str:
+    """نامِ فایلی که یک دورِ واقعی برای این کد **می‌سازد**.
+
+    عمداً از همان کمک‌تابع‌های عمومیِ `countries` استفاده می‌کند که
+    خودِ `write_countries` به کار می‌برد. اگر پایگاهِ GeoIP حاضر باشد
+    `DE` به `Germany.txt` می‌رسد و اگر نباشد به `DE.txt` — پس تست در
+    هر دو حالت نامِ **درست** را می‌گیرد.
+
+    چرا مهم است: نسخهٔ اولِ همین تست لینک را روی `DE.txt.tmp` کاشت،
+    ولی دورِ واقعی `Germany.txt` می‌نوشت، پس لینک هرگز سرِ راه نبود و
+    تست روی نسخهٔ **اصلاح‌نشده** هم قبول می‌شد — یک گاردِ توخالی.
+    """
+    names = countries.resolve_names({code: ["x"]})
+    return countries.slug_for(names.get(code, code)) + ".txt"
+
+
+def test_zzz_cty_the_sweep_sees_a_dangling_symlink() -> None:
+    """جارو باید symlinkِ معلق را هم ببیند، نه فقط فایلِ معمولی را.
+
+    این دقیقاً همان تصمیمی است که نقص را می‌ساخت: `isfile` روی
+    symlinkِ معلق `False` می‌دهد. docstringِ خودِ `_sweep` می‌گوید
+    «هر `.tmp` بی‌قید حذف می‌شود» — پیش از اصلاح، این حرف با
+    اندازه‌گیری نقض می‌شد.
+    """
+    out = _tmpdir("cty_symsweep_")
+    base = os.path.join(out, countries.COUNTRIES_DIR)
+    os.makedirs(base, exist_ok=True)
+    link = os.path.join(base, "Germany.txt.tmp")
+    os.symlink(os.path.join(out, "NOWHERE.txt"), link)
+    assert not os.path.isfile(link), "پیش‌فرضِ تست: لینک باید معلق باشد"
+    assert os.path.lexists(link), "پیش‌فرضِ تست: لینک باید موجود باشد"
+
+    pruned = countries._sweep(base, keep={"Germany.txt"})
+
+    assert "Germany.txt.tmp" in pruned, \
+        f"symlinkِ معلق از جارو جان سالم برد: pruned={pruned}"
+    assert not os.path.lexists(link), "لینک هنوز سرِ جایش است"
+
+
+def test_zzz_cty_remove_if_exists_sees_a_dangling_symlink() -> None:
+    """`_remove_if_exists` نباید با `exists` کور شود.
+
+    `exists` symlink را دنبال می‌کند، پس لینکِ معلق را «نبود» می‌دید و
+    یتیم رهایش می‌کرد — و گامِ انتشار با `git add -A` همان یتیم را
+    منتشر می‌کرد.
+    """
+    out = _tmpdir("cty_symrm_")
+    link = os.path.join(out, "L.txt")
+    os.symlink(os.path.join(out, "NOWHERE"), link)
+
+    assert countries._remove_if_exists(link) is True, \
+        "`_remove_if_exists` symlinkِ معلق را ندید"
+    assert not os.path.lexists(link), "لینک پاک نشد"
+
+
+def test_zzz_cty_remove_if_exists_never_follows_a_live_symlink() -> None:
+    """حذفِ لینک باید **خودِ لینک** را بردارد، نه هدفش را.
+
+    مکملِ تستِ قبلی است: اگر روزی کسی برای «دیدنِ» لینکِ معلق سراغِ
+    باز کردن یا خالی‌کردنِ هدف برود، دادهٔ مالک قربانی می‌شود.
+    """
+    out = _tmpdir("cty_symrm2_")
+    target = os.path.join(out, "TARGET.txt")
+    with open(target, "w", encoding="utf-8") as fh:
+        fh.write("owner data\n")
+    link = os.path.join(out, "L.txt")
+    os.symlink(target, link)
+
+    assert countries._remove_if_exists(link) is True
+    assert not os.path.lexists(link), "لینک پاک نشد"
+    assert os.path.isfile(target), "هدفِ لینک پاک شد — نباید می‌شد"
+    with open(target, encoding="utf-8") as fh:
+        assert fh.read() == "owner data\n", "هدفِ لینک دست خورد"
+
+
+def test_zzz_cty_write_text_refuses_to_follow_a_symlink() -> None:
+    """`_write_text` حتی اگر لینک **پس از** جارو کاشته شود باید رد کند.
+
+    این حالتِ TOCTOU است و تنها لایهٔ `O_NOFOLLOW` می‌بندد؛ اصلاحِ
+    شرطِ جارو به‌تنهایی این‌جا کاری نمی‌تواند بکند. انتظار: خطای
+    `OSError`ِ هسته (`ELOOP`) و **دست‌نخوردگیِ** فایلِ قربانی.
+    """
+    out = _tmpdir("cty_symwt_")
+    base = os.path.join(out, countries.COUNTRIES_DIR)
+    os.makedirs(base, exist_ok=True)
+    victim = os.path.join(out, "VICTIM.txt")
+    with open(victim, "w", encoding="utf-8") as fh:
+        fh.write("owner data\n")
+    path = os.path.join(base, "X.txt")
+    os.symlink(victim, path + ".tmp")
+
+    raised = False
+    try:
+        countries._write_text(path, "ss://payload\n")
+    except OSError:
+        raised = True
+
+    assert raised, "`_write_text` از symlink عبور کرد و خطا نداد"
+    with open(victim, encoding="utf-8") as fh:
+        assert fh.read() == "owner data\n", "فایلِ قربانی بازنویسی شد"
+    assert not os.path.exists(path), "فایلِ نهایی نباید ساخته شده باشد"
+
+
+def test_zzz_cty_a_round_never_writes_through_a_planted_symlink() -> None:
+    """آزمونِ سرجمع: یک دورِ کامل با لینک‌های کاشته‌شده روی مسیرِ `.tmp`.
+
+    هر دو جایگاهِ فرارِ سنجیده‌شده هم‌زمان پوشش داده می‌شود:
+    `<Country>.txt.tmp` (یکی معلق و یکی زنده) و `index.json.tmp`.
+    انتظار: نه فایلی بیرون از `Countries/` ساخته شود، نه دادهٔ مالک
+    بازنویسی شود، و دور همچنان خروجیِ درست بدهد.
+    """
+    out = _tmpdir("cty_symround_")
+    base = os.path.join(out, countries.COUNTRIES_DIR)
+    os.makedirs(base, exist_ok=True)
+    victim = os.path.join(out, "VICTIM.txt")
+    with open(victim, "w", encoding="utf-8") as fh:
+        fh.write("owner data\n")
+
+    de = _cty_filename_for("DE")
+    fr = _cty_filename_for("FR")
+    os.symlink(os.path.join(out, "ESCAPED.txt"),
+               os.path.join(base, de + ".tmp"))            # معلق
+    os.symlink(victim, os.path.join(base, fr + ".tmp"))     # زنده
+    os.symlink(os.path.join(out, "IDX_ESCAPED.json"),
+               os.path.join(base, countries.INDEX_NAME + ".tmp"))
+
+    stats = countries.write_countries(out, [
+        _cty_line("DE"),
+        _cty_line("FR", ip="3.3.3.3", tag="T3"),
+    ])
+
+    assert not os.path.exists(os.path.join(out, "ESCAPED.txt")), \
+        f"نوشتن از دلِ symlinkِ معلق بیرون زد (نام: {de})"
+    assert not os.path.exists(os.path.join(out, "IDX_ESCAPED.json")), \
+        "نوشتنِ فهرست از دلِ symlink بیرون زد"
+    with open(victim, encoding="utf-8") as fh:
+        assert fh.read() == "owner data\n", "فایلِ قربانی بازنویسی شد"
+    assert sorted(os.listdir(out)) == [countries.COUNTRIES_DIR,
+                                       "VICTIM.txt"], \
+        f"چیزی بیرون از Countries/ ساخته شد: {sorted(os.listdir(out))}"
+    left = sorted(os.listdir(base))
+    assert not [f for f in left if f.endswith(".tmp")], \
+        f"`.tmp` رها شد: {left}"
+    assert stats["countries"] == 2, stats
+    assert stats["configs"] == 2, stats
+
 if __name__ == "__main__":
     sys.exit(_run_all())
