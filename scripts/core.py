@@ -896,6 +896,21 @@ def _norm_identity_value(key: str, val: str) -> str:
     return v
 
 
+#: آینهٔ `converters.VMESS_SECURITY`. عمداً اینجا **تکرار** شده و import
+#: نمی‌شود: `core` لایهٔ زیرین است و `converters` را import نمی‌کند (وارونگیِ
+#: وابستگی و importِ حلقوی). یک تستِ اختصاصی این دو را قفل می‌کند تا هرگز
+#: واگرا نشوند.
+_VMESS_SECURITY: frozenset = frozenset({
+    "auto", "none", "zero", "aes-128-cfb", "aes-128-gcm", "chacha20-poly1305",
+})
+
+
+def _vmess_security(scy: object) -> str:
+    """همان نگاشتِ `converters._sanitize_vmess_security` — چرایی آنجاست."""
+    s = str(scy or "").strip().lower()
+    return s if s in _VMESS_SECURITY else "auto"
+
+
 def dedup_key(line: str) -> str:
     """Fingerprint هویتِ سرور — CDN-aware (دقیقاً معادل ربات)."""
     line = line.strip()
@@ -992,14 +1007,19 @@ def dedup_key(line: str) -> str:
                 # قاعدهٔ «در تردید، ادغام نکن» می‌شکافیم.
                 f":{net}:{path}:{tls}"
                 f":{_norm_aid(obj.get('aid'))}"
-                # ★ فاز K / K-A: `scy` رمزنگاریِ VMess است و امیت می‌شود:
-                # `converters.py:551` آن را می‌خواند، `:852` به `cipher`
-                # (clash) و `:1143` به `security` (sing-box) می‌نویسد —
-                # **حرف‌به‌حرف و بی‌کوچک‌سازی**. پس کلید هم عیناً همان را
-                # می‌گیرد؛ کوچک‌کردنش «AUTO» و «auto» را ادغام می‌کرد در
-                # حالی که خروجی‌شان متفاوت است. سنجیده شد: ۱ کانفیگ نجات،
-                # ۰ افرازِ کاذب.
-                f":{str(obj.get('scy') or 'auto')}"
+                # ★ فاز K / K-A — **بازنگری‌شده در حادثهٔ ۲۰۲۶-۰۹-۰۷**:
+                # `scy` رمزنگاریِ VMess است و امیت می‌شود (`cipher` در clash،
+                # `security` در sing-box). متنِ پیشین می‌گفت مقدار
+                # «حرف‌به‌حرف و بی‌کوچک‌سازی» امیت می‌شود و کلید هم باید
+                # عیناً همان را بگیرد — و آن **در زمانِ خود درست بود**.
+                # اکنون مبدّل مقدار را از یک whitelist عبور می‌دهد
+                # (`_sanitize_vmess_security`)، چون یک مقدارِ نامعتبر کلِ
+                # فایل را در هر دو کلاینت می‌سوزاند. پس کلید هم باید **همان
+                # نگاشت** را بزند، وگرنه «AUTO» و «auto» — که حالا خروجیِ
+                # یکسان می‌دهند — کلیدِ متفاوت می‌گیرند و ناوردایِ
+                # «کلید و خروجی هم‌داستان‌اند» می‌شکند. سنجیده شد: ۲۲۵ جفت،
+                # ۰ ناسازگاری.
+                f":{_vmess_security(obj.get('scy'))}"
                 # ★ فاز K / K-D — چرایی در بالا، کنارِ محاسبهٔ `srv`.
                 f":srv={srv}"
             )

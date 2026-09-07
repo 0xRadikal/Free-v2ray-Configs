@@ -693,6 +693,58 @@ def _alpn_list(raw: Any) -> list:
     return out
 
 
+#: مقادیرِ مجازِ `security` در vmess — **تقاطعِ** آنچه sing-box و mihomo
+#: هر دو می‌پذیرند. هر مقدار خارج از این مجموعه با پیامِ «unsupported
+#: security type» کلِ فایل را رد می‌کند، نه فقط همان نود را.
+#:
+#: ★ حادثهٔ ۲۰۲۶-۰۹-۰۷ — چرا این مجموعه وجود دارد:
+#:   یک نودِ vmess با `"scy": "null"` (رشتهٔ «null»، نه مقدارِ تهی) وارد
+#:   پیکره شد. خطِ پیشین `str(obj.get("scy") or "auto")` بود و `or` تنها
+#:   مقادیرِ *falsy* را می‌گیرد؛ «null» یک رشتهٔ **ناتهی** است، پس بی‌هیچ
+#:   اعتبارسنجی تا `cipher` (clash) و `security` (sing-box) می‌رفت.
+#:   نتیجه: ۱ نود از ۱۰٬۹۶۱ چهار سطل از شش سطل (all/heavy/verified/fast)
+#:   را سرخ کرد، گامِ انتشار skip شد و مخزن در یک قفلِ خودپایدار افتاد
+#:   (دادهٔ بد روی main می‌ماند ⇒ دورِ بعد دوباره همان را می‌خواند).
+#:
+#: مقادیر **با اجرای واقعیِ همان باینری‌های pinشدهٔ CI** استخراج شده‌اند
+#: (sing-box 1.13.14 و mihomo v1.19.29)، نه از روی خواندنِ مستندات:
+#:   • sing-box  می‌پذیرد: auto none zero aes-128-cfb aes-128-gcm
+#:                          chacha20-poly1305 **و** رشتهٔ تهی
+#:   • mihomo    می‌پذیرد: همان شش، **به‌علاوهٔ** AUTO/Auto (چون
+#:                          `strings.ToLower` می‌زند) ولی **نه** رشتهٔ تهی
+#:   ⇒ تقاطع = همین شش مقدار. رشتهٔ تهی و گونه‌های بزرگ‌نویس عمداً بیرون
+#:     مانده‌اند چون در یکی از دو کلاینت شکست می‌دهند.
+#: هر دو کلاینت از `metacubex/sing-vmess` استفاده می‌کنند و سوئیچِ
+#: `NewClient` در هر دو فورک کلمه‌به‌کلمه یکسان است — به همین دلیل پیامِ
+#: خطایشان هم یکی بود.
+VMESS_SECURITY: frozenset = frozenset({
+    "auto", "none", "zero", "aes-128-cfb", "aes-128-gcm", "chacha20-poly1305",
+})
+
+
+def _sanitize_vmess_security(scy: Any) -> str:
+    """`scy`ِ vmess → مقداری که **هر دو** کلاینت می‌پذیرند.
+
+    سیاست: **coerce به `auto`**، نه drop. چرا؟ سنجشِ زنده روی همان اجرای
+    شکست‌خورده: تنها ۱ نود از ۱۳۳۱ نودِ vmess مقدارِ نامعتبر داشت و همان نود
+    از آزمونِ پروکسیِ زندهٔ L3 عبور کرده و تا سطلِ `verified/` رسیده بود —
+    یعنی سرور واقعاً کار می‌کند و فقط برچسبِ رمزش زباله است. `auto` همان
+    مذاکرهٔ استانداردِ vmess است (خودِ sing-box هم مقدارِ تهی را به `auto`
+    بدل می‌کند)، پس coerce صفر نود را قربانی می‌کند در حالی که drop یک
+    نودِ **سالم** را دور می‌ریخت.
+
+    `.strip()` لازم است: هر دو کلاینت `"zero "`ِ فاصله‌دار را رد می‌کنند.
+    `.lower()` هم لازم است: sing-box `AUTO` را رد می‌کند (کوچک‌سازی نمی‌کند)
+    هرچند mihomo آن را می‌پذیرد.
+
+    ⚠️ هم‌گامی: `core.dedup_key` نیز باید **همین** نگاشت را بزند، وگرنه دو
+    ورودی که خروجیِ یکسان تولید می‌کنند کلیدِ متفاوت می‌گیرند و ناوردایِ
+    «کلید و خروجی هم‌داستان‌اند» (فاز K) می‌شکند.
+    """
+    s = str(scy or "").strip().lower()
+    return s if s in VMESS_SECURITY else "auto"
+
+
 def parse_proxy(line: str) -> Optional[Dict[str, Any]]:
     """یک URI کانفیگ → dict واسط استاندارد یا None."""
     line = line.strip()
@@ -731,7 +783,7 @@ def parse_proxy(line: str) -> Optional[Dict[str, Any]]:
                 "port": _safe_int(obj.get("port")),
                 "uuid": str(obj.get("id") or ""),
                 "alterId": _safe_int(obj.get("aid"), 0),
-                "cipher": str(obj.get("scy") or "auto"),
+                "cipher": _sanitize_vmess_security(obj.get("scy")),
                 "network": (str(obj.get("net") or "tcp") or "tcp").lower(),
                 "tls": str(obj.get("tls") or "").lower() in ("tls", "reality"),
                 # پیش از این این سه مسیر (vmess/vless/trojan) خام عبور می‌کردند و
