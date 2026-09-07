@@ -7229,8 +7229,79 @@ def test_zz_k_vmess_scy_absent_equals_auto():
 
 
 def test_zz_k_vmess_scy_case_preserved_like_the_product():
-    """مبدّل مقدار را **حرف‌به‌حرف** امیت می‌کند؛ کوچک‌سازی ادغامِ کاذب بود."""
-    _k_pair(_k_vm(scy="AUTO"), _k_vm(scy="auto"), False, "scy=AUTO در برابر auto")
+    """★ بازنویسی‌شده در حادثهٔ ۲۰۲۶-۰۹-۰۷.
+
+    فرضِ پیشینِ این تست «مبدّل مقدار را حرف‌به‌حرف امیت می‌کند» بود و
+    `scy=AUTO` را جدا از `auto` می‌شمرد. آن فرض دیگر درست نیست: مبدّل حالا
+    `scy` را از whitelistِ `VMESS_SECURITY` عبور می‌دهد، چون یک مقدارِ
+    نامعتبر (نمونهٔ واقعی: رشتهٔ «null») کلِ فایل را در **هر دو** کلاینت
+    می‌سوزاند و چهار سطل را سرخ می‌کند.
+
+    ناوردایِ حقیقی — که هم پیش و هم پس از وصله برقرار است — این است که
+    کلید و خروجی **هم‌داستان** بمانند. پس اکنون `AUTO` و `auto` خروجیِ
+    یکسان می‌دهند، و کلید هم باید یکی شود.
+    """
+    _k_pair(_k_vm(scy="AUTO"), _k_vm(scy="auto"), True, "scy=AUTO در برابر auto")
+    _k_pair(_k_vm(scy="Auto"), _k_vm(scy="auto"), True, "scy=Auto در برابر auto")
+    # مقدارِ زباله هم به `auto` می‌رسد — همان نودی که مخزن را قفل کرد.
+    _k_pair(_k_vm(scy="null"), _k_vm(scy="auto"), True, "scy=null در برابر auto")
+    # ولی مقادیرِ **معتبر و متفاوت** هنوز باید بشکافند.
+    _k_pair(_k_vm(scy="none"), _k_vm(scy="auto"), False, "scy=none در برابر auto")
+
+
+def test_zz_k_vmess_security_whitelist_matches_both_clients() -> None:
+    """`VMESS_SECURITY` دقیقاً تقاطعِ چیزی است که دو کلاینت می‌پذیرند.
+
+    مقادیر با اجرای واقعیِ باینری‌های pinشدهٔ CI استخراج شده‌اند. این تست
+    مجموعه را **قفل** می‌کند تا کسی بعداً مقداری اضافه/کم نکند بی‌آنکه
+    دوباره با کلاینتِ واقعی بسنجد.
+    """
+    assert converters.VMESS_SECURITY == frozenset({
+        "auto", "none", "zero", "aes-128-cfb", "aes-128-gcm",
+        "chacha20-poly1305",
+    }), sorted(converters.VMESS_SECURITY)
+    # رشتهٔ تهی عمداً بیرون است: sing-box می‌پذیرد ولی mihomo رد می‌کند.
+    assert "" not in converters.VMESS_SECURITY
+    # گونه‌های بزرگ‌نویس عمداً بیرون‌اند: mihomo می‌پذیرد ولی sing-box نه.
+    assert "AUTO" not in converters.VMESS_SECURITY
+
+
+def test_zz_k_vmess_security_sanitizer_is_total_and_safe() -> None:
+    """هیچ ورودی‌ای — هرچقدر زباله — نمی‌تواند مقدارِ نامعتبر بیرون بدهد."""
+    JUNK = ["null", "NULL", "None", "undefined", "", "   ", None, 0, [], {},
+            "aes-256-gcm", "chacha20-ietf-poly1305", "rc4-md5", "http", "tls",
+            "AUTO", "Auto", " auto ", "ZERO", "AES-128-GCM", "\n", "\t auto"]
+    for j in JUNK:
+        got = converters._sanitize_vmess_security(j)
+        assert got in converters.VMESS_SECURITY, (j, got)
+    # مقادیرِ معتبر باید **دست‌نخورده** بمانند (با نرمال‌سازیِ حروف/فاصله).
+    for ok in sorted(converters.VMESS_SECURITY):
+        assert converters._sanitize_vmess_security(ok) == ok
+        assert converters._sanitize_vmess_security(ok.upper()) == ok
+        assert converters._sanitize_vmess_security(f"  {ok}  ") == ok
+
+
+def test_zz_k_vmess_security_mirror_never_diverges() -> None:
+    """`core._VMESS_SECURITY` باید آینهٔ دقیقِ `converters.VMESS_SECURITY` باشد.
+
+    `core` نمی‌تواند `converters` را import کند (وارونگیِ وابستگی)، پس
+    مجموعه تکرار شده است. این تست تنها چیزی است که مانعِ واگراییِ خاموشِ
+    آن دو می‌شود — واگرایی یعنی کلید و خروجی از هم می‌پاشند.
+    """
+    assert core._VMESS_SECURITY == converters.VMESS_SECURITY, (
+        sorted(core._VMESS_SECURITY), sorted(converters.VMESS_SECURITY))
+    # ★ این فهرست با mutation testing ساخته شد، نه با حدس. جهشی که فقط
+    # `.lower()` را از آینهٔ `core` برمی‌داشت **زنده ماند**، چون فهرستِ اولیه
+    # تنها مقادیرِ زبالهٔ بزرگ‌نویس (`AUTO`) را می‌آزمود — و آن‌ها در هر دو
+    # پیاده‌سازی به `auto` می‌رسند، پس واگرایی را پنهان می‌کردند. تنها جایی
+    # که نبودِ `.lower()` خود را نشان می‌دهد، مقادیرِ **معتبرِ** بزرگ‌نویس‌اند
+    # (`ZERO`, `NONE`, `AES-128-GCM`) که باید به همان مقدارِ معتبر برسند.
+    probes: list = ["null", "AUTO", "", "zero", " auto ", "aes-256-gcm", None,
+                    "undefined", "  ", 0, [], {}]
+    probes += [v.upper() for v in sorted(converters.VMESS_SECURITY)]
+    probes += [f" {v.title()} " for v in sorted(converters.VMESS_SECURITY)]
+    for j in probes:
+        assert core._vmess_security(j) == converters._sanitize_vmess_security(j), j
 
 
 # ── K-B: `insecure` در hysteria2/tuic ───────────────────────────────────────
@@ -7339,7 +7410,11 @@ def test_zz_k_key_and_product_never_disagree():
     """جمعِ همهٔ سناریوهای فاز K در یک جدول — کلید و خروجی هم‌داستان‌اند."""
     cases = [
         (_k_vm(), _k_vm(scy="auto"), True),
-        (_k_vm(scy="AUTO"), _k_vm(scy="auto"), False),
+        # ★ ۲۰۲۶-۰۹-۰۷: پس از whitelist شدنِ `scy`، این دو خروجیِ یکسان
+        # می‌دهند، پس باید یک کلید بگیرند.
+        (_k_vm(scy="AUTO"), _k_vm(scy="auto"), True),
+        (_k_vm(scy="null"), _k_vm(scy="auto"), True),
+        (_k_vm(scy="none"), _k_vm(scy="auto"), False),
         (_k_vm(net="tcp", sni="f.example.com"), _k_vm(net="tcp"), False),
         (_k_vm(net="grpc", sni="f.example.com"), _k_vm(net="grpc"), False),
         (_k_vm(host="h.example.com", sni="h.example.com"),
