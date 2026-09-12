@@ -1,8 +1,8 @@
 {
   "brand": "@Raydikalx",
-  "checked_at": "2026-09-07T18:53:05.516576+00:00",
-  "checked_at_unix": 1788807185,
-  "elapsed_seconds": 23.7,
+  "checked_at": "2026-09-12T10:22:06.111712+00:00",
+  "checked_at_unix": 1789208526,
+  "elapsed_seconds": 22.5,
   "summary": {
     "total": 19,
     "ok": 8,
@@ -15,20 +15,20 @@
       "tier": "light",
       "name": "base64.txt",
       "status": "ok",
-      "count": 321,
+      "count": 224,
       "http_code": 200,
       "attempts": 1,
-      "latency_ms": 227
+      "latency_ms": 366
     },
     {
       "url": "https://raw.githubusercontent.com/4n0nymou3/multi-proxy-config-fetcher/refs/heads/main/configs/proxy_configs.txt",
       "tier": "light",
       "name": "proxy_configs.txt",
       "status": "ok",
-      "count": 850,
+      "count": 157,
       "http_code": 200,
       "attempts": 1,
-      "latency_ms": 116
+      "latency_ms": 224
     },
     {
       "url": "https://raw.githubusercontent.com/mahsanet/MahsaFreeConfig/refs/heads/main/mci/sub_1.txt",
@@ -49,10 +49,10 @@
       "tier": "light",
       "name": "server.txt",
       "status": "ok",
-      "count": 1801,
+      "count": 2016,
       "http_code": 200,
       "attempts": 1,
-      "latency_ms": 305
+      "latency_ms": 321
     },
     {
       "url": "https://raw.githubusercontent.com/roosterkid/openproxylist/refs/heads/main/V2RAY_RAW.txt",
@@ -62,17 +62,17 @@
       "count": 150,
       "http_code": 200,
       "attempts": 1,
-      "latency_ms": 122
+      "latency_ms": 273
     },
     {
       "url": "https://raw.githubusercontent.com/barry-far/V2ray-Config/refs/heads/main/All_Configs_base64_Sub.txt",
       "tier": "heavy",
       "name": "All_Configs_base64_Sub.txt",
       "status": "ok",
-      "count": 7818,
+      "count": 7668,
       "http_code": 200,
       "attempts": 1,
-      "latency_ms": 565
+      "latency_ms": 608
     },
     {
       "url": "https://raw.githubusercontent.com/V2RAYCONFIGSPOOL/V2RAY_SUB/refs/heads/main/v2ray_configs_no1.txt",
@@ -117,7 +117,7 @@
       "count": 10,
       "http_code": 200,
       "attempts": 1,
-      "latency_ms": 302
+      "latency_ms": 285
     },
     {
       "url": "https://raw.githubusercontent.com/V2RAYCONFIGSPOOL/V2RAY_SUB/refs/heads/main/v2ray_configs_no7.txt",
@@ -145,20 +145,20 @@
       "tier": "heavy",
       "name": "VPN-cat",
       "status": "ok",
-      "count": 91,
+      "count": 355,
       "http_code": 200,
       "attempts": 1,
-      "latency_ms": 122
+      "latency_ms": 206
     },
     {
       "url": "https://raw.githubusercontent.com/Delta-Kronecker/V2ray-Config/refs/heads/main/config/all_configs.txt",
       "tier": "heavy",
       "name": "all_configs.txt",
       "status": "ok",
-      "count": 7469,
+      "count": 7427,
       "http_code": 200,
       "attempts": 1,
-      "latency_ms": 958
+      "latency_ms": 449
     },
     {
       "url": "https://raw.githubusercontent.com/Epodonios/v2ray-configs/main/All_Configs_Sub.txt",
@@ -170,147 +170,134 @@
   ],
   "converters": {
     "clash": {
-      "total": 383,
+      "total": 485,
       "by_reason": {
-        "invalid_server": 8,
-        "not_expressible": 4,
-        "unparsable": 361,
+        "invalid_server": 10,
+        "not_expressible": 2,
+        "unparsable": 463,
         "unroutable_server": 10
       },
       "by_protocol": {
-        "ss": 320,
-        "vmess": 48,
-        "trojan": 5,
+        "ss": 412,
+        "vmess": 61,
+        "trojan": 7,
         "hy2": 3,
-        "vless": 3,
-        "anytls": 2,
-        "hysteria2": 1,
-        "shadowsocksr": 1
+        "anytls": 1,
+        "vless": 1
       }
     },
     "singbox": {
-      "total": 757,
+      "total": 877,
       "by_reason": {
-        "invalid_server": 8,
-        "not_expressible": 378,
-        "unparsable": 361,
+        "invalid_server": 10,
+        "not_expressible": 394,
+        "unparsable": 463,
         "unroutable_server": 10
       },
       "by_protocol": {
-        "vless": 352,
-        "ss": 320,
-        "vmess": 62,
-        "trojan": 16,
+        "ss": 412,
+        "vless": 358,
+        "vmess": 89,
+        "trojan": 14,
         "hy2": 3,
-        "anytls": 2,
-        "hysteria2": 1,
-        "shadowsocksr": 1
+        "anytls": 1
       }
     }
   },
   "converters_by_category": {
     "all": {
       "clash": {
-        "total": 383,
+        "total": 485,
         "by_reason": {
-          "invalid_server": 8,
-          "not_expressible": 4,
-          "unparsable": 361,
+          "invalid_server": 10,
+          "not_expressible": 2,
+          "unparsable": 463,
           "unroutable_server": 10
         },
         "by_protocol": {
-          "ss": 320,
-          "vmess": 48,
-          "trojan": 5,
+          "ss": 412,
+          "vmess": 61,
+          "trojan": 7,
           "hy2": 3,
-          "vless": 3,
-          "anytls": 2,
-          "hysteria2": 1,
-          "shadowsocksr": 1
+          "anytls": 1,
+          "vless": 1
         }
       },
       "singbox": {
-        "total": 757,
+        "total": 877,
         "by_reason": {
-          "invalid_server": 8,
-          "not_expressible": 378,
-          "unparsable": 361,
+          "invalid_server": 10,
+          "not_expressible": 394,
+          "unparsable": 463,
           "unroutable_server": 10
         },
         "by_protocol": {
-          "vless": 352,
-          "ss": 320,
-          "vmess": 62,
-          "trojan": 16,
+          "ss": 412,
+          "vless": 358,
+          "vmess": 89,
+          "trojan": 14,
           "hy2": 3,
-          "anytls": 2,
-          "hysteria2": 1,
-          "shadowsocksr": 1
+          "anytls": 1
         }
       }
     },
     "heavy": {
       "clash": {
-        "total": 368,
+        "total": 470,
         "by_reason": {
-          "invalid_server": 4,
-          "not_expressible": 4,
-          "unparsable": 360
+          "invalid_server": 6,
+          "not_expressible": 2,
+          "unparsable": 462
         },
         "by_protocol": {
-          "ss": 320,
-          "vmess": 35,
-          "trojan": 5,
+          "ss": 412,
+          "vmess": 47,
+          "trojan": 7,
           "hy2": 3,
-          "vless": 3,
-          "hysteria2": 1,
-          "shadowsocksr": 1
+          "vless": 1
         }
       },
       "singbox": {
-        "total": 709,
+        "total": 832,
         "by_reason": {
-          "invalid_server": 4,
-          "not_expressible": 345,
-          "unparsable": 360
+          "invalid_server": 6,
+          "not_expressible": 364,
+          "unparsable": 462
         },
         "by_protocol": {
-          "vless": 328,
-          "ss": 320,
-          "vmess": 40,
-          "trojan": 16,
-          "hy2": 3,
-          "hysteria2": 1,
-          "shadowsocksr": 1
+          "ss": 412,
+          "vless": 349,
+          "vmess": 54,
+          "trojan": 14,
+          "hy2": 3
         }
       }
     },
     "light": {
       "clash": {
-        "total": 16,
+        "total": 15,
         "by_reason": {
           "invalid_server": 4,
-          "unparsable": 2,
+          "unparsable": 1,
           "unroutable_server": 10
         },
         "by_protocol": {
           "vmess": 14,
-          "anytls": 2
+          "anytls": 1
         }
       },
       "singbox": {
-        "total": 98,
+        "total": 73,
         "by_reason": {
           "invalid_server": 4,
-          "not_expressible": 82,
-          "unparsable": 2,
+          "not_expressible": 58,
+          "unparsable": 1,
           "unroutable_server": 10
         },
         "by_protocol": {
-          "vless": 66,
-          "vmess": 28,
-          "anytls": 2,
-          "trojan": 2
+          "vmess": 42,
+          "vless": 30,
+          "anytls": 1
         }
       }
     }
@@ -335,70 +322,70 @@
   "converter_gate": {},
   "geo": {
     "db_loaded": 1,
-    "by_ip_literal": 4074,
+    "by_ip_literal": 4267,
     "unknown_ip_literal": 1,
-    "by_dns": 2003,
-    "dns_failed": 360,
-    "unknown_after_dns": 5,
+    "by_dns": 1988,
+    "dns_failed": 384,
+    "unknown_after_dns": 1,
     "skipped_no_db": 0,
-    "hosts_resolved": 6077,
-    "hosts_unknown": 366
+    "hosts_resolved": 6255,
+    "hosts_unknown": 386
   },
   "cascade": {
     "exit_country": {
-      "colo": "IAD",
+      "colo": "DFW",
       "loc": "US",
       "source": "https://cp.cloudflare.com/cdn-cgi/trace"
     },
     "layers": {
       "l0_l1": {
-        "in": 11704,
-        "out": 11324,
+        "in": 11735,
+        "out": 11251,
         "dropped": {
-          "unparsable": 361,
-          "invalid_port": 5,
-          "invalid_uuid": 1,
+          "unparsable": 463,
+          "invalid_port": 8,
+          "invalid_uuid": 0,
           "unroutable_server": 10,
           "invalid_server": 3
         },
-        "endpoints_unique": 7172,
-        "dedup_saving_pct": 36.67,
-        "seconds": 0.56
+        "endpoints_unique": 7342,
+        "dedup_saving_pct": 34.74,
+        "seconds": 0.52
       },
       "l2": {
-        "in": 11324,
-        "out": 9044,
-        "open_pct": 79.87,
-        "open_pct_of_raw_input": 77.27,
-        "dns_failed": 353,
-        "dns_seconds": 21.82,
-        "tcp_seconds": 7.03,
+        "in": 11251,
+        "out": 8888,
+        "open_pct": 79.0,
+        "open_pct_of_raw_input": 75.74,
+        "dns_failed": 376,
+        "dns_seconds": 18.72,
+        "tcp_seconds": 7.1,
         "fd_before": 6,
         "fd_after": 6,
-        "seconds": 29.44
+        "seconds": 26.39
       },
       "l3": {
-        "in": 9044,
+        "in": 8888,
         "rounds": 3,
         "per_run_ok": [
-          1645,
-          1735,
-          1680
+          1572,
+          1613,
+          1504
         ],
-        "ever_ok": 1895,
-        "stable": 1455,
-        "flaky_pct": 23.22,
-        "seconds": 241.19
+        "ever_ok": 1817,
+        "stable": 1299,
+        "flaky_pct": 28.51,
+        "seconds": 258.69
       }
     },
     "buckets": {
-      "verified": 1455,
-      "fast": 1021,
-      "secure": 923,
+      "verified": 1299,
+      "fast": 940,
+      "secure": 811,
       "top": 100,
       "top_short_by": 0,
       "fast_threshold_ms": 800
     },
-    "total_seconds": 272.1
+    "total_seconds": 286.35
   }
 }
