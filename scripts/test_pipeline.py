@@ -14517,5 +14517,264 @@ def test_zzz_cty_a_round_never_writes_through_a_planted_symlink() -> None:
     assert stats["countries"] == 2, stats
     assert stats["configs"] == 2, stats
 
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# منابعِ غیرفعال‌شده — گزارش باید صادق باشد، نه گمراه‌کننده
+# ══════════════════════════════════════════════════════════════════════════════
+#
+# نقصِ اندازه‌گیری‌شده (۱۳ سپتامبر ۲۰۲۶): `health.json` می‌گفت
+#     summary = {"total": 19, "ok": 8, "empty": 0, "fail": 0}
+# یعنی ۱۱ منبع در **هیچ** سطلی شمرده نمی‌شدند و در فهرست با برچسبِ
+# `unknown` و بدونِ `http_code`/`latency_ms` می‌آمدند. خوانندهٔ گزارش این را
+# «۱۱ منبعِ مرده» می‌خواند.
+#
+# کاوشِ مستقیم خلافش را ثابت کرد: هر ۱۹ منبع در سه دورِ متوالی HTTP 200 با
+# بدنهٔ غیرخالی دادند. واقعیت این بود که حافظهٔ بین‌دوره‌ای آن ۱۱ را عمداً
+# خاموش کرده بود، و اندازه‌گیریِ بازده نشان داد همه‌شان با هم فقط ۲۳ کانفیگِ
+# یکتا (۰.۲۰٪ روی ۱۱٬۷۶۲) اضافه می‌کنند — پس آن تصمیم درست بود و تنها
+# **گزارشش** غلط بود.
+
+
+def test_zzz_dis_disabled_sources_are_labelled_not_called_unknown() -> None:
+    """منبعی که حافظه خاموش کرده باید `disabled` باشد، نه `unknown`."""
+    saved = dict(aggregate.SOURCE_HEALTH)
+    try:
+        aggregate.SOURCE_HEALTH.clear()
+        url = aggregate.LIGHT_SOURCES[0]
+        rep = aggregate.build_health_report(1.0, disabled={url: "zero unique yield"})
+        row = next(r for r in rep["sources"] if r["url"] == url)
+        assert row["status"] == "disabled", row
+        assert row["reason"] == "zero unique yield", row
+        other = next(r for r in rep["sources"] if r["url"] != url)
+        assert other["status"] == "unknown", other
+        assert "reason" not in other, other
+    finally:
+        aggregate.SOURCE_HEALTH.clear()
+        aggregate.SOURCE_HEALTH.update(saved)
+
+
+def test_zzz_dis_summary_buckets_add_up_to_total() -> None:
+    """جمعِ سطل‌ها باید دقیقاً `total` شود — هیچ منبعی بی‌صدا گم نشود.
+
+    همان ناوردایی که پیش از این نقض می‌شد: ok+empty+fail = ۸ بود در حالی
+    که total = ۱۹.
+    """
+    saved = dict(aggregate.SOURCE_HEALTH)
+    try:
+        aggregate.SOURCE_HEALTH.clear()
+        allsrc = aggregate.LIGHT_SOURCES + aggregate.HEAVY_SOURCES
+        for url in allsrc[:3]:
+            aggregate.SOURCE_HEALTH[url] = {
+                "name": url.rsplit("/", 1)[-1], "status": "ok", "count": 5,
+                "http_code": 200, "attempts": 1, "latency_ms": 10,
+            }
+        dis = {u: "zero unique yield" for u in allsrc[3:7]}
+        rep = aggregate.build_health_report(1.0, disabled=dis)
+        s = rep["summary"]
+        parts = s["ok"] + s["empty"] + s["fail"] + s["disabled"] + s["unknown"]
+        assert parts == s["total"], f"سطل‌ها {parts} != total {s['total']}: {s}"
+        assert s["total"] == len(allsrc), s
+        assert s["ok"] == 3, s
+        assert s["disabled"] == 4, s
+        assert s["unknown"] == len(allsrc) - 7, s
+    finally:
+        aggregate.SOURCE_HEALTH.clear()
+        aggregate.SOURCE_HEALTH.update(saved)
+
+
+def test_zzz_dis_a_fetched_source_is_never_relabelled_disabled() -> None:
+    """اگر منبعی واقعاً واکشی شده، برچسبِ سلامتِ واقعی‌اش برنده است.
+
+    حتی اگر نگاشتِ `disabled` اشتباهاً نامش را ببرد؛ وگرنه یک باگ در حافظه
+    می‌توانست یک منبعِ سالم را در گزارش خاموش نشان دهد.
+    """
+    saved = dict(aggregate.SOURCE_HEALTH)
+    try:
+        aggregate.SOURCE_HEALTH.clear()
+        url = aggregate.HEAVY_SOURCES[0]
+        aggregate.SOURCE_HEALTH[url] = {
+            "name": "x", "status": "ok", "count": 42,
+            "http_code": 200, "attempts": 1, "latency_ms": 7,
+        }
+        rep = aggregate.build_health_report(1.0, disabled={url: "should be ignored"})
+        row = next(r for r in rep["sources"] if r["url"] == url)
+        assert row["status"] == "ok", row
+        assert row["count"] == 42, row
+        assert row.get("reason") != "should be ignored", row
+        assert rep["summary"]["ok"] == 1, rep["summary"]
+        assert rep["summary"]["disabled"] == 0, rep["summary"]
+    finally:
+        aggregate.SOURCE_HEALTH.clear()
+        aggregate.SOURCE_HEALTH.update(saved)
+
+
+def test_zzz_dis_report_is_backward_compatible_without_the_new_arg() -> None:
+    """امضای تازه نباید هیچ مصرف‌کنندهٔ قبلی را بشکند."""
+    saved = dict(aggregate.SOURCE_HEALTH)
+    try:
+        aggregate.SOURCE_HEALTH.clear()
+        rep = aggregate.build_health_report(1.0)          # بدونِ آرگومانِ تازه
+        s = rep["summary"]
+        for k in ("total", "ok", "empty", "fail", "disabled", "unknown"):
+            assert k in s, f"کلیدِ {k} در خلاصه نیست: {s}"
+        assert s["disabled"] == 0, s
+        assert s["unknown"] == s["total"], s
+        assert all(r["status"] == "unknown" for r in rep["sources"]), \
+            "بدونِ نگاشتِ disabled، رفتار باید دقیقاً مثلِ قبل باشد"
+    finally:
+        aggregate.SOURCE_HEALTH.clear()
+        aggregate.SOURCE_HEALTH.update(saved)
+
+
+def test_zzz_dis_main_feeds_the_real_reasons_into_the_report() -> None:
+    """`main` باید علتِ واقعیِ ثبت‌شده در حافظه را به گزارش بدهد — با AST.
+
+    grep کافی نیست: کامنتی که کلمهٔ `disabled` دارد می‌تواند grep را سبز
+    کند. کامنت‌ها در درختِ نحوی وجود ندارند، پس AST تنها اثباتِ اجرایی است.
+    """
+    import ast
+    import inspect
+    import textwrap
+
+    tree = ast.parse(textwrap.dedent(inspect.getsource(aggregate.main)))
+    fn = tree.body[0]
+    calls = [n for n in ast.walk(fn)
+             if isinstance(n, ast.Call)
+             and isinstance(n.func, ast.Name)
+             and n.func.id == "build_health_report"]
+    assert calls, "main دیگر build_health_report را صدا نمی‌زند"
+    kw = {k.arg for c in calls for k in c.keywords}
+    assert "disabled" in kw, f"آرگومانِ disabled پاس نمی‌شود: {kw}"
+    names = {n.id for n in ast.walk(fn) if isinstance(n, ast.Name)}
+    assert "disabled_reasons" in names, "متغیرِ علت‌ها در main ساخته نمی‌شود"
+    assert "memory" in names, "علت‌ها باید از ماژولِ حافظه بیایند، نه از جای دیگر"
+
+    # ★ فقط وجودِ نام کافی نیست. یک جهشِ عمدی که انتساب را به
+    #   `disabled_reasons = {}` عوض می‌کرد **زنده ماند**، چون نام هنوز آنجا
+    #   بود ولی نگاشت همیشه خالی می‌شد و همهٔ منابعِ خاموش باز `unknown`
+    #   برچسب می‌خوردند. پس باید ثابت شود مقدارش از `disabled_reasons_for`
+    #   می‌آید، نه از یک ثابتِ خالی.
+    assigns = [n for n in ast.walk(fn) if isinstance(n, ast.Assign)
+               and any(isinstance(t, ast.Name) and t.id == "disabled_reasons"
+                       for t in n.targets)]
+    assert assigns, "هیچ انتسابی به disabled_reasons پیدا نشد"
+    fed_by_call = [
+        a for a in assigns
+        if isinstance(a.value, ast.Call)
+        and isinstance(a.value.func, ast.Name)
+        and a.value.func.id == "disabled_reasons_for"
+    ]
+    assert fed_by_call, (
+        "disabled_reasons از disabled_reasons_for پر نمی‌شود ⇒ "
+        "نگاشت می‌تواند همیشه خالی بماند و گزارش بی‌صدا به unknown برگردد")
+    assert len(fed_by_call) == len(assigns), (
+        "یک انتسابِ دیگر به disabled_reasons هست که از تابعِ علت‌ها نمی‌آید ⇒ "
+        "ممکن است مقدارِ درست را زیرنویس کند")
+
+
+def test_zzz_dis_the_signature_really_accepts_the_new_keyword() -> None:
+    """امضا با inspect سنجیده می‌شود، نه با خواندنِ متن."""
+    import inspect
+    sig = inspect.signature(aggregate.build_health_report)
+    assert "disabled" in sig.parameters, sig
+    p = sig.parameters["disabled"]
+    assert p.default is None, f"پیش‌فرض باید None باشد تا سازگارِ عقب‌رو بماند: {p}"
+
+
+def test_zzz_dis_reasons_survive_a_corrupt_or_missing_memory_file() -> None:
+    """حافظهٔ خراب/غایب نباید گزارش را بشکند — فقط سطلِ disabled صفر شود."""
+    saved = dict(aggregate.SOURCE_HEALTH)
+    try:
+        aggregate.SOURCE_HEALTH.clear()
+        for bad in (None, {}, {"": ""}):
+            rep = aggregate.build_health_report(1.0, disabled=bad)
+            s = rep["summary"]
+            total = s["ok"] + s["empty"] + s["fail"] + s["disabled"] + s["unknown"]
+            assert total == s["total"], f"disabled={bad!r} حساب را به‌هم زد: {s}"
+    finally:
+        aggregate.SOURCE_HEALTH.clear()
+        aggregate.SOURCE_HEALTH.update(saved)
+
+
+
+def test_zzz_dis_reasons_for_extracts_the_recorded_reason() -> None:
+    """`disabled_reasons_for` باید علتِ واقعی را از حافظه بیرون بکشد.
+
+    این آزمون از یک جهشِ زندهٔ ماندگار زاده شد: وقتی همین منطق یک حلقهٔ
+    درجا در `main` بود، جهشی که بدنه را با `pass` عوض می‌کرد **زنده ماند**
+    چون هیچ آزمونی نگاشتِ پرشده را نمی‌سنجید — فقط وجودِ نام را.
+    """
+    mem = {"sources": {
+        "k1": {"url": "https://a/x.txt", "reason": "zero unique yield", "disabled_since": "t"},
+        "k2": {"url": "https://b/y.txt", "reason": "another reason", "disabled_since": "t"},
+        "k3": {"url": "https://c/z.txt", "reason": "not skipped this round"},
+    }}
+    out = aggregate.disabled_reasons_for(mem, ["https://a/x.txt", "https://b/y.txt"])
+    assert out == {"https://a/x.txt": "zero unique yield",
+                   "https://b/y.txt": "another reason"}, out
+    assert "https://c/z.txt" not in out, "منبعی که این دور رد نشده نباید بیاید"
+
+
+def test_zzz_dis_reasons_for_falls_back_when_the_reason_is_missing() -> None:
+    """رکوردِ بدونِ `reason` نباید نگاشت را خالی بگذارد."""
+    mem = {"sources": {"k": {"url": "https://a/x.txt", "disabled_since": "t"}}}
+    out = aggregate.disabled_reasons_for(mem, ["https://a/x.txt"])
+    assert out == {"https://a/x.txt": "disabled by memory"}, out
+    for empty in ("", None, 0):
+        mem2 = {"sources": {"k": {"url": "https://a/x.txt", "reason": empty}}}
+        got = aggregate.disabled_reasons_for(mem2, ["https://a/x.txt"])
+        assert got["https://a/x.txt"] == "disabled by memory", (empty, got)
+
+
+def test_zzz_dis_reasons_for_is_total_over_malformed_memory() -> None:
+    """هر شکلِ بدِ حافظه باید به نگاشتِ خالی برسد، نه به استثنا."""
+    for bad in (None, {}, {"sources": None}, {"sources": {}},
+                {"sources": {"k": None}}, {"sources": {"k": "string"}},
+                {"sources": {"k": {"url": 123}}}, {"sources": {"k": {}}},
+                {"sources": []}, "not a dict", 42, []):
+        out = aggregate.disabled_reasons_for(bad, ["https://a/x.txt"])
+        assert out == {}, f"mem={bad!r} -> {out!r}"
+    # و اگر skipped خالی باشد، حتی با حافظهٔ سالم هم چیزی برنگردد
+    mem = {"sources": {"k": {"url": "https://a/x.txt", "reason": "r"}}}
+    assert aggregate.disabled_reasons_for(mem, []) == {}
+
+
+def test_zzz_dis_the_round_end_to_end_labels_the_real_disabled_sources() -> None:
+    """زنجیرهٔ کامل: حافظه → علت‌ها → گزارش، با شکلِ واقعیِ state.json.
+
+    شکلِ ورودی از `state.json`ِ زندهٔ ریپو گرفته شده (کلیدهای `url`،
+    `reason`، `disabled_since`, `tier`, `rounds`).
+    """
+    saved = dict(aggregate.SOURCE_HEALTH)
+    try:
+        aggregate.SOURCE_HEALTH.clear()
+        allsrc = aggregate.LIGHT_SOURCES + aggregate.HEAVY_SOURCES
+        off = allsrc[:2]
+        mem = {"round": 4100, "sources": {
+            f"k{i}": {"url": u, "tier": "light", "rounds": 21,
+                      "disabled_since": "2026-07-30T19:23:41Z",
+                      "reason": "zero unique yield in the last 10 of 21 rounds, "
+                                "and zero again this round"}
+            for i, u in enumerate(off)}}
+        skipped = [u for u in aggregate.state.disabled_urls(mem) if u in allsrc] \
+            if hasattr(aggregate, "state") else off
+        reasons = aggregate.disabled_reasons_for(mem, skipped or off)
+        assert set(reasons) == set(off), reasons
+        rep = aggregate.build_health_report(1.0, disabled=reasons)
+        rows = {r["url"]: r for r in rep["sources"]}
+        for u in off:
+            assert rows[u]["status"] == "disabled", rows[u]
+            assert "zero unique yield" in rows[u]["reason"], rows[u]
+            assert "http_code" not in rows[u], \
+                "منبعِ خاموش واکشی نشده، پس نباید http_code داشته باشد"
+        s = rep["summary"]
+        assert s["disabled"] == 2, s
+        assert s["ok"] + s["empty"] + s["fail"] + s["disabled"] + s["unknown"] == s["total"], s
+    finally:
+        aggregate.SOURCE_HEALTH.clear()
+        aggregate.SOURCE_HEALTH.update(saved)
+
+
 if __name__ == "__main__":
     sys.exit(_run_all())

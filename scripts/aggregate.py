@@ -800,10 +800,36 @@ def build_index(results: Dict[str, CategoryResult], proto_counts: Dict[str, int]
     }
 
 
+def disabled_reasons_for(mem: Dict, skipped: List[str]) -> Dict[str, str]:
+    """url → علتِ ثبت‌شدهٔ غیرفعال‌سازی، فقط برای urlهایی که این دور رد شدند.
+
+    چرا یک تابعِ نام‌دار و نه یک حلقهٔ درجا در `main` (سنجیده، نه سلیقه):
+    نسخهٔ اول همین منطق درونِ `main` بود و آزمونِ AST فقط *وجودِ نام* را
+    می‌سنجید. یک جهشِ عمدی که بدنهٔ حلقه را با `pass` جایگزین می‌کرد **زنده
+    ماند**: نگاشت خالی می‌شد، همهٔ منابعِ خاموش دوباره `unknown` برچسب
+    می‌خوردند، و هیچ آزمونی نمی‌فهمید. حالا که تابعِ جداست، آزمون می‌تواند
+    مستقیم صدایش بزند و آن جهش گرفته می‌شود.
+
+    در برابرِ حافظهٔ بدشکل امن است: هر ورودیِ غیرِ dict یا بدونِ `url`ِ رشته‌ای
+    نادیده گرفته می‌شود. نبودِ فایل ⇒ نگاشتِ خالی ⇒ همان رفتارِ پیشین.
+    """
+    out: Dict[str, str] = {}
+    wanted = set(skipped)
+    entries = mem.get("sources") if isinstance(mem, dict) else None
+    for ent in (entries or {}).values():
+        if not isinstance(ent, dict):
+            continue
+        url = ent.get("url")
+        if isinstance(url, str) and url in wanted:
+            out[url] = str(ent.get("reason") or "disabled by memory")
+    return out
+
+
 def build_health_report(
     elapsed: float,
     conv_by_category: Optional[Dict[str, dict]] = None,
     results: Optional[Dict[str, "CategoryResult"]] = None,
+    disabled: Optional[Dict[str, str]] = None,
 ) -> dict:
     """گزارشِ کاملِ سلامتِ هر منبع — برای مانیتورینگ و دیباگِ منابعِ مرده.
 
@@ -829,9 +855,33 @@ def build_health_report(
     که health.json را پارس می‌کند).
     """
     now = _dt.datetime.now(_dt.timezone.utc)
+
+    # ── چرا «disabled» و نه «unknown» (اصلاحِ یک گزارشِ گمراه‌کننده) ──────────
+    # `main` پیش از واکشی، منابعی را که حافظهٔ بین‌دوره‌ای غیرفعال کرده از
+    # `all_urls` بیرون می‌گذارد (سطرِ ~۱۰۱۲). آن منابع هرگز واکشی نمی‌شوند، پس
+    # کلیدی در `SOURCE_HEALTH` ندارند و تا پیش از این با برچسبِ `unknown` و
+    # بدونِ `http_code`/`latency_ms` در گزارش می‌آمدند.
+    #
+    # این گمراه‌کننده بود: `unknown` مثلِ «نمی‌دانیم، احتمالاً خراب» خوانده
+    # می‌شد، در حالی که واقعیت «عمداً خاموش، چون بازدهِ یکتا نداشت» است. با
+    # اندازه‌گیریِ زنده (۱۳ سپتامبر ۲۰۲۶) هر ۱۹ منبع در سه دورِ متوالی
+    # HTTP 200 با بدنهٔ غیرخالی دادند — پس هیچ‌کدام «مرده» نبودند؛ ۱۱ تا
+    # غیرفعال بودند و مجموعاً ۲۳ کانفیگِ یکتا (۰.۲۰٪) اضافه می‌کردند.
+    #
+    # `summary` هم تا پیش از این `fail: 0` می‌گفت و همان ۱۱ منبع را در هیچ
+    # سطلی نمی‌شمرد، پس `ok + empty + fail != total` می‌شد و خواننده فکر
+    # می‌کرد ۱۱ منبع بی‌صدا گم شده‌اند. کلیدِ تازهٔ `disabled` این حساب را
+    # می‌بندد. کلیدهای قبلی دست‌نخورده‌اند تا مصرف‌کننده‌ها نشکنند.
+    disabled_map = dict(disabled or {})
     items = []
     for url in (LIGHT_SOURCES + HEAVY_SOURCES):
-        h = SOURCE_HEALTH.get(url, {"name": url.rsplit("/", 1)[-1], "status": "unknown", "count": 0})
+        fallback: dict = {"name": url.rsplit("/", 1)[-1], "count": 0}
+        if url in disabled_map:
+            fallback["status"] = "disabled"
+            fallback["reason"] = disabled_map[url]
+        else:
+            fallback["status"] = "unknown"
+        h = SOURCE_HEALTH.get(url, fallback)
         tier = "light" if url in LIGHT_SOURCES else "heavy"
         items.append({"url": url, "tier": tier, **h})
 
@@ -903,6 +953,10 @@ def build_health_report(
             "ok": sum(1 for i in items if i.get("status") == "ok"),
             "empty": sum(1 for i in items if i.get("status") == "empty"),
             "fail": sum(1 for i in items if i.get("status") == "fail"),
+            # ★ دو سطلِ تازه تا جمعِ سطل‌ها با `total` برابر شود. پیش از این
+            #   منابعِ غیرفعال در هیچ سطلی نبودند و گزارش بی‌صدا کم می‌آورد.
+            "disabled": sum(1 for i in items if i.get("status") == "disabled"),
+            "unknown": sum(1 for i in items if i.get("status") == "unknown"),
         },
         "sources": items,
         "converters": conv_stats,
@@ -1008,6 +1062,8 @@ def main() -> int:
     mem = memory.load_state(state_path)
     skipped = [u for u in memory.disabled_urls(mem)
                if u in (LIGHT_SOURCES + HEAVY_SOURCES)]
+    # علتِ ثبت‌شدهٔ هر غیرفعال‌سازی، برای گزارشِ سلامت.
+    disabled_reasons = disabled_reasons_for(mem, skipped)
 
     all_urls = [u for u in (LIGHT_SOURCES + HEAVY_SOURCES) if u not in set(skipped)]
     if skipped:
@@ -1078,11 +1134,14 @@ def main() -> int:
                 json.dumps(index, ensure_ascii=False, indent=2))
 
     # ── گزارشِ سلامتِ منابع (حرفه‌ای) ─────────────────────────────────────────
-    health = build_health_report(elapsed, conv_by_cat, results)
+    health = build_health_report(elapsed, conv_by_cat, results,
+                                 disabled=disabled_reasons)
     _write_text(os.path.join(out_dir, "health.json"),
                 json.dumps(health, ensure_ascii=False, indent=2))
     hs = health["summary"]
-    log(f"  • source health: {hs['ok']} ok / {hs['empty']} empty / {hs['fail']} fail")
+    log(f"  • source health: {hs['ok']} ok / {hs['empty']} empty / {hs['fail']} fail"
+        f" / {hs['disabled']} disabled / {hs['unknown']} unknown"
+        f"  (total {hs['total']})")
 
     cs = health.get("converters") or {}
     for target in ("clash", "singbox"):
