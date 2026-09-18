@@ -458,6 +458,20 @@ _TUIC_CONGESTION = frozenset({"cubic", "new_reno", "bbr"})
 #: بی‌معنا باعث می‌شود دست‌دادنِ TLS در سمتِ کلاینت شکست بخورد.
 _ALPN_ALLOWED = frozenset({"h3", "h2", "http/1.1", "hysteria", "tuic", "quic"})
 
+#: حالت‌های xhttp که mihomo پیاده کرده است.
+#:
+#: چرا لازم است: `mode`ِ ناشناخته را mihomo در **زمانِ بارگذاری** رد می‌کند و
+#: پیامش «xhttp mode <m> is not implemented yet» است — یعنی مثلِ `scy` در vmess،
+#: یک نودِ خراب **کلِ** clash.yaml را از کار می‌اندازد، نه فقط خودش را. سنجش با
+#: همان باینریِ pinشدهٔ CI (mihomo v1.19.29)، تک‌تک صدا زده شد:
+#:
+#:     mode ∈ {"", auto, packet-up, stream-up, stream-one}   → rc=0
+#:     mode ∈ {gun, multi, AUTO, " packet-up ", foo}         → rc=1
+#:
+#: مقایسه **حساس به حروف** است (خودِ mihomo چیزی را lowercase نمی‌کند)، پس
+#: پیش از عضویت‌سنجی نرمال‌سازیِ strip+lower لازم است.
+XHTTP_MODES: frozenset = frozenset({"auto", "packet-up", "stream-up", "stream-one"})
+
 
 #: مقادیرِ نگهبان (sentinel) که «نامِ میزبان» نیستند بلکه «مقدارِ تهی» را در
 #: قالبِ متن بیان می‌کنند. تولیدکنندهٔ بالادست یک `None`/`null` پایتونی یا
@@ -1099,6 +1113,17 @@ def _safe_transport_path(raw: Any) -> str:
     return _BAD_PCT_ESCAPE_RE.sub("%25", raw if isinstance(raw, str) else "")
 
 
+def _sanitize_xhttp_mode(raw: Any) -> str:
+    """`mode`ِ xhttp را به مقداری می‌رساند که mihomo می‌پذیرد، وگرنه تهی.
+
+    همان سیاستِ `_sanitize_flow` و `obfs`ِ hysteria2: مقدارِ بی‌معنا **نادیده**
+    گرفته می‌شود و نود باقی می‌ماند. نوشتنِ مقدارِ خام، کلِ clash.yaml را برای
+    mihomo بی‌استفاده می‌کرد و هزاران نودِ سالم را با خودش می‌برد.
+    """
+    m = (raw or "").strip().lower() if isinstance(raw, str) else ""
+    return m if m in XHTTP_MODES else ""
+
+
 def _clash_network(raw: str) -> str:
     return _CLASH_NETWORK_MAP.get((raw or "").lower(), "tcp")
 
@@ -1153,8 +1178,9 @@ def _clash_transport_opts(p: Dict[str, Any], out: Dict[str, Any]) -> None:
         xh: Dict[str, Any] = {"path": path}
         if host:
             xh["host"] = host
-        if p.get("mode"):
-            xh["mode"] = p["mode"]
+        mode = _sanitize_xhttp_mode(p.get("mode"))
+        if mode:
+            xh["mode"] = mode
         if p.get("extra"):
             # extra یک JSON خام از سمت Xray است؛ فقط کلیدهای شناخته‌شده را برمی‌داریم.
             try:
