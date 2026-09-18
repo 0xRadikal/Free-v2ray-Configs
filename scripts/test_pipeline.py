@@ -14776,5 +14776,45 @@ def test_zzz_dis_the_round_end_to_end_labels_the_real_disabled_sources() -> None
         aggregate.SOURCE_HEALTH.update(saved)
 
 
+def test_xhttp_unimplemented_mode_cannot_burn_the_whole_clash_document():
+    """`mode`ِ ناشناخته را mihomo در بارگذاری رد می‌کند و **کلِ** clash.yaml
+    از کار می‌افتد — همان کلاسِ حادثهٔ `scy` در vmess. پس نوشته نمی‌شود."""
+    out: dict = {}
+    converters._clash_transport_opts({"network": "xhttp", "path": "/x", "mode": "gun"}, out)
+    assert out["network"] == "xhttp"
+    assert out["xhttp-opts"]["path"] == "/x"
+    assert "mode" not in out["xhttp-opts"], out["xhttp-opts"]
+
+
+def test_xhttp_mode_is_normalized_before_the_whitelist():
+    """mihomo حساس به حروف است («AUTO» رد می‌شود)؛ نرمال‌سازی نودِ درست را نجات می‌دهد."""
+    for raw in ("AUTO", " packet-up ", "Stream-One"):
+        out: dict = {}
+        converters._clash_transport_opts({"network": "xhttp", "path": "/x", "mode": raw}, out)
+        assert out["xhttp-opts"]["mode"] in converters.XHTTP_MODES, (raw, out["xhttp-opts"])
+
+
+def test_every_implemented_xhttp_mode_still_reaches_the_clash_document():
+    """سنجش با mihomo v1.19.29: هر چهار حالتِ زیر rc=0 دادند."""
+    for mode in sorted(converters.XHTTP_MODES):
+        out: dict = {}
+        converters._clash_transport_opts({"network": "xhttp", "path": "/x", "mode": mode}, out)
+        assert out["xhttp-opts"]["mode"] == mode, (mode, out["xhttp-opts"])
+
+
+def test_no_emitted_clash_proxy_advertises_an_unimplemented_xhttp_mode():
+    """سرتاسری: نودِ خراب باید بماند ولی `mode`ِ خرابش ننویسد."""
+    u = "d0f1e2a3-b4c5-6789-abcd-ef0123456789"
+    lines = [
+        f"vless://{u}@203.0.113.21:443?type=xhttp&security=tls&sni=a.example&mode=gun#a",
+        f"vless://{u}@203.0.113.22:443?type=xhttp&security=tls&sni=b.example&mode=stream-one#b",
+    ]
+    proxies = yaml.safe_load(converters.build_clash_yaml(lines, limit=20))["proxies"]
+    assert len(proxies) == 2, proxies
+    for proxy in proxies:
+        mode = (proxy.get("xhttp-opts") or {}).get("mode")
+        assert mode is None or mode in converters.XHTTP_MODES, (proxy.get("name"), mode)
+
+
 if __name__ == "__main__":
     sys.exit(_run_all())
