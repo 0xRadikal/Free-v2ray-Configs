@@ -1,8 +1,8 @@
 {
   "brand": "@Raydikalx",
-  "checked_at": "2026-10-15T21:52:42.797955+00:00",
-  "checked_at_unix": 1792101162,
-  "elapsed_seconds": 21.0,
+  "checked_at": "2026-10-15T22:13:44.516306+00:00",
+  "checked_at_unix": 1792102424,
+  "elapsed_seconds": 22.5,
   "summary": {
     "total": 19,
     "ok": 7,
@@ -20,7 +20,7 @@
       "count": 190,
       "http_code": 200,
       "attempts": 1,
-      "latency_ms": 200
+      "latency_ms": 304
     },
     {
       "url": "https://raw.githubusercontent.com/4n0nymou3/multi-proxy-config-fetcher/refs/heads/main/configs/proxy_configs.txt",
@@ -30,7 +30,7 @@
       "count": 233,
       "http_code": 200,
       "attempts": 1,
-      "latency_ms": 174
+      "latency_ms": 150
     },
     {
       "url": "https://raw.githubusercontent.com/mahsanet/MahsaFreeConfig/refs/heads/main/mci/sub_1.txt",
@@ -56,7 +56,7 @@
       "count": 3245,
       "http_code": 200,
       "attempts": 1,
-      "latency_ms": 460
+      "latency_ms": 421
     },
     {
       "url": "https://raw.githubusercontent.com/roosterkid/openproxylist/refs/heads/main/V2RAY_RAW.txt",
@@ -66,7 +66,7 @@
       "count": 150,
       "http_code": 200,
       "attempts": 1,
-      "latency_ms": 164
+      "latency_ms": 375
     },
     {
       "url": "https://raw.githubusercontent.com/barry-far/V2ray-Config/refs/heads/main/All_Configs_base64_Sub.txt",
@@ -76,7 +76,7 @@
       "count": 7716,
       "http_code": 200,
       "attempts": 1,
-      "latency_ms": 615
+      "latency_ms": 845
     },
     {
       "url": "https://raw.githubusercontent.com/V2RAYCONFIGSPOOL/V2RAY_SUB/refs/heads/main/v2ray_configs_no1.txt",
@@ -126,7 +126,7 @@
       "count": 0,
       "http_code": 404,
       "attempts": 1,
-      "latency_ms": 151,
+      "latency_ms": 142,
       "error": "HTTP 404"
     },
     {
@@ -161,7 +161,7 @@
       "count": 143,
       "http_code": 200,
       "attempts": 1,
-      "latency_ms": 174
+      "latency_ms": 159
     },
     {
       "url": "https://raw.githubusercontent.com/Delta-Kronecker/V2ray-Config/refs/heads/main/config/all_configs.txt",
@@ -171,7 +171,7 @@
       "count": 6686,
       "http_code": 200,
       "attempts": 1,
-      "latency_ms": 1153
+      "latency_ms": 1516
     },
     {
       "url": "https://raw.githubusercontent.com/Epodonios/v2ray-configs/main/All_Configs_Sub.txt",
@@ -342,22 +342,22 @@
     "by_ip_literal": 4376,
     "unknown_ip_literal": 2,
     "by_dns": 2178,
-    "dns_failed": 489,
-    "unknown_after_dns": 3,
+    "dns_failed": 488,
+    "unknown_after_dns": 4,
     "skipped_no_db": 0,
     "hosts_resolved": 6554,
     "hosts_unknown": 494
   },
   "cascade": {
     "exit_country": {
-      "colo": "ORD",
+      "colo": "LAX",
       "loc": "US",
       "source": "https://cp.cloudflare.com/cdn-cgi/trace"
     },
     "layers": {
       "l0_l1": {
-        "in": 12115,
-        "out": 11649,
+        "in": 12117,
+        "out": 11651,
         "dropped": {
           "unparsable": 449,
           "invalid_port": 1,
@@ -366,43 +366,43 @@
           "invalid_server": 4
         },
         "endpoints_unique": 7603,
-        "dedup_saving_pct": 34.73,
-        "seconds": 0.29
+        "dedup_saving_pct": 34.74,
+        "seconds": 0.35
       },
       "l2": {
-        "in": 11649,
-        "out": 8520,
-        "open_pct": 73.14,
-        "open_pct_of_raw_input": 70.33,
-        "dns_failed": 448,
-        "dns_seconds": 21.68,
-        "tcp_seconds": 8.15,
+        "in": 11651,
+        "out": 8501,
+        "open_pct": 72.96,
+        "open_pct_of_raw_input": 70.16,
+        "dns_failed": 451,
+        "dns_seconds": 17.7,
+        "tcp_seconds": 8.28,
         "fd_before": 6,
         "fd_after": 6,
-        "seconds": 30.14
+        "seconds": 26.36
       },
       "l3": {
-        "in": 8520,
+        "in": 8501,
         "rounds": 3,
         "per_run_ok": [
-          1242,
-          1252,
-          1248
+          1302,
+          1269,
+          1292
         ],
-        "ever_ok": 1400,
-        "stable": 1071,
-        "flaky_pct": 23.5,
-        "seconds": 243.09
+        "ever_ok": 1434,
+        "stable": 1119,
+        "flaky_pct": 21.97,
+        "seconds": 239.02
       }
     },
     "buckets": {
-      "verified": 1071,
-      "fast": 550,
-      "secure": 795,
+      "verified": 1119,
+      "fast": 589,
+      "secure": 822,
       "top": 100,
       "top_short_by": 0,
       "fast_threshold_ms": 800
     },
-    "total_seconds": 273.95
+    "total_seconds": 266.27
   }
 }
