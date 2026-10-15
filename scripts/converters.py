@@ -301,6 +301,128 @@ def _sanitize_ss(cipher: str, password: str) -> Optional[tuple]:
     return cipher, password
 
 
+_SS_B64_RE = re.compile(r"^[A-Za-z0-9+/_-]+={0,2}$")
+
+
+def _ss_userinfo(raw: str) -> str:
+    """userinfoِ SIP002 → «method:password» (یا ورودیِ unquote‌شده اگر base64 نبود).
+
+    دو نقصِ سنجیده‌شده در نسخهٔ پیشین (که اول base64 و بعد unquote می‌کرد،
+    با `errors="ignore"`):
+
+      ۱) userinfoِ **متنِ ساده** (`chacha20-ietf-poly1305:pass`، مجاز در
+         SIP002) هم base64 فرض می‌شد؛ `urlsafe_b64decode` حروفِ بیرونِ الفبا را
+         بی‌صدا دور می‌ریزد و چون خروجیِ زباله تصادفاً `:` داشت، روشِ رمز
+         «r\\x16…» می‌شد ⇒ نودِ سالم «unparsable».
+      ۲) base64ِ percent-encode‌شده (`…%3D`, `…%2B…`) پیش از unquote رمزگشایی
+         می‌شد ⇒ گذرواژه مثله می‌شد (۲۰ نود در پیکرهٔ زنده با رمزِ خراب به
+         clash/sing-box می‌رفتند: «…🇨\\x1e» به‌جای «…🇨🇳»).
+
+    ترتیبِ درست همان SIP002 است: اول percent-decoding، بعد — فقط اگر رشته
+    نحواً base64 باشد و به UTF-8ِ معتبرِ دارای `:` باز شود — رمزگشایی.
+    """
+    text = urllib.parse.unquote(raw or "")
+    s = text.strip()
+    if s and _SS_B64_RE.match(s):
+        body = s.rstrip("=")
+        if len(body) % 4 != 1:
+            try:
+                dec = base64.urlsafe_b64decode(
+                    body.replace("+", "-").replace("/", "_") + "=" * (-len(body) % 4)
+                ).decode("utf-8")
+            except (ValueError, UnicodeDecodeError):
+                dec = None
+            if dec and ":" in dec:
+                return dec
+    return text
+
+
+#: نشانهٔ «افزونه‌ای که هیچ‌یک از دو کلاینت نمی‌تواند اجرا کند» ⇒ نود حذف شود.
+_SS_PLUGIN_UNUSABLE = object()
+
+
+def _sip003_split(text: str) -> List[tuple]:
+    """رشتهٔ افزونهٔ SIP003 → [(key, value|None), …] با رعایتِ escape.
+
+    طبقِ SIP003، `\\` نویسه‌های `\\`، `;` و `=` را escape می‌کند. در پیکرهٔ
+    زنده ۸۲ از ۸۳ نودِ دارای افزونه pathی مثلِ `/…/?ed\\=2560` دارند؛ برشِ
+    سادهٔ `split(";")`/`partition("=")` آن را درست می‌خواند ولی بک‌اسلش را
+    نگه می‌داشت.
+    """
+    out: List[tuple] = []
+    key: List[str] = []
+    val: Optional[List[str]] = None
+    i = 0
+    while i < len(text):
+        ch = text[i]
+        if ch == "\\" and i + 1 < len(text):
+            (key if val is None else val).append(text[i + 1])
+            i += 2
+            continue
+        if ch == ";":
+            out.append(("".join(key), None if val is None else "".join(val)))
+            key, val = [], None
+        elif ch == "=" and val is None:
+            val = []
+        else:
+            (key if val is None else val).append(ch)
+        i += 1
+    out.append(("".join(key), None if val is None else "".join(val)))
+    return out
+
+
+def _sip003_escape(v: str) -> str:
+    return v.replace("\\", "\\\\").replace(";", "\\;").replace("=", "\\=")
+
+
+def _ss_plugin(query: str) -> Any:
+    """پارامترِ `plugin`ِ SIP003 → dictِ واسط، None (افزونه ندارد) یا UNUSABLE.
+
+    فقط دو افزونه‌ای که **هر دو** کلاینت درون‌ساخت دارند بیان می‌شوند، با همان
+    حالت‌هایی که با باینری‌های پین‌شده آزموده شد:
+      • obfs / simple-obfs / obfs-local  — mode ∈ {http, tls}
+        (mihomo: `obfs mode error` برای هر چیزِ دیگر)
+      • v2ray-plugin                     — mode = websocket
+        (mihomo فقط websocket؛ sing-box برای quic «TLS required»)
+    هر افزونهٔ دیگر (kcptun، …) در sing-box «plugin not found» است ⇒ UNUSABLE.
+    `plugin` بدونِ `;` (فقط نام) را mihomo نادیده می‌گیرد؛ این‌جا هم همان.
+    """
+    try:
+        qs = dict(urllib.parse.parse_qsl(query or "", keep_blank_values=True))
+    except ValueError:
+        return None
+    plugin = qs.get("plugin", "")
+    if not plugin:
+        return None
+    if ";" not in plugin:
+        return None
+    parts = _sip003_split(plugin)
+    name = parts[0][0].strip()
+    opts: Dict[str, str] = {}
+    flags = set()
+    for k, v in parts[1:]:
+        k = k.strip()
+        if not k:
+            continue
+        if v is None:
+            flags.add(k)
+        else:
+            opts[k] = v.strip()
+    if "obfs" in name:
+        mode = opts.get("obfs", "")
+        if mode not in ("http", "tls"):
+            return _SS_PLUGIN_UNUSABLE
+        return {"name": "obfs", "mode": mode, "host": _clean_sni(opts.get("obfs-host")) or ""}
+    if "v2ray-plugin" in name:
+        mode = opts.get("mode") or opts.get("obfs", "")
+        if mode != "websocket":
+            return _SS_PLUGIN_UNUSABLE
+        return {"name": "v2ray-plugin", "mode": "websocket",
+                "host": _clean_sni(opts.get("host") or opts.get("obfs-host")) or "",
+                "path": opts.get("path", ""), "tls": "tls" in flags or "tls" in opts}
+    return _SS_PLUGIN_UNUSABLE
+
+
 def _ub64_text(s: Optional[str], *, allow_empty: bool = False) -> Optional[str]:
     """base64 (استاندارد یا url-safe، با یا بدونِ padding) → متنِ UTF-8.
 
@@ -868,20 +990,25 @@ def parse_proxy(line: str) -> Optional[Dict[str, Any]]:
             method = password = ""
             host = ""
             port = 0
-            if "@" in rest:
-                userinfo, hostpart = rest.rsplit("@", 1)
-                hostpart = hostpart.split("?")[0]
-                try:
-                    dec = base64.urlsafe_b64decode(userinfo + "==").decode("utf-8", errors="ignore")
-                    if ":" in dec:
-                        userinfo = dec
-                except Exception:
-                    pass
-                userinfo = urllib.parse.unquote(userinfo)
+            # ★ authority پیش از هر برشی روی '@' از query جدا می‌شود — همان قاعدهٔ
+            #   `core.dedup_key`. پیش از این `rest.rsplit("@", 1)` روی کلِ رشته
+            #   می‌خورد و `?note=@Channel` (فراوان در دادهٔ واقعی) host را به
+            #   «Channel» و port را به ۰ بدل می‌کرد ⇒ نودِ سالم «unparsable».
+            authority, _qsep, query = rest.partition("?")
+            if "@" in authority:
+                userinfo, hostpart = authority.rsplit("@", 1)
+                # host:port هرگز '/' ندارد؛ `…:443/?plugin=…` شکلِ استانداردِ
+                # SIP002 است و `_safe_int("443/")` پیش از این صفر می‌داد.
+                hostpart = hostpart.split("/", 1)[0]
+                userinfo = _ss_userinfo(userinfo)
                 if ":" in userinfo:
                     method, password = userinfo.split(":", 1)
                 h, _, p = hostpart.rpartition(":")
-                host, port = h, _safe_int(p)
+                # پورت باید «فقط رقم» باشد. `int()` فاصله و `+`/`_` را هم
+                # می‌پذیرد، ولی کلاینت‌ها نه.
+                host, port = h, (int(p) if p.isdigit() and p.isascii() else 0)
+                if host.startswith("[") and host.endswith("]"):
+                    host = host[1:-1]
             else:
                 try:
                     dec = base64.urlsafe_b64decode(rest + "==").decode("utf-8", errors="ignore")
@@ -900,7 +1027,7 @@ def parse_proxy(line: str) -> Optional[Dict[str, Any]]:
             if not ok:
                 return None
             method, password = ok
-            return {
+            out = {
                 "type": "shadowsocks",
                 "name": name,
                 "server": host,
@@ -908,6 +1035,15 @@ def parse_proxy(line: str) -> Optional[Dict[str, Any]]:
                 "cipher": method,
                 "password": password,
             }
+            # ★ SIP003 plugin. پیش از این کاملاً دور ریخته می‌شد و نودِ
+            #   `v2ray-plugin`/`obfs` بی‌افزونه به clash/sing-box می‌رفت — یعنی
+            #   نودی که «معتبر به‌نظر می‌رسد ولی هرگز وصل نمی‌شود».
+            plugin = _ss_plugin(query)
+            if plugin is _SS_PLUGIN_UNUSABLE:
+                return None
+            if plugin:
+                out["plugin"] = plugin
+            return out
 
         if scheme == "ssr":
             # ssr://base64( host:port:protocol:method:obfs:base64(password)
@@ -1256,7 +1392,19 @@ def _to_clash_proxy(p: Dict[str, Any]) -> Optional[Dict[str, Any]]:
             _clash_transport_opts(p, out)
             return out
         if t == "shadowsocks":
-            return {**base, "type": "ss", "cipher": p["cipher"], "password": p["password"], "udp": True}
+            out = {**base, "type": "ss", "cipher": p["cipher"], "password": p["password"], "udp": True}
+            pl = p.get("plugin")
+            if pl:
+                # کلیدها همان‌اند که `common/convert/converter.go`ِ mihomo
+                # خودش از URI می‌سازد (آزموده: mihomo v1.19.29، rc=0).
+                if pl["name"] == "obfs":
+                    out["plugin"] = "obfs"
+                    out["plugin-opts"] = {"mode": pl["mode"], "host": pl["host"]}
+                else:
+                    out["plugin"] = "v2ray-plugin"
+                    out["plugin-opts"] = {"mode": "websocket", "host": pl["host"],
+                                          "path": pl["path"], "tls": bool(pl["tls"])}
+            return out
         if t == "shadowsocksr":
             # ⛔ عامدانه بیان نمی‌شود — بازبینیِ ۲۰۲۶-۰۸-۰۲، با اجرای هستهٔ رسمیِ
             # Hiddify. توضیحِ کامل در بالای همین فایل، بخشِ «ShadowsocksR».
@@ -1574,8 +1722,27 @@ def _to_singbox_outbound(p: Dict[str, Any]) -> Optional[Dict[str, Any]]:
                 ob["transport"] = transport
             return ob
         if t == "shadowsocks":
-            return {"type": "shadowsocks", "tag": p["name"], "server": p["server"],
-                    "server_port": p["port"], "method": p["cipher"], "password": p["password"]}
+            ob = {"type": "shadowsocks", "tag": p["name"], "server": p["server"],
+                  "server_port": p["port"], "method": p["cipher"], "password": p["password"]}
+            pl = p.get("plugin")
+            if pl:
+                # sing-box: `plugin` + رشتهٔ SIP003ِ `plugin_opts` (آزموده: 1.13.14).
+                if pl["name"] == "obfs":
+                    opts = [f"obfs={_sip003_escape(pl['mode'])}"]
+                    if pl["host"]:
+                        opts.append(f"obfs-host={_sip003_escape(pl['host'])}")
+                    ob["plugin"] = "obfs-local"
+                else:
+                    opts = ["mode=websocket"]
+                    if pl["host"]:
+                        opts.append(f"host={_sip003_escape(pl['host'])}")
+                    if pl["path"]:
+                        opts.append(f"path={_sip003_escape(pl['path'])}")
+                    if pl["tls"]:
+                        opts.append("tls")
+                    ob["plugin"] = "v2ray-plugin"
+                ob["plugin_opts"] = ";".join(opts)
+            return ob
         if t == "hysteria2":
             # ساختارِ زیر با sing-box 1.13.14 آزمون شد (rc=0). بر خلافِ Clash،
             # در sing-box مخفی‌سازی یک شیء تودرتو است نه دو کلیدِ جدا.

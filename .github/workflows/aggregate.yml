@@ -2,7 +2,7 @@ name: 🔄 Aggregate V2Ray Configs
 
 # ─────────────────────────────────────────────────────────────────────────────
 # جمع‌آوری، حذف تکراری/خراب، برندینگ و انتشار کانفیگ‌ها — هدف: هر ۱۵ دقیقه
-# منبع: ۱۹ سورس (۵ سبک + ۱۴ انبوه) — بدون TCP-connect
+# منبع: ۱۳ سورس (۸ سبک + ۵ انبوه) — بدون TCP-connect
 # توکن: از GITHUB_TOKEN داخلی Actions استفاده می‌شود (هیچ توکنی hardcode نشده)
 #
 # ★ فیکسِ «به‌روزرسانی نشدن سرِ ساعت» ★
@@ -897,6 +897,31 @@ jobs:
               print(f"- **published:** verified={b['verified']}"
                     f" fast={b['fast']} secure={b['secure']} top={b['top']}")
               print(f"- **cascade time:** {c['total_seconds']}s")
+          PY
+          fi
+          # ── بارگذاریِ واقعیِ اشتراک‌های متنی در mihomo ──────────────────────
+          #
+          # `mihomo -t` هیچ provider‌ی بارگذاری نمی‌کند، پس `configs.txt` که
+          # کاربرانِ Clash Meta/FlClash/Clash Verge subscribe می‌کنند هرگز
+          # سنجیده نمی‌شد؛ سنجیده شد که روی خروجیِ ۲۰۲۶-۱۰-۱۵ همهٔ ۱۲ بررسی
+          # pass بودند در حالی که ۱۰ فایلِ اشتراک در mihomo صفر پروکسی
+          # می‌دادند. `validate.py` اکنون بارگذاریِ واقعی را در کلیدِ
+          # `subscriptions` ثبت می‌کند و این بلوک آن را آشکار می‌کند.
+          if [ -f validation.json ]; then
+            python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          v = json.load(open("validation.json")).get("subscriptions") or {}
+          if v:
+              icon = {"pass": "✅", "fail": "❌"}.get(v.get("status"), "⚠️")
+              print(f"\n### {icon} mihomo subscription load — {v.get('detail', '')}")
+              bad = v.get("failed") or []
+              if bad:
+                  print("\n| File | Lines | Loaded | Error |")
+                  print("|---|---|---|---|")
+                  for rel in bad:
+                      e = v["files"][rel]
+                      err = str(e.get("detail", "")).replace("|", "\\|")[:160]
+                      print(f"| {rel} | {e['lines']} | {e['loaded']} | {err} |")
           PY
           fi
 

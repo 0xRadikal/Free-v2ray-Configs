@@ -39,8 +39,20 @@ sources.py — منابع کانفیگ رایگان.
 `all_sources()` فقط عضوهای زندهٔ لیست‌ها را برمی‌گرداند. پس عددِ بالا همیشه
 «تعدادِ منابعِ فعال» است، نه تعدادِ خطوطِ فایل.
 
-آخرین اعتبارسنجی همهٔ URLهای زیر: ۲۷ آگوست ۲۰۲۶ (هر ۱۹ منبع HTTP 200 و
-تعداد کانفیگ > ۰ برگرداندند).
+آخرین اعتبارسنجی همهٔ URLهای زیر: ۱۵ اکتبر ۲۰۲۶ — هر ۱۳ منبع HTTP 200
+برگرداندند (۹ منبعِ `V2RAYCONFIGSPOOL` در همین تاریخ حذف و ۳ منبع افزوده شدند؛ پایین را
+ببینید).
+
+حذفِ ۱۵ اکتبر ۲۰۲۶ — `V2RAYCONFIGSPOOL/V2RAY_SUB` (۹ URL)
+────────────────────────────────────────────────────────
+دلیلِ قاطع، نه حدس: خودِ مخزن دیگر وجود ندارد. سه سنجشِ مستقل:
+  • `raw.githubusercontent.com/.../v2ray_configs_no{1..9}.txt` ⇒ هر ۹ تا HTTP 404
+  • `api.github.com/repos/V2RAYCONFIGSPOOL/V2RAY_SUB` ⇒ 404
+  • فهرستِ ۱۴ مخزنِ عمومیِ همان کاربر (API) ⇒ `V2RAY_SUB` در آن نیست (تغییرِ نام هم
+    نیست؛ هیچ مخزنِ دیگری فایلِ `v2ray_configs_no*.txt` ندارد).
+پیش از حذف، ۸ تا از ۹ را `state.py` با «۰ یکتا» غیرفعال کرده بود و `no6` تنها
+به‌خاطرِ کفِ `MIN_ACTIVE` هر ۱۵ دقیقه یک 404 می‌گرفت. حذف، تعدادِ منابعِ
+*فعالِ* واکشی‌شده را عوض نمی‌کند (۷ قبل و بعد) و هیچ کانفیگی از خروجی کم نمی‌کند.
 
 بازنگریِ ۲۷ آگوست ۲۰۲۶ — بر پایهٔ آبشارِ واقعی، نه حدس
 ────────────────────────────────────────────────────────
@@ -62,7 +74,7 @@ sources.py — منابع کانفیگ رایگان.
 from __future__ import annotations
 from typing import List
 
-# ── سبک / با کیفیت (۵ منبع فعال) ──────────────────────────────────────────────
+# ── سبک / با کیفیت (۸ منبع فعال) ──────────────────────────────────────────────
 # نکته: چهار آدرس mci/sub_2..4 و mtn/sub_2..4 که قبلاً اینجا بودند حذف شدند؛
 # همهٔ آن‌ها HTTP 200 با بدنهٔ صفر بایت برمی‌گرداندند (منبع مرده ولی نامرئی).
 # سه منبعِ کامنت‌شدهٔ زیر عمداً پاک نشده‌اند: دلیلِ سنجیده‌شدهٔ کنارشان تنها
@@ -93,6 +105,25 @@ LIGHT_SOURCES: List[str] = [
     "https://raw.githubusercontent.com/mahsanet/MahsaFreeConfig/refs/heads/main/mtn/sub_1.txt",
     # منابع دستچین‌شدهٔ متوسط‌حجم
     "https://raw.githubusercontent.com/ALIILAPRO/v2rayNG-Config/main/server.txt",
+    # ── افزوده ۲۰۲۶-۱۰-۱۵ — مسابقهٔ آبشارِ واقعی، دو دورِ مستقل ──────────────────
+    # همان روشِ docs/source-audit-20260827.md: اتحادِ ۱۷٬۳۰۲ کلیدِ یکتا از ۷ منبعِ
+    # فعال + ۱۶ نامزد، هم‌زمان در L2 و L3×۳ (xray-knife v10.1.1). کنترلِ مثبت
+    # (کلیدهای `verified/` پروداکشن) ۷۸.۶٪ / ۷۹.۰٪ پایدار، کنترلِ منفی (`all/`
+    # منهای `verified/`) ۲.۷٪ / ۳.۳٪ ⇒ سنجه تفکیک می‌کند. «SOLE» = پایدارهایی که
+    # هیچ منبعِ فعالی ندارد. دور۱ / دور۲:
+    #   Au1rxx    : ۵۹۲/۶۱۳ پایدار از ۱۱۷۳ (۵۰–۵۲٪)، SOLE ۱۳۶/۱۵۵ — بزرگ‌ترین سود
+    #   v2go      : ۳۹۳/۴۳۶ پایدار از ۵۷۲–۶۲۸ (۶۹٪)، SOLE ۴۶/۵۴
+    #   LatinaSub : ۱۵۲/۱۶۲ پایدار از ۲۵۴ (۶۰–۶۴٪)، SOLE ۴۱/۴۶
+    # سهٔ‌شان با هم: پیکرهٔ پایدار ۸۸۳→۱۰۷۲ و ۹۳۵→۱۱۶۰ (+۲۱–۲۴٪) به بهای تنها
+    # ~۶۲۰ خطِ تازه در `all/`. هر سه نگهداری‌شده‌اند (۱۰۰ کامیتِ همین مسیر در
+    # ۳–۴ هفتهٔ اخیر)، fork/archived نیستند. نرخِ پایداریِ بالا ⇒ جایشان LIGHT است.
+    # عمداً افزوده *نشد*: SoliSpirit (+۴۰/+۴۴ پایدار ولی +۱۱۹۴ خط، ~۳.۵٪ ⇒ عمدتاً
+    # مرده در `all/`)، و ۱۱ نامزدِ دیگر با SOLE ۰–۱۵ (MatinGhanbari، Proxify،
+    # TGParse، nyeinkokoaung404، MahanKenway، MhdiTaheri، F0rc3Run، iboxz،
+    # mehrtat، DukeMehdi، Pawdroid) — در حدِّ نوفه یا زیرمجموعهٔ پیکره.
+    "https://raw.githubusercontent.com/Au1rxx/free-vpn-subscriptions/main/output/v2ray-base64.txt",
+    "https://raw.githubusercontent.com/Danialsamadi/v2go/main/AllConfigsSub.txt",
+    "https://raw.githubusercontent.com/LalatinaHub/LatinaSub/main/result/sub",
     # ── غیرفعال ۲۰۲۶-۰۸-۲۷ (کامنت، نه حذف) ───────────────────────────────────
     # w1770946466/Auto_proxy/Long_term_subscription_num — دلیلِ قاطع:
     # آخرین کامیتِ **همین مسیر** در بالادست `2024-03-20T18:13:17Z` است
@@ -104,19 +135,13 @@ LIGHT_SOURCES: List[str] = [
     # "https://raw.githubusercontent.com/w1770946466/Auto_proxy/main/Long_term_subscription_num",
 ]
 
-# ── انبوه / حجم بالا (۱۴ منبع) ────────────────────────────────────────────────
+# ── انبوه / حجم بالا (۵ منبع) ─────────────────────────────────────────────────
 HEAVY_SOURCES: List[str] = [
     "https://raw.githubusercontent.com/roosterkid/openproxylist/refs/heads/main/V2RAY_RAW.txt",
     "https://raw.githubusercontent.com/barry-far/V2ray-Config/refs/heads/main/All_Configs_base64_Sub.txt",
-    "https://raw.githubusercontent.com/V2RAYCONFIGSPOOL/V2RAY_SUB/refs/heads/main/v2ray_configs_no1.txt",
-    "https://raw.githubusercontent.com/V2RAYCONFIGSPOOL/V2RAY_SUB/refs/heads/main/v2ray_configs_no2.txt",
-    "https://raw.githubusercontent.com/V2RAYCONFIGSPOOL/V2RAY_SUB/refs/heads/main/v2ray_configs_no3.txt",
-    "https://raw.githubusercontent.com/V2RAYCONFIGSPOOL/V2RAY_SUB/refs/heads/main/v2ray_configs_no4.txt",
-    "https://raw.githubusercontent.com/V2RAYCONFIGSPOOL/V2RAY_SUB/refs/heads/main/v2ray_configs_no5.txt",
-    "https://raw.githubusercontent.com/V2RAYCONFIGSPOOL/V2RAY_SUB/refs/heads/main/v2ray_configs_no6.txt",
-    "https://raw.githubusercontent.com/V2RAYCONFIGSPOOL/V2RAY_SUB/refs/heads/main/v2ray_configs_no7.txt",
-    "https://raw.githubusercontent.com/V2RAYCONFIGSPOOL/V2RAY_SUB/refs/heads/main/v2ray_configs_no8.txt",
-    "https://raw.githubusercontent.com/V2RAYCONFIGSPOOL/V2RAY_SUB/refs/heads/main/v2ray_configs_no9.txt",
+    # ── حذف ۲۰۲۶-۱۰-۱۵: ۹ منبعِ V2RAYCONFIGSPOOL/V2RAY_SUB — مخزن 404 است
+    #    (دلیل و سه سنجشِ مستقل در docstringِ بالا). URLها برای سابقه:
+    #    https://raw.githubusercontent.com/V2RAYCONFIGSPOOL/V2RAY_SUB/refs/heads/main/v2ray_configs_no{1..9}.txt
     "https://raw.githubusercontent.com/ShadowException/VPN/refs/heads/main/configs/VPN-cat",
     # جایگزین‌های منبع مردهٔ MahsaNetConfigTopic/xray_final.txt (HTTP 404):
     # ── غیرفعال ۲۰۲۶-۰۸-۲۷ (کامنت، نه حذف) ───────────────────────────────────

@@ -46,6 +46,9 @@ If a change genuinely cannot be measured (a typo fix, a comment), just say so.
       with a case that fails before the change and passes after it.
 - [ ] Nothing is advertised that the code does not actually deliver — no README
       or docs claim for a protocol, tier or file the pipeline never writes.
+- [ ] Dashboard (`dashboard-src/`) changes only: works with the keyboard alone,
+      focus stays visible, and an automated checker (e.g. axe) reports no new
+      violations — see [ACCESSIBILITY.md](../ACCESSIBILITY.md#contributor-expectations).
 
 <!--
 For reference, these are the things that get a PR rejected (CONTRIBUTING.md):

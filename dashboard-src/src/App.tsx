@@ -445,10 +445,10 @@ function Rail({
       ) : null}
 
       <div className="mt-5 hidden space-y-1 text-[12px] text-muted-foreground lg:block">
-        <a className="flex items-center gap-1.5 hover:text-foreground" href="https://github.com/0xRadikal/Free-v2ray-Configs">
+        <a className="flex min-h-6 items-center gap-1.5 hover:text-foreground" href="https://github.com/0xRadikal/Free-v2ray-Configs">
           <GitBranch size={12} /> repository
         </a>
-        <a className="flex items-center gap-1.5 hover:text-foreground" href="https://t.me/Raydikalx">
+        <a className="flex min-h-6 items-center gap-1.5 hover:text-foreground" href="https://t.me/Raydikalx">
           <Send size={12} /> {brand || '@Raydikalx'}
         </a>
       </div>

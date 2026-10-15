@@ -90,8 +90,8 @@ https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/verified/con
 | ⚡ **`fast`** | `verified` **且**中位延迟 `< 800 毫秒` | [txt](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/fast/configs.txt) | [b64](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/fast/configs_base64.txt) | [yaml](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/fast/clash.yaml) | [json](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/fast/singbox.json) |
 | 🔐 **`secure`** | `verified` **且**具备前向保密，**且**链接没有关闭证书校验 | [txt](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/secure/configs.txt) | [b64](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/secure/configs_base64.txt) | [yaml](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/secure/clash.yaml) | [json](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/secure/singbox.json) |
 | 🌐 **`all`** | 全部内容，已去重 —— 列表最大，但大部分未经测试 | [txt](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/all/configs.txt) | [b64](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/all/configs_base64.txt) | [yaml](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/all/clash.yaml) | [json](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/all/singbox.json) |
-| 📦 **`heavy`** | 只含 14 个大量上游 | [txt](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/heavy/configs.txt) | [b64](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/heavy/configs_base64.txt) | [yaml](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/heavy/clash.yaml) | [json](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/heavy/singbox.json) |
-| ⭐ **`light`** | 只含 5 个精选 / 经过测速的上游 | [txt](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/light/configs.txt) | [b64](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/light/configs_base64.txt) | [yaml](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/light/clash.yaml) | [json](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/light/singbox.json) |
+| 📦 **`heavy`** | 只含 5 个大量上游 | [txt](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/heavy/configs.txt) | [b64](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/heavy/configs_base64.txt) | [yaml](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/heavy/clash.yaml) | [json](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/heavy/singbox.json) |
+| ⭐ **`light`** | 只含 8 个精选 / 经过测速的上游 | [txt](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/light/configs.txt) | [b64](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/light/configs_base64.txt) | [yaml](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/light/clash.yaml) | [json](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/light/singbox.json) |
 
 **该用哪种格式？** `configs_base64.txt` 是经典的订阅格式，也是最稳妥的默认选择。
 `configs.txt` 是同一份列表的未编码版本。`clash.yaml` 是完整的 mihomo/Clash 配置文件；
@@ -343,8 +343,8 @@ verified/   configs.txt · configs_base64.txt · clash.yaml · singbox.json   �
 fast/       configs.txt · configs_base64.txt · clash.yaml · singbox.json   verified + 中位 < 800ms
 secure/     configs.txt · configs_base64.txt · clash.yaml · singbox.json   verified + 前向保密
 all/        configs.txt · configs_base64.txt · clash.yaml · singbox.json   light + heavy，已去重
-heavy/      configs.txt · configs_base64.txt · clash.yaml · singbox.json   14 个大量上游
-light/      configs.txt · configs_base64.txt · clash.yaml · singbox.json   5 个精选上游
+heavy/      configs.txt · configs_base64.txt · clash.yaml · singbox.json   5 个大量上游
+light/      configs.txt · configs_base64.txt · clash.yaml · singbox.json   8 个精选上游
 protocols/  vless.txt · vmess.txt · trojan.txt · … (+ *_base64.txt)        从 all/ 拆分
 archive/    all_broken.txt · heavy_broken.txt (+ _base64)                  被拒绝的内容
 top100.txt  延迟最低的 100 个 verified 配置
@@ -361,7 +361,7 @@ scripts/    流水线 —— core · sources · filters · converters · geo · 
 .github/    定时工作流 · Dependabot 配置 · issue 模板
 docs/       实时状态面板（在浏览器中读取 index.json / health.json）
 README.md · README_FA.md · README_ZH.md · README_RU.md
-SECURITY.md · CONTRIBUTING.md · LICENSE
+SECURITY.md · CONTRIBUTING.md · ACCESSIBILITY.md · LICENSE
 ```
 
 两条容易被忽略、却非常重要的规则：
@@ -476,7 +476,7 @@ https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/index.json
 https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/health.json
 ```
 
-每次运行都会重新生成。对 19 个源中的每一个，记录 `status`（`ok` / `empty` / `fail`）、
+每次运行都会重新生成。对 13 个源中的每一个，记录 `status`（`ok` / `empty` / `fail`）、
 HTTP 状态码、尝试次数、延迟、产出的配置数量以及最后一次错误 —— 这让失效或改动过的上游
 立刻可见，而不是让产出无声地缩水。
 
@@ -526,7 +526,7 @@ CDN、没有追踪器、没有外部字体 —— 并在 raw 不可达时自动�
 
 # ⚙️ 工作原理
 
-1. **抓取** —— 并发下载 19 个源，自动识别 base64/纯文本。遇到瞬时错误会重试，但对 4xx
+1. **抓取** —— 并发下载 13 个源，自动识别 base64/纯文本。遇到瞬时错误会重试，但对 4xx
    快速失败，这样一个失效的 URL 会被*报告*出来，而不是被无声地永远重试下去。
 2. **清洗** —— 丢弃假的以及结构上损坏的记录（全零 UUID、`App not supported`、空
    proxies、不可路由的服务器）。
@@ -565,6 +565,7 @@ GitHub 的 `schedule:` cron 是尽力而为的，在繁忙时段经常被延迟�
 | 🐛 **发现失效的源或有问题的配置？** | 开一个 issue —— 模板在 `.github/` 里 |
 | 🔐 **安全策略** | [`SECURITY.md`](SECURITY.md) |
 | 📐 **贡献指南** | [`CONTRIBUTING.md`](CONTRIBUTING.md) |
+| ♿ **无障碍** | [`ACCESSIBILITY.md`](ACCESSIBILITY.md) —— 已测试的内容、已知限制，以及如何报告障碍 |
 | 📜 **许可证** | [MIT](LICENSE) |
 
 ## 🙌 数据来源

@@ -11449,6 +11449,42 @@ def _f3_fake_xray_knife(kind: str = "good") -> str:
     return path
 
 
+class _F3PrivateTemp:
+    """
+    `tempfile.tempdir` را فقط در طولِ فراخوانیِ سنجیده‌شده به یک پوشهٔ خصوصی
+    می‌برد و بعد برمی‌گرداند.
+
+    ناپایداریِ سنجیده‌شده: تست‌های F-3 قبلاً `l3_*` را در **پوشهٔ مشترکِ سیستم**
+    (`gettempdir()`) می‌شمردند؛ هر فرآیندِ دیگری که هم‌زمان `l3_*` بسازد (اجرای
+    موازیِ همین سوئیت، یا خودِ pipeline) تست را بی‌تقصیر قرمز می‌کرد. بازتولید:
+    یک حلقهٔ پس‌زمینه که هر ۰.۱ ثانیه `/tmp/l3_noiseXXXX` می‌سازد ⇒
+    `test_zzz_f3_a_full_l3_round_leaves_no_temp_file_behind` شکست (۴۷۰/۴۷۱).
+    `mkstemp` بی‌آرگومانِ `dir` همیشه از `tempfile.tempdir` پیروی می‌کند، پس
+    حساسیت به نشتِ واقعی دست‌نخورده می‌ماند و فقط نویزِ بیرونی حذف می‌شود.
+
+    شیم و ورودیِ کش‌شده باید **پیش از** ورود ساخته شوند، وگرنه داخلِ همین
+    پوشه می‌افتند و با پاک‌شدنش کش خراب می‌شود.
+    """
+
+    def __enter__(self) -> "_F3PrivateTemp":
+        import tempfile as _tf
+        self._saved = _tf.tempdir
+        self.path = _tf.mkdtemp(prefix="f3_private_")
+        _tf.tempdir = self.path
+        return self
+
+    def leftovers(self, pattern: str = "l3_*") -> list:
+        import glob as _glob
+        return sorted(os.path.basename(p) for p in
+                      _glob.glob(os.path.join(self.path, pattern)))
+
+    def __exit__(self, *exc) -> None:
+        import shutil as _shutil
+        import tempfile as _tf
+        _tf.tempdir = self._saved
+        _shutil.rmtree(self.path, ignore_errors=True)
+
+
 def _f3_input_file() -> str:
     """یک فایلِ ورودیِ ناتهیِ بازاستفاده‌شدنی برای L3."""
     if not _F3_INPUT:
@@ -11473,20 +11509,19 @@ def test_zzz_f3_an_auto_created_result_file_is_not_left_behind() -> None:
     این تست به **رفتار** نگاه می‌کند نه به متنِ کد: می‌شمارد که در TMPDIR
     چند فایلِ تازهٔ `l3_*.csv` مانده است.
     """
-    import glob as _glob
-    import tempfile as _tf
-
     binary = _f3_fake_xray_knife()
-    tmpdir = _tf.gettempdir()
-    pattern = os.path.join(tmpdir, "l3_*.csv")
+    in_path = _f3_input_file()
 
-    before = set(_glob.glob(pattern))
-    res = realtest.run_test(_f3_input_file(), binary=binary)
-    after = set(_glob.glob(pattern))
-    new = sorted(after - before)
+    with _F3PrivateTemp() as box:
+        res = realtest.run_test(in_path, binary=binary)
+        new = box.leftovers("l3_*.csv")
+        # نگهبانِ پوچی: اگر فایل جای دیگری ساخته شود، شمردنِ پوشهٔ خصوصی بی‌معناست.
+        assert os.path.dirname(os.path.abspath(res["out_path"])) == box.path, (
+            f"فایلِ خودساخته باید در پوشهٔ خصوصی ساخته شود وگرنه سنجش پوچ است؛ "
+            f"شد {res['out_path']!r}")
 
     assert not new, (
-        f"L3 فایلِ موقتِ خودش را جا گذاشت: {[os.path.basename(p) for p in new]}. "
+        f"L3 فایلِ موقتِ خودش را جا گذاشت: {new}. "
         f"پیش از درمان هر فراخوانی ۱ فایل جا می‌گذاشت و `run_l3_round` سه‌تا.")
 
     # قرارداد نباید شکسته باشد: کلید هست، ولی فایل روی دیسک نیست.
@@ -11533,11 +11568,8 @@ def test_zzz_f3_every_failure_path_also_cleans_the_temp_file() -> None:
     یعنی ۳ مسیر از ۷ نشت داشتند. پس از درمان باید هر هفت مسیر ۰ باشد،
     **و** نوعِ استثنا هم عوض نشده باشد.
     """
-    import glob as _glob
     import tempfile as _tf
 
-    tmpdir = _tf.gettempdir()
-    pattern = os.path.join(tmpdir, "l3_*.csv")
     good_in = _f3_input_file()
 
     cases = [
@@ -11554,22 +11586,21 @@ def test_zzz_f3_every_failure_path_also_cleans_the_temp_file() -> None:
 
     checked = 0
     for label, binary, want_exc, extra in cases:
-        before = set(_glob.glob(pattern))
-        try:
-            realtest.run_test(good_in, binary=binary, **extra)
-        except want_exc:
-            checked += 1
-        except Exception as exc:                       # noqa: BLE001
-            raise AssertionError(
-                f"{label}: انتظار {want_exc.__name__} بود، "
-                f"{type(exc).__name__} آمد ⇒ رفتار عوض شده است") from exc
-        else:
-            raise AssertionError(
-                f"{label}: باید {want_exc.__name__} می‌داد ولی نداد")
-        new = sorted(set(_glob.glob(pattern)) - before)
+        with _F3PrivateTemp() as box:
+            try:
+                realtest.run_test(good_in, binary=binary, **extra)
+            except want_exc:
+                checked += 1
+            except Exception as exc:                   # noqa: BLE001
+                raise AssertionError(
+                    f"{label}: انتظار {want_exc.__name__} بود، "
+                    f"{type(exc).__name__} آمد ⇒ رفتار عوض شده است") from exc
+            else:
+                raise AssertionError(
+                    f"{label}: باید {want_exc.__name__} می‌داد ولی نداد")
+            new = box.leftovers("l3_*.csv")
         assert not new, (
-            f"{label}: مسیرِ استثنا فایلِ موقت جا گذاشت: "
-            f"{[os.path.basename(p) for p in new]}")
+            f"{label}: مسیرِ استثنا فایلِ موقت جا گذاشت: {new}")
 
     assert checked == len(cases), (
         f"فقط {checked} از {len(cases)} مسیرِ استثنا آزموده شد ⇒ این تست پوچ است")
@@ -11580,15 +11611,16 @@ def test_zzz_f3_every_failure_path_also_cleans_the_temp_file() -> None:
         empty = os.path.join(empty_dir, "in.txt")
         with open(empty, "w", encoding="utf-8") as fh:
             fh.write("\n  \n")
-        before = set(_glob.glob(pattern))
-        try:
-            realtest.run_test(empty, binary=_f3_fake_xray_knife())
-        except realtest.EmptyInput:
-            pass
-        else:
-            raise AssertionError("ورودیِ تهی باید EmptyInput بدهد")
-        assert not set(_glob.glob(pattern)) - before, (
-            "مسیرِ ورودیِ تهی فایلِ موقت جا گذاشت")
+        fake = _f3_fake_xray_knife()
+        with _F3PrivateTemp() as box:
+            try:
+                realtest.run_test(empty, binary=fake)
+            except realtest.EmptyInput:
+                pass
+            else:
+                raise AssertionError("ورودیِ تهی باید EmptyInput بدهد")
+            new = box.leftovers("l3_*.csv")
+        assert not new, f"مسیرِ ورودیِ تهی فایلِ موقت جا گذاشت: {new}"
     finally:
         import shutil as _shutil
         _shutil.rmtree(empty_dir, ignore_errors=True)
@@ -11603,22 +11635,17 @@ def test_zzz_f3_a_full_l3_round_leaves_no_temp_file_behind() -> None:
     این تست همان مسیر را با باینریِ شبیه‌ساز می‌پیماید تا نشتِ انباشتیِ CI
     دیگر برنگردد.
     """
-    import glob as _glob
-    import tempfile as _tf
-
     binary = _f3_fake_xray_knife()
-    pattern = os.path.join(_tf.gettempdir(), "l3_*")
 
-    before = set(_glob.glob(pattern))
-    res = pipeline.run_l3_round(
-        ["vless://f3@1.2.3.4:443?type=tcp#f3"], rounds=3, binary=binary)
-    new = sorted(set(_glob.glob(pattern)) - before)
+    with _F3PrivateTemp() as box:
+        res = pipeline.run_l3_round(
+            ["vless://f3@1.2.3.4:443?type=tcp#f3"], rounds=3, binary=binary)
+        new = box.leftovers("l3_*")
 
     assert res.get("rounds") == 3, (
         f"سنجش باید سه دور باشد وگرنه پوچ است؛ شد {res.get('rounds')!r}")
     assert not new, (
-        f"یک دورِ کاملِ L3 این‌ها را جا گذاشت: "
-        f"{[os.path.basename(p) for p in new]} (پیش از درمان: ۳ فایل)")
+        f"یک دورِ کاملِ L3 این‌ها را جا گذاشت: {new} (پیش از درمان: ۳ فایل)")
 
 
 # ============================================================================
@@ -14814,6 +14841,372 @@ def test_no_emitted_clash_proxy_advertises_an_unimplemented_xhttp_mode():
     for proxy in proxies:
         mode = (proxy.get("xhttp-opts") or {}).get("mode")
         assert mode is None or mode in converters.XHTTP_MODES, (proxy.get("name"), mode)
+
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# دروازهٔ سازگاریِ mihomo — «یک خطِ بد، کلِ اشتراک را خالی می‌کند»
+# ══════════════════════════════════════════════════════════════════════════════
+# هر حکمِ زیر با باینریِ واقعیِ mihomo v1.19.29 (همان نسخهٔ پین‌شدهٔ CI) و با
+# الگوی «دو خطِ سالم + خطِ مورد آزمون» سنجیده شد: FATAL یعنی provider صفر نود
+# برگرداند، نه فقط آن خط. نسخهٔ v1.19.32 هم روی پیکرهٔ زنده همان رفتار را داشت.
+
+import mihomo_compat  # noqa: E402
+
+_MC_UUID = "3a02129b-0bf6-4e26-854a-e317d54b4fa9"
+_MC_PBK = "BjG7XoEMR2uxHbBk_rtkR7P_S_luG2VcvQlvZ4YHzH8"
+
+
+def _mc_b64(s: str) -> str:
+    return base64.urlsafe_b64encode(s.encode()).decode().rstrip("=")
+
+
+def _mc_vmess(**kw) -> str:
+    o = {"v": "2", "ps": "t", "add": "1.2.3.4", "port": "443", "id": _MC_UUID,
+         "aid": "0", "net": "tcp"}
+    o.update(kw)
+    return "vmess://" + base64.b64encode(json.dumps(o).encode()).decode()
+
+
+#: (برچسب، خط، آیا mihomo کلِ اشتراک را رد کرد؟) — حکم‌ها **سنجیده** شده‌اند.
+_MC_MEASURED = (
+    ("ss chacha20-poly1305", f"ss://{_mc_b64('chacha20-poly1305:abc')}@1.2.3.4:443#t", True),
+    ("ss chacha20-ietf-poly1305", f"ss://{_mc_b64('chacha20-ietf-poly1305:abc')}@1.2.3.4:443#t", False),
+    ("ss UPPER method", f"ss://{_mc_b64('AES-128-GCM:x')}@1.2.3.4:443#t", True),
+    ("ss plain UPPER", "ss://AES-128-GCM:pw@1.2.3.4:443#t", True),
+    ("ss legacy bad method", "ss://" + _mc_b64("chacha20-poly1305:x@1.2.3.4:443") + "#t", True),
+    ("ss legacy ok", "ss://" + _mc_b64("aes-128-gcm:x@1.2.3.4:443") + "#t", False),
+    ("ss 2022 bad key", f"ss://{_mc_b64('2022-blake3-aes-128-gcm:abc')}@1.2.3.4:443#t", True),
+    ("ss empty password", f"ss://{_mc_b64('aes-128-gcm:')}@1.2.3.4:443#t", True),
+    ("ss none + empty password", f"ss://{_mc_b64('none:')}@1.2.3.4:443#t", False),
+    ("ss obfs grpc", f"ss://{_mc_b64('aes-128-gcm:x')}@1.2.3.4:443/?plugin=obfs-local%3Bobfs%3Dgrpc#t", True),
+    ("ss v2ray-plugin quic", f"ss://{_mc_b64('aes-128-gcm:x')}@1.2.3.4:443/?plugin=v2ray-plugin%3Bmode%3Dquic#t", True),
+    ("ss v2ray-plugin websocket", f"ss://{_mc_b64('none:x')}@1.2.3.4:443/?plugin=v2ray-plugin%3Bmode%3Dwebsocket#t", False),
+    ("ss junk after port (skipped, not fatal)", f"ss://{_mc_b64('aes-128-gcm:x')}@1.2.3.4:443freenet#t", False),
+    ("vless reality ok", f"vless://{_MC_UUID}@1.2.3.4:443?security=reality&pbk={_MC_PBK}&sid=27e5#t", False),
+    ("vless realityJUNK + pbk", f"vless://{_MC_UUID}@1.2.3.4:443?security=realityJUNK&pbk={_MC_PBK}#t", True),
+    ("vless none + pbk", f"vless://{_MC_UUID}@1.2.3.4:443?security=none&pbk={_MC_PBK}#t", True),
+    ("vless Reality (case-insensitive)", f"vless://{_MC_UUID}@1.2.3.4:443?security=Reality&pbk={_MC_PBK}#t", False),
+    ("vless bad pbk", f"vless://{_MC_UUID}@1.2.3.4:443?security=reality&pbk=short#t", True),
+    ("vless padded pbk", f"vless://{_MC_UUID}@1.2.3.4:443?security=reality&pbk={_MC_PBK}%3D#t", True),
+    ("vless sid odd", f"vless://{_MC_UUID}@1.2.3.4:443?security=reality&pbk={_MC_PBK}&sid=abc#t", True),
+    ("vless sid 16 hex", f"vless://{_MC_UUID}@1.2.3.4:443?security=reality&pbk={_MC_PBK}&sid=0123456789abcdef#t", False),
+    ("vless encryption mlk", f"vless://{_MC_UUID}@1.2.3.4:443?security=tls&encryption=mlk#t", True),
+    ("vless encryption NONE", f"vless://{_MC_UUID}@1.2.3.4:443?security=tls&encryption=NONE#t", True),
+    ("vless encryption mlkem ok", f"vless://{_MC_UUID}@1.2.3.4:443?security=tls&encryption=mlkem768x25519plus.native.0rtt.0Vh97j6xS7KWSt0KJUlPGDqvOnB6YEWo0xWQ3HQgYm4#t", False),
+    ("vless encryption mlkem no key", f"vless://{_MC_UUID}@1.2.3.4:443?security=tls&encryption=mlkem768x25519plus.native.0rtt.short#t", True),
+    ("vless xhttp mode junk", f"vless://{_MC_UUID}@1.2.3.4:443?security=tls&type=xhttp&mode=junk#t", True),
+    ("vless xhttp mode Auto", f"vless://{_MC_UUID}@1.2.3.4:443?security=tls&type=xhttp&mode=Auto#t", True),
+    ("vless no port (skipped)", f"vless://{_MC_UUID}@1.2.3.4?security=tls#t", False),
+    ("vmess scy junk", _mc_vmess(scy="junkcipher"), True),
+    ("vmess scy AES-128-GCM", _mc_vmess(scy="AES-128-GCM"), False),
+    ("vmess scy ' auto'", _mc_vmess(scy=" auto"), True),
+    ("vmess port abc", _mc_vmess(port="abc"), True),
+    ("vmess port empty", _mc_vmess(port=""), True),
+    ("vmess port int", _mc_vmess(port=443), False),
+    ("vmess aid abc", _mc_vmess(aid="abc"), True),
+    ("vmess aid null", _mc_vmess(aid=None), False),
+    ("trojan no port", "trojan://pw@1.2.3.4#t", True),
+    ("trojan port abc (skipped)", "trojan://pw@1.2.3.4:abc#t", False),
+    ("trojan broken bracket (skipped)", "trojan://8r<[9'l6hAO#t", False),
+    ("tuic no port", f"tuic://{_MC_UUID}:pw@1.2.3.4#t", True),
+    ("hysteria no port", "hysteria://1.2.3.4?auth=x#t", True),
+    ("hy2 obfs without password", "hysteria2://pw@1.2.3.4:443?obfs=salamander#t", True),
+    ("hy2 obfs junk", "hysteria2://pw@1.2.3.4:443?obfs=junk&obfs-password=x#t", True),
+    ("hy2 obfs gecko", "hysteria2://pw@1.2.3.4:443?obfs=gecko&obfs-password=x#t", False),
+    ("hy2 port hopping", "hysteria2://pw@1.2.3.4:443,1000-2000?sni=a.b#t", False),
+)
+
+
+def test_mihomo_gate_matches_every_measured_verdict_of_the_real_binary():
+    """هر حکمِ `fatal_reason` باید با حکمِ سنجیده‌شدهٔ mihomo یکی باشد — دوسویه.
+
+    منفیِ کاذب یعنی کلِ `all/configs.txt` برای کاربرِ Clash Verge/FlClash خالی
+    می‌ماند (وضعیتی که از ۲۰۲۶-۰۷-۲۹ تا امروز برقرار بود). مثبتِ کاذب یعنی نودِ
+    سالم بی‌دلیل حذف می‌شود. هر دو جهت قفل می‌شوند.
+    """
+    wrong = [(label, expect, mihomo_compat.fatal_reason(line))
+             for label, line, expect in _MC_MEASURED
+             if bool(mihomo_compat.fatal_reason(line)) != expect]
+    assert not wrong, f"دروازه با باینریِ واقعی ناسازگار است: {wrong}"
+
+
+def test_mihomo_gate_is_total_and_never_raises():
+    """گزاره باید روی هر ورودیِ خصمانه None یا یک دلیل بدهد، هرگز استثنا."""
+    hostile = ["", "ss://", "vmess://", "vmess://!!!", "vless://@:", "trojan://[",
+               "ss://%ZZ@1.2.3.4:443", "hysteria2://?obfs=", "x" * 5000,
+               "ss://" + "A" * 4001 + "@1.2.3.4:443", None]
+    for h in hostile:
+        r = mihomo_compat.fatal_reason(h)  # type: ignore[arg-type]
+        assert r is None or isinstance(r, str), (h, r)
+
+
+def test_mihomo_fatal_lines_never_reach_the_published_text_outputs():
+    """سرتاسری: خطِ مرگبار در `process_category` حذف و در گزارش شمرده شود.
+
+    و — مهم‌تر — همزادِ سالمِ آن (کلیدِ یکتاسازیِ یکسان) نباید به‌عنوانِ
+    «تکراری» قربانی شود؛ برای همین دروازه **پیش از** یکتاسازی است.
+    """
+    bad = f"ss://{_mc_b64('AES-128-GCM:pw')}@198.51.100.7:443#bad"
+    good = f"ss://{_mc_b64('aes-128-gcm:pw')}@198.51.100.7:443#good"
+    assert core.dedup_key(bad) == core.dedup_key(good), "پیش‌فرضِ آزمون نقض شد"
+    r = aggregate.process_category({"u": [bad, good]}, ["u"])
+    assert len(r.unique) == 1, r.unique
+    assert mihomo_compat.fatal_reason(r.unique[0]) is None, r.unique
+    assert r.mihomo_fatal == {mihomo_compat.REASON_SS_METHOD: 1}, r.mihomo_fatal
+    health = aggregate.build_health_report(0.0, None, {"all": r})
+    assert health["mihomo_gate"]["all"]["dropped"] == 1, health["mihomo_gate"]
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# پارسرِ Shadowsocks — چهار نقصِ سنجیده‌شده روی پیکرهٔ زنده (۲۰۲۶-۱۰-۱۵)
+# ══════════════════════════════════════════════════════════════════════════════
+
+def test_ss_at_sign_in_query_no_longer_destroys_the_endpoint():
+    """`?note=@Channel` پیش از این host را «Channel» و port را ۰ می‌کرد."""
+    line = f"ss://{_mc_b64('chacha20-ietf-poly1305:7c31a67b41b18c26')}@89.223.88.33:11201?note=@FreeOnlineVPN#MX"
+    p = converters.parse_proxy(line)
+    assert p and (p["server"], p["port"]) == ("89.223.88.33", 11201), p
+    assert p["cipher"] == "chacha20-ietf-poly1305" and p["password"] == "7c31a67b41b18c26", p
+
+
+def test_ss_port_followed_by_a_slash_is_parsed():
+    """`host:443/?plugin=` شکلِ استانداردِ SIP002 است؛ `_safe_int("443/")` صفر بود."""
+    p = converters.parse_proxy(f"ss://{_mc_b64('aes-128-gcm:x')}@1.2.3.4:443/?type=tcp#t")
+    assert p and p["port"] == 443, p
+
+
+def test_ss_plaintext_userinfo_is_not_mistaken_for_base64():
+    """SIP002 userinfoِ متنی را مجاز می‌داند؛ پیش از این «r\\x16…» رمز می‌شد."""
+    p = converters.parse_proxy("ss://chacha20-ietf-poly1305:oZIoA69Q8yhcQV8ka3Pa3A@193.29.139.188:8080#NL")
+    assert p and p["cipher"] == "chacha20-ietf-poly1305", p
+    assert p["password"] == "oZIoA69Q8yhcQV8ka3Pa3A", p
+
+
+def test_ss_percent_encoded_base64_userinfo_keeps_the_exact_password():
+    """اول percent-decode، بعد base64 — وگرنه گذرواژه مثله می‌شد (۲۰ نودِ زنده)."""
+    pw = "https://t.me/WangCai2\U0001F1E8\U0001F1F3"
+    ui = urllib.parse.quote(base64.b64encode(f"none:{pw}".encode()).decode().rstrip("="), safe="")
+    p = converters.parse_proxy(f"ss://{ui}@112.163.229.82:10909#KR")
+    assert p and p["password"] == pw, (p or {}).get("password")
+    p2 = converters.parse_proxy("ss://YWVzLTI1Ni1nY206M2VPRmVOc3NkZTdQWVlNdg%3D%3D@84.247.155.196:80#FR")
+    assert p2 and p2["password"] == "3eOFeNssde7PYYMv", (p2 or {}).get("password")
+
+
+def test_ss_plugin_reaches_clash_and_singbox_instead_of_being_dropped():
+    """نودِ `v2ray-plugin` بی‌افزونه «معتبر به‌نظر می‌رسد ولی هرگز وصل نمی‌شود»."""
+    line = ("ss://bm9uZTo1OWZjNWY4Yy01Njk3LTRlYjgtYWNmMi04YWUzNjNmMjAzYTI=@132.145.91.181:8443"
+            "?plugin=v2ray-plugin%3Bmode%3Dwebsocket%3Bpath%3D%2Fp%2F%3Fed%5C%3D2560"
+            "%3Bhost%3Dexample.pages.dev%3Btls#KR")
+    clash = yaml.safe_load(converters.build_clash_yaml([line]))["proxies"]
+    assert len(clash) == 1 and clash[0]["plugin"] == "v2ray-plugin", clash
+    assert clash[0]["plugin-opts"] == {"mode": "websocket", "host": "example.pages.dev",
+                                       "path": "/p/?ed=2560", "tls": True}, clash[0]
+    sb = [o for o in json.loads(converters.build_singbox_json([line]))["outbounds"]
+          if o.get("type") == "shadowsocks"]
+    assert len(sb) == 1 and sb[0]["plugin"] == "v2ray-plugin", sb
+    assert sb[0]["plugin_opts"] == "mode=websocket;host=example.pages.dev;path=/p/?ed\\=2560;tls", sb[0]
+
+
+def test_ss_plugin_that_no_client_can_run_drops_the_node():
+    """kcptun (sing-box: plugin not found) و حالت‌های نامعتبر نباید بیان شوند."""
+    for q in ("plugin=kcptun%3Bkey%3Dx", "plugin=v2ray-plugin%3Bmode%3Dquic",
+              "plugin=obfs-local%3Bobfs%3Dgrpc"):
+        assert converters.parse_proxy(f"ss://{_mc_b64('aes-128-gcm:x')}@1.2.3.4:443/?{q}#t") is None, q
+    # افزونه بدونِ `;` (فقط نام) را mihomo نادیده می‌گیرد؛ این‌جا هم.
+    p = converters.parse_proxy(f"ss://{_mc_b64('aes-128-gcm:x')}@1.2.3.4:443/?plugin=v2ray-plugin#t")
+    assert p and "plugin" not in p, p
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# auto-disable — دو آینهٔ کامل نباید در یک دور با هم خاموش شوند
+# ══════════════════════════════════════════════════════════════════════════════
+
+def test_auto_disable_never_switches_off_every_copy_of_mirrored_content():
+    """بازتولیدِ دقیقِ نقص: دو آینهٔ ۲۰۰ کانفیگی، هر دو «یکتای صفر»، هر دو در دورِ
+    دهم با هم غیرفعال می‌شدند و آن ۲۰۰ کانفیگ از خروجی پاک می‌شد. حالا یکی
+    می‌ماند، و چون پس از آن صاحبِ محتوای یکتا است، **هرگز** خاموش نمی‌شود.
+    """
+    d = _tmpdir(prefix="mirror_")
+    path = os.path.join(d, "state.json")
+    mirror = [f"vless://{_MC_UUID}@198.51.100.{i}:443?security=tls#m" for i in range(200)]
+    urls = [f"https://example.com/s{i}.txt" for i in range(8)] + \
+           ["https://example.com/A.txt", "https://example.com/B.txt"]
+    st = state.empty_state()
+    for _ in range(state.MIN_ROUNDS + 6):
+        per = {u: [f"trojan://p@203.0.113.{j}:{1000 + k}#y" for k in range(5)]
+               for j, u in enumerate(urls[:8])}
+        per["https://example.com/A.txt"] = list(mirror)
+        per["https://example.com/B.txt"] = list(mirror)
+        st = aggregate.advance_memory(st, per, urls, path)
+    off = state.disabled_urls(st)
+    assert len(off) == 1 and off[0] in urls[8:], off
+    # و فراخوانِ قدیمی (بدونِ keys_by_url) بایت‌به‌بایت رفتارِ پیشین را دارد:
+    legacy = state.disable_candidates(st, {u: 0 for u in urls}, 1)
+    assert isinstance(legacy, dict)
+
+
+# ============================================================================
+# بارگذاریِ واقعیِ اشتراک‌های متنی در mihomo (validate.check_subscriptions)
+# ============================================================================
+#
+# سطرِ لاگ زیر **کپیِ بایت‌به‌بایتِ** خروجیِ mihomo v1.19.29 است (باینریِ
+# pin‌شدهٔ CI) برای یک provider با یک سطرِ ss با روشِ chacha20-poly1305 —
+# نه نوشتهٔ دست. اگر قالبِ لاگ در نسخه‌ای عوض شود، این تست باید عوض شود.
+_SUB_REAL_LOG = (
+    'time="2026-10-16T00:19:37.782965304+03:30" level=error msg="initial proxy '
+    'provider p000 error: proxy 0 error: ss 1.2.3.4:8446 cipher: '
+    'chacha20-poly1305 initialize error: unknown method: chacha20-poly1305"\n'
+    'time="2026-10-16T00:19:37.784825813+03:30" level=info msg="Start initial '
+    'provider zz_load_sentinel"\n')
+
+
+def test_subscription_error_parser_reads_the_real_mihomo_log_line():
+    errs = validate._parse_provider_errors(_SUB_REAL_LOG)
+    assert set(errs) == {"p000"}, errs
+    assert errs["p000"].startswith("proxy 0 error: ss 1.2.3.4:8446"), errs
+    assert errs["p000"].endswith("unknown method: chacha20-poly1305"), (
+        f"گیومهٔ پایانی نباید در متن بماند: {errs['p000']!r}")
+    # نگهبانِ «تمام شد» همان رشته‌ای است که در لاگِ واقعی آمده.
+    assert f"Start initial provider {validate._SENTINEL}" in _SUB_REAL_LOG
+    # سطرِ info/خطای rule-provider نباید خطای proxy-provider شمرده شود.
+    assert validate._parse_provider_errors(
+        'level=error msg="initial rule provider zz error: x"\n') == {}
+
+
+def test_subscription_relevance_reads_plain_and_base64_like_mihomo():
+    plain = ("#profile-title: x\n# comment\nvless://u@1.2.3.4:443#a\n"
+             "SS://YWVzLTEyOC1nY206cA@1.2.3.4:1#b\nhapp://crypt5/zz\n")
+    assert validate._mihomo_relevant_lines(plain.encode()) == 2, \
+        "طرح‌ها باید بی‌حساس به حروف شمرده شوند (mihomo: strings.ToLower)"
+    b64 = base64.b64encode(plain.encode())
+    assert validate._mihomo_relevant_lines(b64) == 2, \
+        "فایلِ _base64 باید مثلِ DecodeBase64ِ mihomo باز شود"
+    # base64ِ بی‌padding و شکسته در چند سطر — mihomo هر دو را می‌پذیرد.
+    raw = base64.b64encode(plain.encode()).rstrip(b"=")
+    assert validate._mihomo_relevant_lines(raw[:40] + b"\n" + raw[40:]) == 2
+    only_happ = b"#profile-title: x\nhapp://crypt5/abc\nslipnet-enc://zz\n"
+    assert validate._mihomo_relevant_lines(only_happ) == 0
+    assert validate._mihomo_relevant_lines(base64.b64encode(only_happ)) == 0
+    assert validate._mihomo_relevant_lines(b"") == 0
+    assert validate._mihomo_relevant_lines(b"\xff\xfe\x00garbage") == 0
+
+
+def test_subscription_verdicts_never_report_zero_proxies_as_pass():
+    c = validate._classify_subscription
+    assert c(10, 10, None)["status"] == "pass"
+    r = c(12103, 0, "proxy 595 error: …")
+    assert r["status"] == "fail" and r["detail"].startswith("proxy 595"), r
+    r = c(5, 0, None)
+    assert r["status"] == "fail", f"صفر پروکسی بی‌خطا هم شکست است: {r}"
+    # فایلی که mihomo اصلاً طرحش را نمی‌شناسد خراب نیست، نامربوط است —
+    # حتی اگر mihomo رویش خطا بدهد (protocols/happ.txt در خروجیِ زنده).
+    r = c(0, 0, "yaml: unmarshal errors")
+    assert r["status"] == "n/a" and "yaml" in r["detail"], r
+    assert c(0, 0, None)["status"] == "n/a"
+    # یک خطا حتی با پروکسی‌های بارگذاری‌شده (نباید رخ دهد) باز هم fail است.
+    assert c(3, 3, "boom")["status"] == "fail"
+
+
+def test_subscription_file_list_covers_every_published_text_subscription():
+    root = _tmpdir(prefix="sub_list_")
+    for rel in ("all/configs.txt", "all/configs_base64.txt", "light/configs.txt",
+                "verified/configs.txt", "protocols/vless.txt",
+                "protocols/vless_base64.txt", "Countries/Germany.txt",
+                "top100.txt", "all/clash.yaml", "Countries/index.json"):
+        os.makedirs(os.path.dirname(os.path.join(root, rel)), exist_ok=True)
+        with open(os.path.join(root, rel), "w", encoding="utf-8") as fh:
+            fh.write("x\n")
+    got = validate._subscription_files(root, ["all", "heavy", "light", "verified"])
+    assert got == sorted(got) and len(got) == len(set(got)), got
+    assert got == ["Countries/Germany.txt", "all/configs.txt",
+                   "all/configs_base64.txt", "light/configs.txt",
+                   "protocols/vless.txt", "protocols/vless_base64.txt",
+                   "top100.txt", "verified/configs.txt"], got
+
+
+def test_subscription_check_without_binary_is_skipped_and_never_raises():
+    root = _tmpdir(prefix="sub_nobin_")
+    r = validate.check_subscriptions(root, None)
+    assert r["status"] == "skipped", r
+    # باینریِ ناموجود/غیرقابل‌اجرا: هرگز استثنا، همیشه fail با توضیح.
+    os.makedirs(os.path.join(root, "all"))
+    with open(os.path.join(root, "all", "configs.txt"), "w") as fh:
+        fh.write("vless://u@1.2.3.4:443#a\n")
+    with _F3PrivateTemp() as box:
+        r = validate.check_subscriptions(root, "/definitely/not/mihomo_zz")
+        left = box.leftovers("mh_sub_*")
+    assert r["status"] == "fail" and "FileNotFoundError" in r["detail"], r
+    assert not left, f"پوشهٔ کاریِ موقت باید در مسیرِ خطا هم پاک شود: {left}"
+
+
+def test_subscription_result_never_changes_the_existing_gate_verdict():
+    """
+    `subscriptions` عمداً بیرونِ `summary`/`ok` است: حکمِ دروازهٔ قبلی برای
+    `--strict` باید بیت‌به‌بیت همان بماند و بستنِ انتشار فقط با
+    `--strict-subscriptions`. هر دو جهت سنجیده می‌شود، از جمله کدِ خروجِ
+    واقعیِ `main()` که CI به آن تکیه دارد.
+    """
+    root = _tmpdir(prefix="sub_gate_")
+    _f5_healthy_tree(root)
+    orig = validate.check_subscriptions
+    argv = sys.argv
+    try:
+        validate.check_subscriptions = lambda *a, **k: {
+            "status": "fail", "files": {"all/configs.txt": {
+                "lines": 3, "loaded": 0, "status": "fail", "detail": "boom"}},
+            "failed": ["all/configs.txt"], "detail": "1 of 1"}
+        rep = validate.validate_outputs(root)
+        assert rep["ok"] is True and rep["subscriptions"]["status"] == "fail", rep
+        assert "fail" not in rep["offending"], rep["offending"]
+        import contextlib, io
+        with contextlib.redirect_stdout(io.StringIO()):
+            sys.argv = ["validate.py", "--out", root, "--strict"]
+            rc_default = validate.main()
+            sys.argv = ["validate.py", "--out", root, "--strict",
+                        "--strict-subscriptions"]
+            rc_strict = validate.main()
+        assert rc_default == 0, "پیش‌فرض فقط هشدار است، نه بستنِ انتشار"
+        assert rc_strict == 1, "--strict-subscriptions باید انتشار را ببندد"
+        validate.check_subscriptions = lambda *a, **k: {
+            "status": "pass", "files": {}, "failed": [], "detail": "ok"}
+        with contextlib.redirect_stdout(io.StringIO()):
+            assert validate.main() == 0
+    finally:
+        validate.check_subscriptions = orig
+        sys.argv = argv
+
+
+def test_subscription_check_with_the_real_mihomo_binary():
+    """
+    سرتاسری با **باینریِ واقعی** — فقط وقتی `MIHOMO_BIN` صریحاً داده شود
+    (عمداً نه از PATH: تست‌های F-5 به نبودِ باینری در PATH تکیه دارند).
+    بی‌آن، این تست هیچ ادعایی نمی‌کند و فقط برمی‌گردد.
+    """
+    binary = os.environ.get("MIHOMO_BIN", "")
+    if not binary:
+        return
+    root = _tmpdir(prefix="sub_real_")
+    good = "trojan://p@1.2.3.4:443?security=tls&sni=a.com#ok\n"
+    bad = "ss://" + base64.b64encode(b"chacha20-poly1305:pw").decode() + "@1.2.3.4:8446#bad\n"
+    files = {"all/configs.txt": good + bad, "heavy/configs.txt": good,
+             "light/configs.txt": good * 1,
+             "light/configs_base64.txt": base64.b64encode((good + bad).encode()).decode(),
+             "protocols/happ.txt": "#profile-title: x\nhapp://crypt5/zz\n"}
+    for rel, body in files.items():
+        os.makedirs(os.path.dirname(os.path.join(root, rel)), exist_ok=True)
+        with open(os.path.join(root, rel), "w", encoding="utf-8") as fh:
+            fh.write(body)
+    r = validate.check_subscriptions(root, binary,
+                                     categories=["all", "heavy", "light"])
+    st = {k: v["status"] for k, v in r["files"].items()}
+    assert st == {"all/configs.txt": "fail", "heavy/configs.txt": "pass",
+                  "light/configs.txt": "pass", "light/configs_base64.txt": "fail",
+                  "protocols/happ.txt": "n/a"}, r
+    assert "chacha20-poly1305" in r["files"]["all/configs.txt"]["detail"], r
+    assert r["files"]["heavy/configs.txt"]["loaded"] == 1, r
+    assert r["status"] == "fail" and r["failed"] == [
+        "all/configs.txt", "light/configs_base64.txt"], r
 
 
 if __name__ == "__main__":
