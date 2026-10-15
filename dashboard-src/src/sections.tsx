@@ -118,7 +118,11 @@ export function CategoriesSection({ idx }: { idx: IndexDoc }) {
       title="Categories"
       lede="all = every source · heavy = bulk feeds · light = curated feeds"
     >
-      <div className="tscroll">
+      {/* No cell in this table is focusable, so without tabIndex a keyboard
+          user cannot scroll it on a narrow screen (axe
+          scrollable-region-focusable, measured at 375 px). role+label give the
+          focus stop a name. */}
+      <div className="tscroll" tabIndex={0} role="region" aria-label="Categories table">
         <table className="dtable">
           <thead>
             <tr>
@@ -307,7 +311,7 @@ export function CascadeSection({ health }: { health: HealthDoc }) {
         />
       </div>
 
-      <div className="tscroll mt-3">
+      <div className="tscroll mt-3" tabIndex={0} role="region" aria-label="Verification stages table">
         <table className="dtable">
           <thead>
             <tr>
@@ -766,16 +770,24 @@ export function LinksSection({ idx }: { idx: IndexDoc }) {
           <TabsTrigger value="mirror" className="fig rounded-[1px] text-xs">mirror (jsDelivr)</TabsTrigger>
           <TabsTrigger value="base64" className="fig rounded-[1px] text-xs">base64</TabsTrigger>
         </TabsList>
-      </Tabs>
-
-      <div className="tscroll mt-2">
+        {/* Radix points every trigger's aria-controls at `content-<value>`.
+            The table used to sit outside <Tabs>, so those ids pointed at
+            nothing (axe aria-valid-attr-value, critical). Rendering the table
+            inside the active panel gives the tabs a real tabpanel; `rows` is
+            already filtered by `flavour`, so the output is unchanged. All three
+            panels are rendered (Radix keeps the inactive ones empty and
+            hidden), so every trigger's aria-controls resolves, not just the
+            active one's. */}
+        {(['primary', 'mirror', 'base64'] as const).map((f) => (
+        <TabsContent key={f} value={f} className="mt-2">
+          <div className="tscroll">
         <table className="dtable">
           <thead>
             <tr>
               <th scope="col">group</th>
               <th scope="col">format</th>
               <th scope="col">URL</th>
-              <th scope="col" className="w-0" />
+              <th scope="col" className="w-0"><span className="sr-only">Copy</span></th>
             </tr>
           </thead>
           <tbody>
@@ -800,7 +812,10 @@ export function LinksSection({ idx }: { idx: IndexDoc }) {
             ) : null}
           </tbody>
         </table>
-      </div>
+          </div>
+        </TabsContent>
+        ))}
+      </Tabs>
     </Section>
   );
 }

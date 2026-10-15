@@ -32,11 +32,22 @@
       property="og:description"
       content="A free V2Ray / Xray subscription rebuilt every 15 minutes from public sources, deduplicated and checked against real clients. This dashboard reports what actually works, including the failures."
     />
+    <!-- JPEG, not SVG: X/Twitter and Facebook reject SVG previews, so an SVG
+         og:image gave every shared link a blank card. Source of truth is
+         assets/social-preview.svg (make_assets.py social()); rasterised by
+         assets/make_social_preview.py at 1280x640, GitHub's recommended
+         social-preview size (2:1). -->
     <meta
       property="og:image"
-      content="https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/assets/hero.svg"
+      content="https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/assets/social-preview.jpg"
     />
+    <meta property="og:image:type" content="image/jpeg" />
+    <meta property="og:image:width" content="1280" />
+    <meta property="og:image:height" content="640" />
+    <meta property="og:image:alt" content="Free V2Ray Configs — a free V2Ray / Xray subscription rebuilt every 15 minutes and verified by real clients" />
     <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:image" content="https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/assets/social-preview.jpg" />
+    <meta name="twitter:image:alt" content="Free V2Ray Configs — a free V2Ray / Xray subscription rebuilt every 15 minutes and verified by real clients" />
     <meta name="twitter:title" content="Free V2Ray Configs — live status" />
     <meta
       name="twitter:description"

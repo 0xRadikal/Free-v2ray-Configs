@@ -35,6 +35,7 @@ a fresh list.
 | **A whole protocol/tier failing in a client** | [New issue → Config problem](https://github.com/0xRadikal/Free-v2ray-Configs/issues/new/choose) |
 | **An upstream source to add** | [New issue → Suggest an upstream source](https://github.com/0xRadikal/Free-v2ray-Configs/issues/new/choose) |
 | **A security problem** | [SECURITY.md](SECURITY.md) — report privately, not as a public issue |
+| **An accessibility barrier** — something is hard or impossible to use with your setup | [New issue → Accessibility barrier](https://github.com/0xRadikal/Free-v2ray-Configs/issues/new?template=accessibility.yml) · [ACCESSIBILITY.md](ACCESSIBILITY.md) |
 | **General chat, outage notices, quick questions** | [@Raydikalx on Telegram](https://t.me/Raydikalx) |
 | **Want to change the code** | [CONTRIBUTING.md](CONTRIBUTING.md) |
 

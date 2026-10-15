@@ -1,0 +1,77 @@
+name: ♿ Accessibility barrier
+description: Something in the dashboard, the README or the docs is hard or impossible to use with your setup.
+title: "a11y: "
+# The `accessibility` label is created alongside this form. If it is ever
+# deleted, GitHub silently drops it from new issues rather than failing.
+labels: ["accessibility", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you — accessibility reports are treated as expertise, not complaints.
+        Only the first question is required. Answer what you can; we will ask if we need more.
+
+        You never need to tell us about a disability or share personal or medical information.
+        See [ACCESSIBILITY.md](https://github.com/0xRadikal/Free-v2ray-Configs/blob/main/ACCESSIBILITY.md) for what has been tested and what is already known.
+
+        If this form is hard to use with your setup, a plain message to [@Raydikalx on Telegram](https://t.me/Raydikalx) is fine too.
+
+  - type: textarea
+    id: what
+    attributes:
+      label: What were you trying to do, and what happened?
+      description: For example, "I could not copy the verified link with the keyboard" or "the screen reader read the table out of order".
+    validations:
+      required: true
+
+  - type: input
+    id: where
+    attributes:
+      label: Where did it happen?
+      description: A link to the page, file or README section.
+      placeholder: https://0xradikal.github.io/Free-v2ray-Configs/
+    validations:
+      required: false
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Optional, but it helps us find the problem quickly.
+      placeholder: |
+        1. Open the dashboard
+        2. Press Tab until …
+        3. …
+    validations:
+      required: false
+
+  - type: textarea
+    id: setup
+    attributes:
+      label: Your setup
+      description: Device, operating system, browser, and any assistive technology (screen reader, magnifier, voice control, switch access …), with versions if you know them.
+      placeholder: "Android 15, Chrome 141, TalkBack"
+    validations:
+      required: false
+
+  - type: dropdown
+    id: severity
+    attributes:
+      label: How much does it get in your way?
+      description: Optional — you can leave this for us to decide.
+      options:
+        - "Critical — I cannot do a core task at all (for example, get or copy a subscription link)"
+        - "Serious — very difficult, but I found a workaround"
+        - "Moderate — annoying or inconsistent"
+        - "Minor — small issue, little effect"
+        - "Not sure"
+    validations:
+      required: false
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else?
+      description: A screenshot or recording only if you are comfortable sharing one, or a suggestion for how it could work better.
+    validations:
+      required: false

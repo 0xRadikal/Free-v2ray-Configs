@@ -491,6 +491,114 @@ def divider() -> None:
 </svg>''')
 
 
+
+# ---------------------------------------------------------------------------
+# Social preview card — the image link previews (GitHub repo card, X, Slack,
+# Telegram, Discord) show. Separate from hero() because the constraints differ:
+#   • 1280×640 (2:1) — GitHub's recommended social-preview size; X/Facebook
+#     crop toward 1.91:1, so nothing important sits in the outer 20 px band.
+#   • Read at thumbnail size, so: one headline, one line of proof, few words,
+#     large type. No animation (previews are rasterised once).
+#   • Only claims that hold for EVERY release: no counts, no dates. The protocol
+#     row lists exactly the protocols with a published per-protocol file
+#     (index.json → protocol_files), not every scheme the parser knows.
+# Rendered to JPEG/PNG by assets/make_social_preview.py (X and Facebook reject
+# SVG as og:image).
+# ---------------------------------------------------------------------------
+SOCIAL_PROTOCOLS = ["VLESS", "VMess", "Trojan", "Shadowsocks", "Hysteria2", "SOCKS"]
+SOCIAL_CLIENTS = "v2rayNG · Hiddify · NekoBox · v2rayN · Clash Meta · sing-box"
+
+
+def social() -> None:
+    W, H = 1280, 640
+    chip_cols = [CYAN, VIOLET, GREEN, AMBER, ROSE, CYAN]
+    widths = [int(len(t) * 14.2) + 44 for t in SOCIAL_PROTOCOLS]
+    gap = 14
+    x = (W - (sum(widths) + gap * (len(widths) - 1))) / 2
+    chips = []
+    for t, w, c in zip(SOCIAL_PROTOCOLS, widths, chip_cols):
+        chips.append(
+            f'<rect id="chip{len(chips)}" x="{x:.0f}" y="398" width="{w}" height="46" rx="23" fill="{c}" fill-opacity=".12" '
+            f'stroke="{c}" stroke-opacity=".55" stroke-width="1.5"/>'
+            f'<text data-box="chip{len(chips)}" x="{x + w/2:.0f}" y="429" text-anchor="middle" font-family="{FONT}" font-size="22" '
+            f'font-weight="700" fill="{c}">{t}</text>')
+        x += w + gap
+    steps = [("Parsed", CYAN), ("Deduplicated", VIOLET), ("TCP-checked", AMBER),
+             ("Proxied ×3", GREEN), ("Client-validated", ROSE)]
+    # Box width follows the label so a long label cannot spill out. 12.4 px/char
+    # at 20 px semibold covers the widest fallback measured (DejaVu Sans:
+    # "Deduplicated" 150 px, "TCP-checked" 143 px); make_social_preview.py
+    # re-checks every label against its box on the real render.
+    sws = [int(len(t) * 12.4) + 70 for t, _ in steps]
+    sgap = 20
+    sx0 = (W - (sum(sws) + sgap * (len(steps) - 1))) / 2
+    step_svg = []
+    sx = sx0
+    for i, (t, c) in enumerate(steps):
+        sw = sws[i]
+        step_svg.append(
+            f'<rect id="step{i}" x="{sx:.0f}" y="300" width="{sw}" height="54" rx="12" fill="#0F1A30" stroke="{c}" '
+            f'stroke-opacity=".6" stroke-width="1.5"/>'
+            f'<circle cx="{sx + 30:.0f}" cy="327" r="11" fill="{c}" fill-opacity=".18" stroke="{c}" stroke-width="1.5"/>'
+            f'<path d="M{sx + 25:.0f} 327 l4 4 l7 -8" fill="none" stroke="{c}" stroke-width="2.4" '
+            f'stroke-linecap="round" stroke-linejoin="round"/>'
+            f'<text data-box="step{i}" x="{sx + 50:.0f}" y="334" font-family="{FONT}" font-size="20" font-weight="600" fill="{INK}">{t}</text>')
+        if i < len(steps) - 1:
+            ax = sx + sw + 4
+            step_svg.append(f'<path d="M{ax:.0f} 327 h{sgap - 8}" stroke="{MUTED}" stroke-opacity=".7" stroke-width="2"/>')
+        sx += sw + sgap
+    write("social-preview.svg", f"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {W} {H}" width="{W}" height="{H}" role="img"
+     aria-label="Free V2Ray Configs — free V2Ray and Xray subscription, rebuilt every 15 minutes and checked by real clients">
+  <title>Free V2Ray Configs — free V2Ray / Xray subscription, rebuilt every 15 minutes, checked by real clients</title>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#070C18"/><stop offset=".5" stop-color="{BG1}"/><stop offset="1" stop-color="#070C18"/>
+    </linearGradient>
+    <radialGradient id="g1" cx="50%" cy="50%" r="50%">
+      <stop offset="0" stop-color="{CYAN}" stop-opacity=".30"/><stop offset="1" stop-color="{CYAN}" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="g2" cx="50%" cy="50%" r="50%">
+      <stop offset="0" stop-color="{VIOLET}" stop-opacity=".30"/><stop offset="1" stop-color="{VIOLET}" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="ttl" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#FFFFFF"/><stop offset=".5" stop-color="#BAE6FD"/><stop offset="1" stop-color="{CYAN}"/>
+    </linearGradient>
+    <linearGradient id="bar" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="{CYAN}"/><stop offset=".5" stop-color="{VIOLET}"/><stop offset="1" stop-color="{GREEN}"/>
+    </linearGradient>
+    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+      <path d="M40 0H0V40" fill="none" stroke="#FFFFFF" stroke-opacity=".035" stroke-width="1"/>
+    </pattern>
+  </defs>
+  <rect width="{W}" height="{H}" fill="url(#bg)"/>
+  <rect width="{W}" height="{H}" fill="url(#grid)"/>
+  <ellipse cx="180" cy="90" rx="520" ry="300" fill="url(#g1)"/>
+  <ellipse cx="1120" cy="560" rx="520" ry="300" fill="url(#g2)"/>
+  <rect x="0" y="0" width="{W}" height="6" fill="url(#bar)"/>
+
+  <!-- mark -->
+  <g transform="translate(640,92)">
+    <circle r="40" fill="{CYAN}" fill-opacity=".08" stroke="{CYAN}" stroke-opacity=".6" stroke-width="2"/>
+    <ellipse rx="17" ry="40" fill="none" stroke="{CYAN}" stroke-opacity=".45" stroke-width="1.6"/>
+    <path d="M-40 0H40M-35-19H35M-35 19H35" stroke="{CYAN}" stroke-opacity=".45" stroke-width="1.6" fill="none"/>
+    <circle r="40" fill="none" stroke="{GREEN}" stroke-width="3" stroke-dasharray="44 207" stroke-linecap="round"/>
+  </g>
+
+  <text x="640" y="200" text-anchor="middle" font-family="{FONT}" font-size="76" font-weight="800"
+        letter-spacing="-1.5" fill="url(#ttl)">Free V2Ray Configs</text>
+  <text x="640" y="256" text-anchor="middle" font-family="{FONT}" font-size="28" fill="{MUTED}">
+    A free V2Ray / Xray subscription — rebuilt <tspan fill="{INK}" font-weight="700">every 15 minutes</tspan>
+  </text>
+
+  {''.join(step_svg)}
+  {''.join(chips)}
+
+  <text x="640" y="500" text-anchor="middle" font-family="{FONT}" font-size="22" fill="{MUTED}">{SOCIAL_CLIENTS}</text>
+
+  <rect id="url" x="340" y="540" width="600" height="52" rx="26" fill="#0F1A30" stroke="{CYAN}" stroke-opacity=".35"/>
+  <text data-box="url" x="640" y="574" text-anchor="middle" font-family="{MONO}" font-size="22" fill="{CYAN}">github.com/0xRadikal/Free-v2ray-Configs</text>
+</svg>""")
+
 def main() -> None:
     print("building README assets ->", OUT)
     hero()
@@ -499,6 +607,7 @@ def main() -> None:
     qrs()
     donate_qrs()
     divider()
+    social()
     print("done")
 
 

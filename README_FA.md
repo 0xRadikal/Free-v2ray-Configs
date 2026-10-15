@@ -93,8 +93,8 @@ https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/verified/con
 | ⚡ **`fast`** | `verified` **و** تأخیرِ میانه `< ۸۰۰ms` | [txt](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/fast/configs.txt) | [b64](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/fast/configs_base64.txt) | [yaml](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/fast/clash.yaml) | [json](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/fast/singbox.json) |
 | 🔐 **`secure`** | `verified` **و** دارای forward secrecy، **و** لینک اعتبارسنجیِ گواهی را غیرفعال نکرده باشد | [txt](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/secure/configs.txt) | [b64](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/secure/configs_base64.txt) | [yaml](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/secure/clash.yaml) | [json](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/secure/singbox.json) |
 | 🌐 **`all`** | همه‌چیز، تکراری‌زدایی‌شده — بزرگ‌ترین فهرست، عمدتاً تست‌نشده | [txt](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/all/configs.txt) | [b64](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/all/configs_base64.txt) | [yaml](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/all/clash.yaml) | [json](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/all/singbox.json) |
-| 📦 **`heavy`** | فقط ۱۴ منبعِ پرحجم | [txt](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/heavy/configs.txt) | [b64](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/heavy/configs_base64.txt) | [yaml](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/heavy/clash.yaml) | [json](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/heavy/singbox.json) |
-| ⭐ **`light`** | فقط ۵ منبعِ گزیده / سرعت‌تست‌شده | [txt](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/light/configs.txt) | [b64](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/light/configs_base64.txt) | [yaml](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/light/clash.yaml) | [json](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/light/singbox.json) |
+| 📦 **`heavy`** | فقط ۵ منبعِ پرحجم | [txt](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/heavy/configs.txt) | [b64](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/heavy/configs_base64.txt) | [yaml](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/heavy/clash.yaml) | [json](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/heavy/singbox.json) |
+| ⭐ **`light`** | فقط ۸ منبعِ گزیده / سرعت‌تست‌شده | [txt](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/light/configs.txt) | [b64](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/light/configs_base64.txt) | [yaml](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/light/clash.yaml) | [json](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/light/singbox.json) |
 
 **کدام فرمت؟** `configs_base64.txt` فرمتِ کلاسیکِ اشتراک و امن‌ترین پیش‌فرض است.
 `configs.txt` همان فهرست بدونِ رمزگذاری است. `clash.yaml` یک پروفایلِ کاملِ
@@ -358,8 +358,8 @@ verified/   configs.txt · configs_base64.txt · clash.yaml · singbox.json   ه
 fast/       configs.txt · configs_base64.txt · clash.yaml · singbox.json   verified + میانه < 800ms
 secure/     configs.txt · configs_base64.txt · clash.yaml · singbox.json   verified + forward secrecy
 all/        configs.txt · configs_base64.txt · clash.yaml · singbox.json   light + heavy، تکراری‌زدایی‌شده
-heavy/      configs.txt · configs_base64.txt · clash.yaml · singbox.json   ۱۴ منبعِ پرحجم
-light/      configs.txt · configs_base64.txt · clash.yaml · singbox.json   ۵ منبعِ گزینش‌شده
+heavy/      configs.txt · configs_base64.txt · clash.yaml · singbox.json   ۵ منبعِ پرحجم
+light/      configs.txt · configs_base64.txt · clash.yaml · singbox.json   ۸ منبعِ گزینش‌شده
 protocols/  vless.txt · vmess.txt · trojan.txt · … (+ *_base64.txt)        تفکیک‌شده از all/
 archive/    all_broken.txt · heavy_broken.txt (+ _base64)                  آنچه رد شد
 top100.txt  ۱۰۰ کانفیگِ verified با کمترین تأخیر
@@ -376,7 +376,7 @@ scripts/    خطِ لوله — core · sources · filters · converters · geo 
 .github/    ورک‌فلوی زمان‌بندی‌شده · پیکربندیِ Dependabot · قالب‌های issue
 docs/       داشبوردِ زندهٔ وضعیت (index.json / health.json را در مرورگر می‌خواند)
 README.md · README_FA.md · README_ZH.md · README_RU.md
-SECURITY.md · CONTRIBUTING.md · LICENSE
+SECURITY.md · CONTRIBUTING.md · ACCESSIBILITY.md · LICENSE
 ```
 
 دو قاعده که به‌راحتی از قلم می‌افتند و خیلی مهم‌اند:
@@ -510,7 +510,7 @@ https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/index.json
 https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/health.json
 ```
 
-در هر اجرا بازتولید می‌شود. برای هر یک از ۱۹ منبع، `status` (`ok` / `empty` / `fail`)،
+در هر اجرا بازتولید می‌شود. برای هر یک از ۱۳ منبع، `status` (`ok` / `empty` / `fail`)،
 کدِ HTTP، تعدادِ تلاش، تأخیر، تعدادِ کانفیگِ برگردانده‌شده و آخرین خطا را ثبت می‌کند — پس
 یک منبعِ مرده یا تغییرکرده بی‌درنگ دیده می‌شود، به‌جای اینکه بی‌صدا خروجی را آب کند.
 
@@ -562,7 +562,7 @@ https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/health.json
 
 # ⚙️ چطور کار می‌کند
 
-1. **واکشی** — ۱۹ منبع به‌صورتِ هم‌زمان دانلود می‌شوند، با تشخیصِ خودکارِ base64/متنِ ساده.
+1. **واکشی** — ۱۳ منبع به‌صورتِ هم‌زمان دانلود می‌شوند، با تشخیصِ خودکارِ base64/متنِ ساده.
    در خطاهای گذرا دوباره تلاش می‌کند، اما روی ۴xx سریع شکست می‌خورد تا یک آدرسِ مرده
    *گزارش* شود، نه اینکه بی‌صدا تا ابد دوباره تلاش شود.
 2. **پاک‌سازی** — حذفِ ورودی‌های ساختگی و ساختاراً خراب (UUIDِ صفر،
@@ -604,6 +604,7 @@ https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/health.json
 | 🐛 **منبعِ خراب یا کانفیگِ بد پیدا کردید؟** | یک issue باز کنید — قالب‌ها در `.github/` هستند |
 | 🔐 **سیاستِ امنیتی** | [`SECURITY.md`](SECURITY.md) |
 | 📐 **راهنمای مشارکت** | [`CONTRIBUTING.md`](CONTRIBUTING.md) |
+| ♿ **دسترس‌پذیری** | [`ACCESSIBILITY.md`](ACCESSIBILITY.md) — چه چیزی آزموده شده، محدودیت‌های شناخته‌شده، و راهِ گزارشِ مانع |
 | 📜 **مجوز** | [MIT](LICENSE) |
 
 ## 🙌 منابع

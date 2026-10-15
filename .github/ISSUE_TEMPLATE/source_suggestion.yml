@@ -10,7 +10,10 @@ body:
   - type: markdown
     attributes:
       value: |
-        This repository aggregates **19** public sources (5 light + 14 heavy).
+        This repository aggregates a curated list of public sources — the live
+        list is [`scripts/sources.py`](https://github.com/0xRadikal/Free-v2ray-Configs/blob/main/scripts/sources.py)
+        and each one's status is in `health.json`. (No count is written here on
+        purpose: it changes whenever a source is added or retired.)
         Adding one is cheap, but a bad source is not free: it costs fetch time on
         every run (~96 runs/day) and can inject malformed entries that the
         cleaning stage then has to reject.
@@ -60,7 +63,7 @@ body:
     attributes:
       label: Why is it worth adding?
       description: |
-        Ideally: what it provides that the existing 19 sources don't — different
+        Ideally: what it provides that the existing sources don't — different
         protocols, different regions, or entries that survive dedup rather than
         collapsing into ones already collected.
     validations:

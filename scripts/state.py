@@ -45,7 +45,7 @@ import hashlib
 import json
 import os
 import time
-from typing import Dict, List
+from typing import Dict, List, Optional, Set
 
 #: نسخهٔ schema. هر عددِ دیگری «ناشناس» است و حافظه از صفر ساخته می‌شود.
 SCHEMA = 1
@@ -235,7 +235,8 @@ def record_round(state: Dict,
 
 def disable_candidates(state: Dict,
                        current_unique: Dict[str, int],
-                       union_size: int) -> Dict[str, str]:
+                       union_size: int,
+                       keys_by_url: Optional[Dict[str, Set[str]]] = None) -> Dict[str, str]:
     """منابعی که *مجازند* غیرفعال شوند → `{url: reason}`.
 
     هر سه شرط باید برقرار باشد. هیچ‌کدام اختیاری نیست:
@@ -280,7 +281,40 @@ def disable_candidates(state: Dict,
     budget = max(0, len(active) - MIN_ACTIVE)
     eligible.sort(key=lambda kv: -kv[1])
     out: Dict[str, str] = {}
-    for key, rounds in eligible[:budget]:
+
+    # ── گاردِ آینه‌ها (تصمیمِ حریصانه) ──────────────────────────────────────
+    # «بازدهِ یکتا» نسبت به *همهٔ* منابعِ فعالِ امروز سنجیده می‌شود. پس دو
+    # آینهٔ کامل (A ≡ B) هر دو یکتای صفر می‌گیرند و هر دو نامزد می‌شوند —
+    # در حالی که حذفِ *هر دو* کلِ آن محتوا را از خروجی پاک می‌کند (بازتولیدشده:
+    # دو آینهٔ ۲۰۰ کانفیگی در دورِ دهم با هم غیرفعال شدند). یکتا بودن خاصیتِ
+    # *مجموعه* است، نه تک‌منبع؛ پس پس از هر تصمیم، نامزدِ بعدی باید در برابرِ
+    # منابعی سنجیده شود که **واقعاً می‌مانند**.
+    #
+    # وقتی `keys_by_url` داده شود، یک نامزد فقط وقتی غیرفعال می‌شود که همهٔ
+    # کلیدهای امروزش در اجتماعِ منابعِ باقی‌مانده (فعال‌ها منهای تصمیم‌های همین
+    # دور) هم باشند. بدونِ آن (فراخوانِ قدیمی) رفتار بایت‌به‌بایت قبلی است.
+    if keys_by_url is None:
+        chosen = eligible[:budget]
+    else:
+        active_urls = [srcs[k]["url"] for k in active]
+        dropped: Set[str] = set()
+        chosen = []
+        for key, rounds in eligible:
+            if len(chosen) >= budget:
+                break
+            url = srcs[key]["url"]
+            mine = keys_by_url.get(url) or set()
+            if mine:
+                remaining: Set[str] = set()
+                for other in active_urls:
+                    if other != url and other not in dropped:
+                        remaining |= keys_by_url.get(other) or set()
+                if not mine <= remaining:
+                    continue   # حذفش محتوایی را از خروجی پاک می‌کرد ⇒ بمان
+            dropped.add(url)
+            chosen.append((key, rounds))
+
+    for key, rounds in chosen:
         out[srcs[key]["url"]] = (
             f"zero unique yield in the last {MIN_ROUNDS} of {rounds} rounds, "
             f"and zero again this round")

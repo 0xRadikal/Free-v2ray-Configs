@@ -9,8 +9,8 @@ point at [`.github/workflows/aggregate.yml`](.github/workflows/aggregate.yml).
 
 ## ⚠️ Read this first: the biggest risk is not in this code
 
-This repository is an **aggregator**. It collects configs that 21 third-party
-upstreams have already published, deduplicates them, rebrands the remarks, and
+This repository is an **aggregator**. It collects configs that third-party upstreams
+(listed in [`scripts/sources.py`](scripts/sources.py)) have already published, deduplicates them, rebrands the remarks, and
 checks that the files are structurally valid for real clients.
 
 It does **not** operate, own, audit, or vet the proxy servers those configs point

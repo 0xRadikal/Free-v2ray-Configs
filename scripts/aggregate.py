@@ -4,7 +4,7 @@
 aggregate.py — خط‌لولهٔ اصلیِ تجمیع کانفیگ‌های @Raydikalx.
 
 جریان کار (هیچ TCP-connect ای انجام نمی‌شود — مطابق تصمیم کاربر):
-  ۱) واکشیِ هم‌زمانِ ۱۹ منبع (۵ سبک + ۱۴ انبوه) با ThreadPool
+  ۱) واکشیِ هم‌زمانِ ۱۳ منبع (۸ سبک + ۵ انبوه) با ThreadPool
   ۲) استخراجِ کانفیگ‌های معتبر از هر منبع (direct یا base64)
   ۳) برای سه دستهٔ ALL / HEAVY / LIGHT:
        • حذف خراب‌ها (dummy)  → بایگانیِ broken
@@ -37,6 +37,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import core  # noqa: E402
 import converters  # noqa: E402
+import mihomo_compat  # noqa: E402
 import state as memory  # noqa: E402
 from sources import LIGHT_SOURCES, HEAVY_SOURCES  # noqa: E402
 
@@ -282,6 +283,28 @@ class CategoryResult:
         self.unbranded_dropped = 0
         self.unbranded_rebranded = 0
         self.unbranded_samples: List[str] = []
+        # ── دروازهٔ سازگاریِ mihomo ──────────────────────────────────────────
+        # خطوطی که mihomo (و هر کلاینتِ مبتنی بر آن) با دیدنشان **کلِ** اشتراک
+        # را رد می‌کند. جزئیات و مدرکِ اجرایی در `mihomo_compat.py`.
+        self.mihomo_fatal: Dict[str, int] = {}
+        self.mihomo_fatal_samples: List[str] = []
+
+
+def _note_mihomo_fatal(r: "CategoryResult", line: str) -> bool:
+    """اگر خط برای mihomo مرگبار است، شمارش کن و True بده (یعنی: منتشر نکن).
+
+    چرا حذف و نه ترمیم: هر شش خطِ مرگبارِ اندازه‌گیری‌شده در پیکرهٔ زنده
+    (۲۰۲۶-۱۰-۱۵) از L0 هم رد نمی‌شدند یا کلیدشان قابلِ ترمیمِ امن نبود؛
+    ترمیمِ حدسی (مثلاً عوض‌کردنِ رمزِ ss) کانفیگی می‌سازد که «معتبر به‌نظر
+    می‌رسد ولی هرگز وصل نمی‌شود».
+    """
+    why = mihomo_compat.fatal_reason(line)
+    if not why:
+        return False
+    r.mihomo_fatal[why] = r.mihomo_fatal.get(why, 0) + 1
+    if len(r.mihomo_fatal_samples) < 3:
+        r.mihomo_fatal_samples.append(line[:160])
+    return True
 
 
 def process_category(
@@ -318,6 +341,12 @@ def process_category(
             is_dummy, key = cached
             if is_dummy:
                 r.broken.append(line)
+                continue
+            # دروازهٔ سازگاریِ mihomo — **پیش از** یکتاسازی. اگر بعد از آن بود،
+            # یک خطِ مرگبار می‌توانست کلیدِ یکتاسازی را تصاحب کند و همزادِ سالمش
+            # (مثلاً `AES-128-GCM` در برابرِ `aes-128-gcm` که کلیدِ یکسان دارند)
+            # به‌عنوانِ «تکراری» دور ریخته شود.
+            if _note_mihomo_fatal(r, line):
                 continue
             if key not in seen_cores:
                 seen_cores.add(key)
@@ -962,6 +991,12 @@ def build_health_report(
         "converters": conv_stats,
         "converters_by_category": conv_by_cat or None,
         "brand_gate": brand_gate,
+        # دروازهٔ سازگاریِ mihomo — همان قاعدهٔ سه‌حالته‌ی `brand_gate`:
+        # dict ⇒ سنجیده شد؛ کلیدِ غایب ⇒ نسخهٔ قدیمی. صفرِ امروز سلامت است.
+        "mihomo_gate": ({cat: {"dropped": sum(getattr(r, "mihomo_fatal", {}).values()),
+                               "by_reason": dict(sorted(getattr(r, "mihomo_fatal", {}).items())),
+                               "samples": list(getattr(r, "mihomo_fatal_samples", []))}
+                         for cat, r in results.items()} if results else None),
         "converter_gate": converter_gate,
         "geo": geo_stats,
     }
@@ -970,6 +1005,25 @@ def build_health_report(
 # ──────────────────────────────────────────────────────────────────────────────
 # حافظهٔ بین‌دوره‌ای (فاز D)
 # ──────────────────────────────────────────────────────────────────────────────
+
+def source_keys(per_source: Dict[str, List[str]]) -> Dict[str, set]:
+    """مجموعهٔ کلیدهای یکتاسازیِ هر منبع (همان هویتی که خروجی با آن یکتا می‌شود).
+
+    هم `unique_yield` و هم گاردِ آینه‌ها در `state.disable_candidates` از همین
+    یک تعریف می‌خوانند تا نتوانند با هم ناسازگار شوند.
+    """
+    keys: Dict[str, set] = {}
+    for url, cfgs in per_source.items():
+        ks = set()
+        for line in cfgs:
+            try:
+                if not core.is_dummy_config(line):
+                    ks.add(core.dedup_key(line))
+            except Exception:
+                continue
+        keys[url] = ks
+    return keys
+
 
 def unique_yield(per_source: Dict[str, List[str]]) -> Tuple[Dict[str, int], Dict[str, int], int]:
     """بازدهِ **یکتا**ی هر منبع → (total, unique, union_size).
@@ -985,16 +1039,7 @@ def unique_yield(per_source: Dict[str, List[str]]) -> Tuple[Dict[str, int], Dict
     از `core.dedup_key` — همان تابعِ هویتی که خطِ لوله برای تکراری‌زدایی به‌کار
     می‌برد — استفاده می‌شود، تا این سنجه با خروجیِ واقعی هم‌داستان باشد.
     """
-    keys: Dict[str, set] = {}
-    for url, cfgs in per_source.items():
-        ks = set()
-        for line in cfgs:
-            try:
-                if not core.is_dummy_config(line):
-                    ks.add(core.dedup_key(line))
-            except Exception:
-                continue
-        keys[url] = ks
+    keys = source_keys(per_source)
 
     owners: Dict[str, int] = {}
     for ks in keys.values():
@@ -1021,7 +1066,10 @@ def advance_memory(state: dict, per_source: Dict[str, List[str]],
                for u in per_source}
         state = memory.record_round(state, obs, live_urls)
 
-        cand = memory.disable_candidates(state, uniq, union)
+        # کلیدهای هر منبع به گاردِ آینه‌ها داده می‌شود تا دو آینهٔ کامل در یک
+        # دور با هم خاموش نشوند (توضیح در `state.disable_candidates`).
+        cand = memory.disable_candidates(state, uniq, union,
+                                         keys_by_url=source_keys(per_source))
         if cand:
             state = memory.mark_disabled(state, cand)
             for url, why in cand.items():
@@ -1121,6 +1169,10 @@ def main() -> int:
                 f"rebranded={r.unbranded_rebranded}")
             for s in r.unbranded_samples:
                 log(f"       ↳ {s}")
+    for cat, r in results.items():
+        if r.mihomo_fatal:
+            log(f"  🛡️ mihomo gate [{cat}]: dropped {sum(r.mihomo_fatal.values())} "
+                f"line(s) that would empty the whole subscription — {r.mihomo_fatal}")
 
     proto_counts = write_protocols(out_dir, res_all.unique)
     log("  • protocols: " + ", ".join(f"{k}={v}" for k, v in proto_counts.items() if v))

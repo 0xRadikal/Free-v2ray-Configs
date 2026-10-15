@@ -90,8 +90,8 @@ pool, filtered by how much evidence there is that a config actually works**.
 | ⚡ **`fast`** | `verified` **and** median delay `< 800 ms` | [txt](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/fast/configs.txt) | [b64](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/fast/configs_base64.txt) | [yaml](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/fast/clash.yaml) | [json](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/fast/singbox.json) |
 | 🔐 **`secure`** | `verified` **and** forward secrecy, **and** the link does not disable cert validation | [txt](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/secure/configs.txt) | [b64](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/secure/configs_base64.txt) | [yaml](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/secure/clash.yaml) | [json](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/secure/singbox.json) |
 | 🌐 **`all`** | everything, deduplicated — largest list, mostly untested | [txt](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/all/configs.txt) | [b64](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/all/configs_base64.txt) | [yaml](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/all/clash.yaml) | [json](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/all/singbox.json) |
-| 📦 **`heavy`** | the 14 high-volume upstreams only | [txt](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/heavy/configs.txt) | [b64](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/heavy/configs_base64.txt) | [yaml](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/heavy/clash.yaml) | [json](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/heavy/singbox.json) |
-| ⭐ **`light`** | the 5 curated / speed-tested upstreams only | [txt](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/light/configs.txt) | [b64](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/light/configs_base64.txt) | [yaml](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/light/clash.yaml) | [json](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/light/singbox.json) |
+| 📦 **`heavy`** | the 5 high-volume upstreams only | [txt](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/heavy/configs.txt) | [b64](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/heavy/configs_base64.txt) | [yaml](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/heavy/clash.yaml) | [json](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/heavy/singbox.json) |
+| ⭐ **`light`** | the 8 curated / speed-tested upstreams only | [txt](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/light/configs.txt) | [b64](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/light/configs_base64.txt) | [yaml](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/light/clash.yaml) | [json](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/light/singbox.json) |
 
 **Which format?** `configs_base64.txt` is the classic subscription format and the safest
 default. `configs.txt` is the same list unencoded. `clash.yaml` is a full mihomo/Clash
@@ -350,8 +350,8 @@ verified/   configs.txt · configs_base64.txt · clash.yaml · singbox.json   pa
 fast/       configs.txt · configs_base64.txt · clash.yaml · singbox.json   verified + median < 800ms
 secure/     configs.txt · configs_base64.txt · clash.yaml · singbox.json   verified + forward secrecy
 all/        configs.txt · configs_base64.txt · clash.yaml · singbox.json   light + heavy, deduplicated
-heavy/      configs.txt · configs_base64.txt · clash.yaml · singbox.json   14 high-volume upstreams
-light/      configs.txt · configs_base64.txt · clash.yaml · singbox.json   5 curated upstreams
+heavy/      configs.txt · configs_base64.txt · clash.yaml · singbox.json   5 high-volume upstreams
+light/      configs.txt · configs_base64.txt · clash.yaml · singbox.json   8 curated upstreams
 protocols/  vless.txt · vmess.txt · trojan.txt · … (+ *_base64.txt)        split out of all/
 archive/    all_broken.txt · heavy_broken.txt (+ _base64)                  what was rejected
 top100.txt  the 100 lowest-latency verified configs
@@ -368,7 +368,7 @@ scripts/    the pipeline — core · sources · filters · converters · geo · 
 .github/    the scheduled workflow · Dependabot config · issue templates
 docs/       the live status dashboard (reads index.json / health.json in the browser)
 README.md · README_FA.md · README_ZH.md · README_RU.md
-SECURITY.md · CONTRIBUTING.md · LICENSE
+SECURITY.md · CONTRIBUTING.md · ACCESSIBILITY.md · LICENSE
 ```
 
 Two rules that are easy to miss and matter a lot:
@@ -504,7 +504,7 @@ exist.
 https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/health.json
 ```
 
-Regenerated every run. For each of the 19 sources it records `status`
+Regenerated every run. For each of the 13 sources it records `status`
 (`ok` / `empty` / `fail`), HTTP code, attempt count, latency, the yielded config count and
 the last error — so a dead or changed upstream is visible immediately instead of silently
 shrinking the output.
@@ -558,7 +558,7 @@ and falls back to the jsDelivr mirror automatically if raw is unreachable.
 
 # ⚙️ How it works
 
-1. **Fetch** — 19 sources downloaded concurrently, with automatic base64/plain detection.
+1. **Fetch** — 13 sources downloaded concurrently, with automatic base64/plain detection.
    Retries on transient errors, but fails fast on 4xx so a dead URL is *reported*, not
    silently retried forever.
 2. **Clean** — drop dummy and structurally broken entries (zero UUID,
@@ -600,13 +600,16 @@ periods. To hold a steady cadence anyway, this repository uses **three layers**:
 | 🐛 **Found a broken source or a bad config?** | Open an issue — the templates are in `.github/` |
 | 🔐 **Security policy** | [`SECURITY.md`](SECURITY.md) |
 | 📐 **Contribution guide** | [`CONTRIBUTING.md`](CONTRIBUTING.md) |
+| ♿ **Accessibility** | [`ACCESSIBILITY.md`](ACCESSIBILITY.md) — what is tested, known limits, how to report a barrier |
 | 📜 **License** | [MIT](LICENSE) |
 
 ## 🙌 Sources
 
-Thanks to every upstream maintainer. The **19 sources currently aggregated** come from
-iampedii, 4n0nymou3, mahsanet, ALIILAPRO, roosterkid, barry-far, V2RAYCONFIGSPOOL,
-ShadowException, Delta-Kronecker and Epodonios.
+Thanks to every upstream maintainer. The **13 sources currently aggregated** come from
+iampedii, 4n0nymou3, mahsanet, ALIILAPRO, Au1rxx, Danialsamadi, LalatinaHub, roosterkid, barry-far,
+ShadowException, Delta-Kronecker and Epodonios. Thanks also to V2RAYCONFIGSPOOL,
+whose 9 feeds were removed on 2026-10-15 only because the upstream repository no
+longer exists (every URL and the GitHub API return 404).
 
 Equally sincere thanks to the maintainers whose feeds this repository **used to** include
 — mahdibland, peasoft and w1770946466. They were retired on 2026-08-27 purely on

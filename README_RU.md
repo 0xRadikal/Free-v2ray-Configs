@@ -94,8 +94,8 @@ https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/verified/con
 | ⚡ **`fast`** | `verified` **и** медианная задержка `< 800 мс` | [txt](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/fast/configs.txt) | [b64](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/fast/configs_base64.txt) | [yaml](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/fast/clash.yaml) | [json](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/fast/singbox.json) |
 | 🔐 **`secure`** | `verified` **и** forward secrecy, **и** ссылка не отключает проверку сертификата | [txt](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/secure/configs.txt) | [b64](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/secure/configs_base64.txt) | [yaml](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/secure/clash.yaml) | [json](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/secure/singbox.json) |
 | 🌐 **`all`** | всё, с дедупликацией — самый большой список, в основном непроверенный | [txt](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/all/configs.txt) | [b64](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/all/configs_base64.txt) | [yaml](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/all/clash.yaml) | [json](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/all/singbox.json) |
-| 📦 **`heavy`** | только 14 объёмных источников | [txt](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/heavy/configs.txt) | [b64](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/heavy/configs_base64.txt) | [yaml](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/heavy/clash.yaml) | [json](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/heavy/singbox.json) |
-| ⭐ **`light`** | только 5 отобранных источников, прошедших тест скорости | [txt](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/light/configs.txt) | [b64](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/light/configs_base64.txt) | [yaml](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/light/clash.yaml) | [json](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/light/singbox.json) |
+| 📦 **`heavy`** | только 5 объёмных источников | [txt](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/heavy/configs.txt) | [b64](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/heavy/configs_base64.txt) | [yaml](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/heavy/clash.yaml) | [json](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/heavy/singbox.json) |
+| ⭐ **`light`** | только 8 отобранных источников, прошедших тест скорости | [txt](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/light/configs.txt) | [b64](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/light/configs_base64.txt) | [yaml](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/light/clash.yaml) | [json](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/light/singbox.json) |
 
 **Какой формат?** `configs_base64.txt` — классический формат подписки и самый безопасный
 выбор по умолчанию. `configs.txt` — тот же список без кодирования. `clash.yaml` — готовый
@@ -361,8 +361,8 @@ verified/   configs.txt · configs_base64.txt · clash.yaml · singbox.json   п
 fast/       configs.txt · configs_base64.txt · clash.yaml · singbox.json   verified + медиана < 800 мс
 secure/     configs.txt · configs_base64.txt · clash.yaml · singbox.json   verified + forward secrecy
 all/        configs.txt · configs_base64.txt · clash.yaml · singbox.json   light + heavy, с дедупликацией
-heavy/      configs.txt · configs_base64.txt · clash.yaml · singbox.json   14 объёмных источников
-light/      configs.txt · configs_base64.txt · clash.yaml · singbox.json   5 отобранных источников
+heavy/      configs.txt · configs_base64.txt · clash.yaml · singbox.json   5 объёмных источников
+light/      configs.txt · configs_base64.txt · clash.yaml · singbox.json   8 отобранных источников
 protocols/  vless.txt · vmess.txt · trojan.txt · … (+ *_base64.txt)        выделено из all/
 archive/    all_broken.txt · heavy_broken.txt (+ _base64)                  что было отвергнуто
 top100.txt  100 verified-конфигов с наименьшей задержкой
@@ -379,7 +379,7 @@ scripts/    конвейер — core · sources · filters · converters · geo
 .github/    workflow по расписанию · конфиг Dependabot · шаблоны issue
 docs/       живая панель состояния (читает index.json / health.json в браузере)
 README.md · README_FA.md · README_ZH.md · README_RU.md
-SECURITY.md · CONTRIBUTING.md · LICENSE
+SECURITY.md · CONTRIBUTING.md · ACCESSIBILITY.md · LICENSE
 ```
 
 Два правила, которые легко упустить и которые важны:
@@ -510,7 +510,7 @@ https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/index.json
 https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/health.json
 ```
 
-Пересоздаётся при каждом запуске. Для каждого из 19 источников записываются `status`
+Пересоздаётся при каждом запуске. Для каждого из 13 источников записываются `status`
 (`ok` / `empty` / `fail`), код HTTP, число попыток, задержка, количество выданных
 конфигов и последняя ошибка — поэтому мёртвый или изменившийся источник виден сразу, а не
 молча уменьшает вывод.
@@ -563,7 +563,7 @@ https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/health.json
 
 # ⚙️ Как это работает
 
-1. **Загрузка** — 19 источников скачиваются параллельно, с автоопределением base64/простого
+1. **Загрузка** — 13 источников скачиваются параллельно, с автоопределением base64/простого
    текста. Повторы при временных ошибках, но быстрый отказ на 4xx, чтобы мёртвый URL был
    *отражён в отчёте*, а не молча опрашивался вечно.
 2. **Очистка** — отбрасываются пустышки и структурно битые записи (нулевой UUID,
@@ -607,6 +607,7 @@ Cron в `schedule:` у GitHub работает «по возможности» �
 | 🐛 **Нашли битый источник или плохой конфиг?** | Откройте issue — шаблоны лежат в `.github/` |
 | 🔐 **Политика безопасности** | [`SECURITY.md`](SECURITY.md) |
 | 📐 **Руководство для участников** | [`CONTRIBUTING.md`](CONTRIBUTING.md) |
+| ♿ **Доступность** | [`ACCESSIBILITY.md`](ACCESSIBILITY.md) — что проверено, известные ограничения, как сообщить о барьере |
 | 📜 **Лицензия** | [MIT](LICENSE) |
 
 ## 🙌 Источники
