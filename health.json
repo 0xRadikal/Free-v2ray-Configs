@@ -1,13 +1,13 @@
 {
   "brand": "@Raydikalx",
-  "checked_at": "2026-09-18T14:35:18.636785+00:00",
-  "checked_at_unix": 1789742118,
-  "elapsed_seconds": 23.5,
+  "checked_at": "2026-10-15T21:52:42.797955+00:00",
+  "checked_at_unix": 1792101162,
+  "elapsed_seconds": 21.0,
   "summary": {
     "total": 19,
-    "ok": 8,
+    "ok": 7,
     "empty": 0,
-    "fail": 0,
+    "fail": 1,
     "disabled": 11,
     "unknown": 0
   },
@@ -17,20 +17,20 @@
       "tier": "light",
       "name": "base64.txt",
       "status": "ok",
-      "count": 269,
+      "count": 190,
       "http_code": 200,
       "attempts": 1,
-      "latency_ms": 309
+      "latency_ms": 200
     },
     {
       "url": "https://raw.githubusercontent.com/4n0nymou3/multi-proxy-config-fetcher/refs/heads/main/configs/proxy_configs.txt",
       "tier": "light",
       "name": "proxy_configs.txt",
       "status": "ok",
-      "count": 176,
+      "count": 233,
       "http_code": 200,
       "attempts": 1,
-      "latency_ms": 237
+      "latency_ms": 174
     },
     {
       "url": "https://raw.githubusercontent.com/mahsanet/MahsaFreeConfig/refs/heads/main/mci/sub_1.txt",
@@ -53,10 +53,10 @@
       "tier": "light",
       "name": "server.txt",
       "status": "ok",
-      "count": 2366,
+      "count": 3245,
       "http_code": 200,
       "attempts": 1,
-      "latency_ms": 359
+      "latency_ms": 460
     },
     {
       "url": "https://raw.githubusercontent.com/roosterkid/openproxylist/refs/heads/main/V2RAY_RAW.txt",
@@ -66,17 +66,17 @@
       "count": 150,
       "http_code": 200,
       "attempts": 1,
-      "latency_ms": 201
+      "latency_ms": 164
     },
     {
       "url": "https://raw.githubusercontent.com/barry-far/V2ray-Config/refs/heads/main/All_Configs_base64_Sub.txt",
       "tier": "heavy",
       "name": "All_Configs_base64_Sub.txt",
       "status": "ok",
-      "count": 7804,
+      "count": 7716,
       "http_code": 200,
       "attempts": 1,
-      "latency_ms": 827
+      "latency_ms": 615
     },
     {
       "url": "https://raw.githubusercontent.com/V2RAYCONFIGSPOOL/V2RAY_SUB/refs/heads/main/v2ray_configs_no1.txt",
@@ -122,11 +122,12 @@
       "url": "https://raw.githubusercontent.com/V2RAYCONFIGSPOOL/V2RAY_SUB/refs/heads/main/v2ray_configs_no6.txt",
       "tier": "heavy",
       "name": "v2ray_configs_no6.txt",
-      "status": "ok",
-      "count": 10,
-      "http_code": 200,
+      "status": "fail",
+      "count": 0,
+      "http_code": 404,
       "attempts": 1,
-      "latency_ms": 275
+      "latency_ms": 151,
+      "error": "HTTP 404"
     },
     {
       "url": "https://raw.githubusercontent.com/V2RAYCONFIGSPOOL/V2RAY_SUB/refs/heads/main/v2ray_configs_no7.txt",
@@ -157,20 +158,20 @@
       "tier": "heavy",
       "name": "VPN-cat",
       "status": "ok",
-      "count": 39,
+      "count": 143,
       "http_code": 200,
       "attempts": 1,
-      "latency_ms": 189
+      "latency_ms": 174
     },
     {
       "url": "https://raw.githubusercontent.com/Delta-Kronecker/V2ray-Config/refs/heads/main/config/all_configs.txt",
       "tier": "heavy",
       "name": "all_configs.txt",
       "status": "ok",
-      "count": 7744,
+      "count": 6686,
       "http_code": 200,
       "attempts": 1,
-      "latency_ms": 539
+      "latency_ms": 1153
     },
     {
       "url": "https://raw.githubusercontent.com/Epodonios/v2ray-configs/main/All_Configs_Sub.txt",
@@ -183,119 +184,107 @@
   ],
   "converters": {
     "clash": {
-      "total": 501,
+      "total": 468,
       "by_reason": {
-        "invalid_server": 10,
-        "not_expressible": 3,
-        "unparsable": 474,
-        "unroutable_server": 14
+        "invalid_server": 5,
+        "not_expressible": 2,
+        "unparsable": 449,
+        "unroutable_server": 12
       },
       "by_protocol": {
-        "ss": 432,
-        "vmess": 50,
-        "vless": 7,
-        "trojan": 6,
-        "shadowsocks": 2,
-        "socks": 2,
-        "anytls": 1,
-        "hy2": 1
+        "ss": 410,
+        "vmess": 46,
+        "vless": 6,
+        "socks": 4,
+        "hysteria2": 1,
+        "trojan": 1
       }
     },
     "singbox": {
-      "total": 949,
+      "total": 951,
       "by_reason": {
-        "invalid_server": 10,
-        "not_expressible": 451,
-        "unparsable": 474,
-        "unroutable_server": 14
+        "invalid_server": 5,
+        "not_expressible": 485,
+        "unparsable": 449,
+        "unroutable_server": 12
       },
       "by_protocol": {
-        "ss": 432,
-        "vless": 420,
-        "vmess": 80,
-        "trojan": 11,
-        "shadowsocks": 2,
-        "socks": 2,
-        "anytls": 1,
-        "hy2": 1
+        "vless": 446,
+        "ss": 410,
+        "vmess": 87,
+        "socks": 4,
+        "trojan": 3,
+        "hysteria2": 1
       }
     }
   },
   "converters_by_category": {
     "all": {
       "clash": {
-        "total": 501,
+        "total": 468,
         "by_reason": {
-          "invalid_server": 10,
-          "not_expressible": 3,
-          "unparsable": 474,
-          "unroutable_server": 14
+          "invalid_server": 5,
+          "not_expressible": 2,
+          "unparsable": 449,
+          "unroutable_server": 12
         },
         "by_protocol": {
-          "ss": 432,
-          "vmess": 50,
-          "vless": 7,
-          "trojan": 6,
-          "shadowsocks": 2,
-          "socks": 2,
-          "anytls": 1,
-          "hy2": 1
+          "ss": 410,
+          "vmess": 46,
+          "vless": 6,
+          "socks": 4,
+          "hysteria2": 1,
+          "trojan": 1
         }
       },
       "singbox": {
-        "total": 949,
+        "total": 951,
         "by_reason": {
-          "invalid_server": 10,
-          "not_expressible": 451,
-          "unparsable": 474,
-          "unroutable_server": 14
+          "invalid_server": 5,
+          "not_expressible": 485,
+          "unparsable": 449,
+          "unroutable_server": 12
         },
         "by_protocol": {
-          "ss": 432,
-          "vless": 420,
-          "vmess": 80,
-          "trojan": 11,
-          "shadowsocks": 2,
-          "socks": 2,
-          "anytls": 1,
-          "hy2": 1
+          "vless": 446,
+          "ss": 410,
+          "vmess": 87,
+          "socks": 4,
+          "trojan": 3,
+          "hysteria2": 1
         }
       }
     },
     "heavy": {
       "clash": {
-        "total": 485,
+        "total": 454,
         "by_reason": {
-          "invalid_server": 6,
-          "not_expressible": 3,
-          "unparsable": 472,
-          "unroutable_server": 4
+          "not_expressible": 2,
+          "unparsable": 450,
+          "unroutable_server": 2
         },
         "by_protocol": {
-          "ss": 430,
-          "vmess": 38,
-          "vless": 7,
-          "trojan": 6,
-          "shadowsocks": 2,
-          "hy2": 1,
-          "socks": 1
+          "ss": 412,
+          "vmess": 34,
+          "vless": 5,
+          "hysteria2": 1,
+          "socks": 1,
+          "trojan": 1
         }
       },
       "singbox": {
-        "total": 887,
+        "total": 879,
         "by_reason": {
-          "invalid_server": 6,
-          "not_expressible": 405,
-          "unparsable": 472,
-          "unroutable_server": 4
+          "not_expressible": 427,
+          "unparsable": 450,
+          "unroutable_server": 2
         },
         "by_protocol": {
-          "ss": 430,
-          "vless": 401,
-          "vmess": 41,
-          "trojan": 11,
-          "shadowsocks": 2,
-          "hy2": 1,
+          "vless": 426,
+          "ss": 412,
+          "vmess": 36,
+          "trojan": 3,
+          "hysteria2": 1,
           "socks": 1
         }
       }
@@ -304,31 +293,28 @@
       "clash": {
         "total": 18,
         "by_reason": {
-          "invalid_server": 4,
-          "unparsable": 4,
+          "invalid_server": 5,
+          "unparsable": 3,
           "unroutable_server": 10
         },
         "by_protocol": {
           "vmess": 14,
-          "ss": 2,
-          "anytls": 1,
-          "socks": 1
+          "socks": 3,
+          "vless": 1
         }
       },
       "singbox": {
-        "total": 106,
+        "total": 104,
         "by_reason": {
-          "invalid_server": 4,
-          "not_expressible": 88,
-          "unparsable": 4,
+          "invalid_server": 5,
+          "not_expressible": 86,
+          "unparsable": 3,
           "unroutable_server": 10
         },
         "by_protocol": {
-          "vless": 58,
-          "vmess": 44,
-          "ss": 2,
-          "anytls": 1,
-          "socks": 1
+          "vmess": 55,
+          "vless": 46,
+          "socks": 3
         }
       }
     }
@@ -353,70 +339,70 @@
   "converter_gate": {},
   "geo": {
     "db_loaded": 1,
-    "by_ip_literal": 4438,
-    "unknown_ip_literal": 3,
-    "by_dns": 2020,
-    "dns_failed": 407,
-    "unknown_after_dns": 1,
+    "by_ip_literal": 4376,
+    "unknown_ip_literal": 2,
+    "by_dns": 2178,
+    "dns_failed": 489,
+    "unknown_after_dns": 3,
     "skipped_no_db": 0,
-    "hosts_resolved": 6458,
-    "hosts_unknown": 411
+    "hosts_resolved": 6554,
+    "hosts_unknown": 494
   },
   "cascade": {
     "exit_country": {
-      "colo": "SJC",
+      "colo": "ORD",
       "loc": "US",
       "source": "https://cp.cloudflare.com/cdn-cgi/trace"
     },
     "layers": {
       "l0_l1": {
-        "in": 12077,
-        "out": 11578,
+        "in": 12115,
+        "out": 11649,
         "dropped": {
-          "unparsable": 474,
-          "invalid_port": 7,
-          "invalid_uuid": 1,
-          "unroutable_server": 14,
-          "invalid_server": 3
+          "unparsable": 449,
+          "invalid_port": 1,
+          "invalid_uuid": 0,
+          "unroutable_server": 12,
+          "invalid_server": 4
         },
-        "endpoints_unique": 7588,
-        "dedup_saving_pct": 34.46,
-        "seconds": 0.6
+        "endpoints_unique": 7603,
+        "dedup_saving_pct": 34.73,
+        "seconds": 0.29
       },
       "l2": {
-        "in": 11578,
-        "out": 9048,
-        "open_pct": 78.15,
-        "open_pct_of_raw_input": 74.92,
-        "dns_failed": 388,
-        "dns_seconds": 19.07,
-        "tcp_seconds": 7.34,
+        "in": 11649,
+        "out": 8520,
+        "open_pct": 73.14,
+        "open_pct_of_raw_input": 70.33,
+        "dns_failed": 448,
+        "dns_seconds": 21.68,
+        "tcp_seconds": 8.15,
         "fd_before": 6,
         "fd_after": 6,
-        "seconds": 27.04
+        "seconds": 30.14
       },
       "l3": {
-        "in": 9048,
+        "in": 8520,
         "rounds": 3,
         "per_run_ok": [
-          1472,
-          1504,
-          1482
+          1242,
+          1252,
+          1248
         ],
-        "ever_ok": 1716,
-        "stable": 1227,
-        "flaky_pct": 28.5,
-        "seconds": 262.05
+        "ever_ok": 1400,
+        "stable": 1071,
+        "flaky_pct": 23.5,
+        "seconds": 243.09
       }
     },
     "buckets": {
-      "verified": 1227,
-      "fast": 810,
-      "secure": 718,
+      "verified": 1071,
+      "fast": 550,
+      "secure": 795,
       "top": 100,
       "top_short_by": 0,
       "fast_threshold_ms": 800
     },
-    "total_seconds": 290.51
+    "total_seconds": 273.95
   }
 }
