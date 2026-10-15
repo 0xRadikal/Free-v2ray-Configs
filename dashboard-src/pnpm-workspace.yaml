@@ -38,3 +38,23 @@ allowBuilds:
 # `pnpm.overrides` block there would be silently ignored.
 overrides:
   minimist: ^1.2.8
+
+  # --- GHSA-rj75-hqrm-r3gf / CVE-2026-104844 (MEDIUM, CPU exhaustion) ---
+  # postcss-selector-parser < 7.1.6 parses flat selectors (`.a.a.a…`) in O(n²).
+  # Reaches this tree only as a devDependency of tailwindcss 3.4.1, which pins
+  # `^6.0.11` (and postcss-nested `^6.1.1`), so neither Dependabot nor a
+  # tailwind 3.x upgrade can lift it: there is no fixed 6.x release (6.1.4 is
+  # the last). Forcing 7.1.6 under tailwind 3 was verified before adoption:
+  #   * tailwind output on a stress set of variant/arbitrary selectors is
+  #     byte-identical between 6.1.4 and 7.1.6 (negative control: a one-class
+  #     input change does change it, so the comparison is sensitive);
+  #   * the full `pnpm run bundle` reproduces docs/index.html and the CSS
+  #     byte-for-byte;
+  #   * 40k-class flat selector: 1667 ms on 6.1.4 → 146 ms on 7.1.6.
+  postcss-selector-parser@<7.1.6: 7.1.6
+  # --- GHSA-2v37-7h3g-55p8 / CVE-2026-67213 (HIGH, infinite loop) ---
+  # nanoid < 3.3.18 loops forever in customAlphabet/customRandom with size 0.
+  # Reaches this tree only via postcss (`nanoid: ^3.3.16`), so a 3.x patch
+  # stays inside the range postcss asks for. Dependabot had auto-dismissed it
+  # (development scope) while 3.3.16 was still in the lockfile.
+  nanoid@<3.3.18: ^3.3.18
