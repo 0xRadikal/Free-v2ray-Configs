@@ -685,7 +685,7 @@ TYBumju6Mjd8JCn4RTq95Kk2HPsdcinuz5
 **Сети EVM — Ethereum, BSC, Polygon, Arbitrum, Base, …**
 
 ```text
-0x2F6ec47e416B42C623cF81a64266EE4910a698Cf
+0x4A0579eb11de7f80F719C9a4Df6CD39510400E02
 ```
 
 **TON — The Open Network**

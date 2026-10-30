@@ -608,6 +608,9 @@ def main() -> None:
     donate_qrs()
     divider()
     social()
+    # Restore the reviewed Raydikalx design after the upstream asset generator.
+    import make_brand_assets
+    make_brand_assets.main()
     print("done")
 
 
@@ -630,7 +633,7 @@ TON_BLUE = "#0098EA"
 DONATE_TARGETS = [
     ("qr-donate-trc20.svg", "TYBumju6Mjd8JCn4RTq95Kk2HPsdcinuz5",
      "TRC20", "Tron network", TRON_RED, "Donate on the TRON TRC20 network"),
-    ("qr-donate-evm.svg", "0x2F6ec47e416B42C623cF81a64266EE4910a698Cf",
+    ("qr-donate-evm.svg", "0x4A0579eb11de7f80F719C9a4Df6CD39510400E02",
      "EVM chains", "ETH · BSC · Polygon", VIOLET, "Donate on any EVM network"),
     ("qr-donate-ton.svg", "UQBbZrE5aDsdGVi6enpf_vPuG022W4KjkJNzTDkjVEn4gmu6",
      "TON", "The Open Network", TON_BLUE, "Donate on The Open Network"),
