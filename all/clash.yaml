@@ -17772,6 +17772,18 @@ proxies:
     path: /assignment
     headers:
       Host: www.pleadcourt.org
+- name: "HK \U0001F1ED\U0001F1F0 | @Raydikalx | 0BFE4A"
+  server: 219.76.13.177
+  port: 443
+  type: trojan
+  password: humanity
+  udp: true
+  sni: www.pleadcourt.org
+  network: ws
+  ws-opts:
+    path: /assignment
+    headers:
+      Host: www.pleadcourt.org
 - name: "HK \U0001F1ED\U0001F1F0 | @Raydikalx | E811F1"
   server: 219.76.13.177
   port: 443
@@ -21543,6 +21555,13 @@ proxies:
   password: XuMweB2PWs
   udp: true
   sni: 2.27.109.179.sslip.io
+  network: tcp
+- name: "HK \U0001F1ED\U0001F1F0 | @Raydikalx | 4D6B16"
+  server: 2.27.109.179
+  port: 45464
+  type: trojan
+  password: XuMweB2PWs
+  udp: true
   network: tcp
 - name: "HK \U0001F1ED\U0001F1F0 | @Raydikalx | 73C465"
   server: 2.27.109.179
@@ -30933,6 +30952,19 @@ proxies:
     short-id: e915
   client-fingerprint: chrome
   network: tcp
+- name: "SG \U0001F1F8\U0001F1EC | @Raydikalx | AA9F76"
+  server: 178.94.25.73
+  port: 14430
+  type: vless
+  uuid: 2dacc738-5720-4824-b8bc-e3db57596ba7
+  udp: true
+  tls: false
+  servername: 178.94.25.73
+  network: ws
+  ws-opts:
+    path: /vless
+    headers:
+      Host: 178.94.25.73
 - name: "IR \U0001F1EE\U0001F1F7 | @Raydikalx | 33B863"
   server: 89.42.196.237
   port: 2030
@@ -41338,7 +41370,7 @@ proxies:
     short-id: ''
   client-fingerprint: chrome
   network: tcp
-- name: "US \U0001F1FA\U0001F1F8 | @Raydikalx | BA0A66"
+- name: "SE \U0001F1F8\U0001F1EA | @Raydikalx | BA0A66"
   server: swidenafterlanzerotte.space
   port: 443
   type: vless
@@ -55358,7 +55390,7 @@ proxies:
     short-id: 945974883e
   client-fingerprint: chrome
   network: tcp
-- name: "CZ \U0001F1E8\U0001F1FF | @Raydikalx | 092FF3"
+- name: "DE \U0001F1E9\U0001F1EA | @Raydikalx | 092FF3"
   server: cdn7-39.vk-cdnvideo.com
   port: 8443
   type: vless
@@ -56472,21 +56504,6 @@ proxies:
     public-key: pAgrBKJCmuSJHIzYkEJTqsOBOVBK_DMtEqFPo-PaTkg
     short-id: b3c9d0c6bdd114a6
   client-fingerprint: chrome
-  network: grpc
-  grpc-opts:
-    grpc-service-name: 0adb9638509b
-- name: "FI \U0001F1EB\U0001F1EE | @Raydikalx | 75B681"
-  server: 36a466g.fi1.h1clayd.click
-  port: 443
-  type: vless
-  uuid: 9a0e84f8-4b58-477f-99da-5fac5a2e58e8
-  udp: true
-  tls: true
-  servername: 36a466g.fi1.h1clayd.click
-  reality-opts:
-    public-key: pAgrBKJCmuSJHIzYkEJTqsOBOVBK_DMtEqFPo-PaTkg
-    short-id: b3c9d0c6bdd114a6
-  client-fingerprint: qq
   network: grpc
   grpc-opts:
     grpc-service-name: 0adb9638509b
@@ -60890,6 +60907,20 @@ proxies:
   reality-opts:
     public-key: MMpt_jWc4J3oySBdf5sPDVRkiWlZmOObth6A1scM9BM
     short-id: ''
+  client-fingerprint: chrome
+  network: tcp
+- name: "NL \U0001F1F3\U0001F1F1 | @Raydikalx | 70B5D4"
+  server: cz-prg.dontblockmepls.com
+  port: 2063
+  type: vless
+  uuid: b18d5990-96eb-4587-a386-7f8ef7591e6a
+  udp: true
+  tls: true
+  flow: xtls-rprx-vision
+  servername: rusbid.de
+  reality-opts:
+    public-key: MMpt_jWc4J3oySBdf5sPDVRkiWlZmOObth6A1scM9BM
+    short-id: ''
   client-fingerprint: firefox
   network: tcp
 - name: "NL \U0001F1F3\U0001F1F1 | @Raydikalx | 4C030A"
@@ -64257,7 +64288,6 @@ proxies:
   udp: true
   tls: true
   servername: ty986gfazs.cainiaohub.xyz
-  client-fingerprint: chrome
   network: ws
   ws-opts:
     path: /81574b6b-c9d7-44a0-b83d-dad56e8cb530
@@ -75935,7 +75965,6 @@ proxies:
   udp: true
   tls: true
   servername: sg003.zestapp778.com
-  client-fingerprint: firefox
   network: tcp
 - name: "CA \U0001F1E8\U0001F1E6 | @Raydikalx | 00EE7B"
   server: ca001.zestapp778.com
@@ -128498,6 +128527,7 @@ proxy-groups:
   - "ES \U0001F1EA\U0001F1F8 | @Raydikalx | 98638A"
   - "LT \U0001F1F1\U0001F1F9 | @Raydikalx | 46A7F8"
   - "ES \U0001F1EA\U0001F1F8 | @Raydikalx | 8FF61D"
+  - "HK \U0001F1ED\U0001F1F0 | @Raydikalx | 0BFE4A"
   - "HK \U0001F1ED\U0001F1F0 | @Raydikalx | E811F1"
   - "GB \U0001F1EC\U0001F1E7 | @Raydikalx | 484921"
   - "CZ \U0001F1E8\U0001F1FF | @Raydikalx | 3A4EDC"
@@ -128861,6 +128891,7 @@ proxy-groups:
   - "JP \U0001F1EF\U0001F1F5 | @Raydikalx | 74ACBD"
   - "NL \U0001F1F3\U0001F1F1 | @Raydikalx | DC2E32"
   - "HK \U0001F1ED\U0001F1F0 | @Raydikalx | E00C21"
+  - "HK \U0001F1ED\U0001F1F0 | @Raydikalx | 4D6B16"
   - "HK \U0001F1ED\U0001F1F0 | @Raydikalx | 73C465"
   - "HK \U0001F1ED\U0001F1F0 | @Raydikalx | E9B264"
   - "SE \U0001F1F8\U0001F1EA | @Raydikalx | 462882"
@@ -129584,6 +129615,7 @@ proxy-groups:
   - "FI \U0001F1EB\U0001F1EE | @Raydikalx | 3028E3"
   - "BG \U0001F1E7\U0001F1EC | @Raydikalx | 19C6C6"
   - "BG \U0001F1E7\U0001F1EC | @Raydikalx | 295158"
+  - "SG \U0001F1F8\U0001F1EC | @Raydikalx | AA9F76"
   - "IR \U0001F1EE\U0001F1F7 | @Raydikalx | 33B863"
   - "NL \U0001F1F3\U0001F1F1 | @Raydikalx | CEF21C"
   - "CA \U0001F1E8\U0001F1E6 | @Raydikalx | 45CB38"
@@ -130365,7 +130397,7 @@ proxy-groups:
   - "US \U0001F1FA\U0001F1F8 | @Raydikalx | 79D38F"
   - "US \U0001F1FA\U0001F1F8 | @Raydikalx | 970B2E"
   - "US \U0001F1FA\U0001F1F8 | @Raydikalx | 4820A7"
-  - "US \U0001F1FA\U0001F1F8 | @Raydikalx | BA0A66"
+  - "SE \U0001F1F8\U0001F1EA | @Raydikalx | BA0A66"
   - "DE \U0001F1E9\U0001F1EA | @Raydikalx | 7E8CE1"
   - "IR \U0001F1EE\U0001F1F7 | @Raydikalx | 5CA3E3"
   - "DE \U0001F1E9\U0001F1EA | @Raydikalx | 3BE742"
@@ -131434,7 +131466,7 @@ proxy-groups:
   - "RU \U0001F1F7\U0001F1FA | @Raydikalx | 9D22AD"
   - "NL \U0001F1F3\U0001F1F1 | @Raydikalx | 0710A7"
   - "HK \U0001F1ED\U0001F1F0 | @Raydikalx | 66117E"
-  - "CZ \U0001F1E8\U0001F1FF | @Raydikalx | 092FF3"
+  - "DE \U0001F1E9\U0001F1EA | @Raydikalx | 092FF3"
   - "GB \U0001F1EC\U0001F1E7 | @Raydikalx | 38D973"
   - "Global \U0001F310 | @Raydikalx | C80870"
   - "Global \U0001F310 | @Raydikalx | A75A33"
@@ -131520,7 +131552,6 @@ proxy-groups:
   - "SG \U0001F1F8\U0001F1EC | @Raydikalx | 724C70"
   - "FI \U0001F1EB\U0001F1EE | @Raydikalx | E1D32C"
   - "FI \U0001F1EB\U0001F1EE | @Raydikalx | 8E870F"
-  - "FI \U0001F1EB\U0001F1EE | @Raydikalx | 75B681"
   - "FI \U0001F1EB\U0001F1EE | @Raydikalx | 233711"
   - "NL \U0001F1F3\U0001F1F1 | @Raydikalx | 7E1FEC"
   - "NL \U0001F1F3\U0001F1F1 | @Raydikalx | 4DF65A"
@@ -131859,6 +131890,7 @@ proxy-groups:
   - "DE \U0001F1E9\U0001F1EA | @Raydikalx | BE361E"
   - "SG \U0001F1F8\U0001F1EC | @Raydikalx | 6E1FEC"
   - "NL \U0001F1F3\U0001F1F1 | @Raydikalx | BA5100"
+  - "NL \U0001F1F3\U0001F1F1 | @Raydikalx | 70B5D4"
   - "NL \U0001F1F3\U0001F1F1 | @Raydikalx | 4C030A"
   - "NL \U0001F1F3\U0001F1F1 | @Raydikalx | F2EE8A"
   - "NL \U0001F1F3\U0001F1F1 | @Raydikalx | C2D8E0"
@@ -139160,6 +139192,7 @@ proxy-groups:
   - "ES \U0001F1EA\U0001F1F8 | @Raydikalx | 98638A"
   - "LT \U0001F1F1\U0001F1F9 | @Raydikalx | 46A7F8"
   - "ES \U0001F1EA\U0001F1F8 | @Raydikalx | 8FF61D"
+  - "HK \U0001F1ED\U0001F1F0 | @Raydikalx | 0BFE4A"
   - "HK \U0001F1ED\U0001F1F0 | @Raydikalx | E811F1"
   - "GB \U0001F1EC\U0001F1E7 | @Raydikalx | 484921"
   - "CZ \U0001F1E8\U0001F1FF | @Raydikalx | 3A4EDC"
@@ -139523,6 +139556,7 @@ proxy-groups:
   - "JP \U0001F1EF\U0001F1F5 | @Raydikalx | 74ACBD"
   - "NL \U0001F1F3\U0001F1F1 | @Raydikalx | DC2E32"
   - "HK \U0001F1ED\U0001F1F0 | @Raydikalx | E00C21"
+  - "HK \U0001F1ED\U0001F1F0 | @Raydikalx | 4D6B16"
   - "HK \U0001F1ED\U0001F1F0 | @Raydikalx | 73C465"
   - "HK \U0001F1ED\U0001F1F0 | @Raydikalx | E9B264"
   - "SE \U0001F1F8\U0001F1EA | @Raydikalx | 462882"
@@ -140246,6 +140280,7 @@ proxy-groups:
   - "FI \U0001F1EB\U0001F1EE | @Raydikalx | 3028E3"
   - "BG \U0001F1E7\U0001F1EC | @Raydikalx | 19C6C6"
   - "BG \U0001F1E7\U0001F1EC | @Raydikalx | 295158"
+  - "SG \U0001F1F8\U0001F1EC | @Raydikalx | AA9F76"
   - "IR \U0001F1EE\U0001F1F7 | @Raydikalx | 33B863"
   - "NL \U0001F1F3\U0001F1F1 | @Raydikalx | CEF21C"
   - "CA \U0001F1E8\U0001F1E6 | @Raydikalx | 45CB38"
@@ -141027,7 +141062,7 @@ proxy-groups:
   - "US \U0001F1FA\U0001F1F8 | @Raydikalx | 79D38F"
   - "US \U0001F1FA\U0001F1F8 | @Raydikalx | 970B2E"
   - "US \U0001F1FA\U0001F1F8 | @Raydikalx | 4820A7"
-  - "US \U0001F1FA\U0001F1F8 | @Raydikalx | BA0A66"
+  - "SE \U0001F1F8\U0001F1EA | @Raydikalx | BA0A66"
   - "DE \U0001F1E9\U0001F1EA | @Raydikalx | 7E8CE1"
   - "IR \U0001F1EE\U0001F1F7 | @Raydikalx | 5CA3E3"
   - "DE \U0001F1E9\U0001F1EA | @Raydikalx | 3BE742"
@@ -142096,7 +142131,7 @@ proxy-groups:
   - "RU \U0001F1F7\U0001F1FA | @Raydikalx | 9D22AD"
   - "NL \U0001F1F3\U0001F1F1 | @Raydikalx | 0710A7"
   - "HK \U0001F1ED\U0001F1F0 | @Raydikalx | 66117E"
-  - "CZ \U0001F1E8\U0001F1FF | @Raydikalx | 092FF3"
+  - "DE \U0001F1E9\U0001F1EA | @Raydikalx | 092FF3"
   - "GB \U0001F1EC\U0001F1E7 | @Raydikalx | 38D973"
   - "Global \U0001F310 | @Raydikalx | C80870"
   - "Global \U0001F310 | @Raydikalx | A75A33"
@@ -142182,7 +142217,6 @@ proxy-groups:
   - "SG \U0001F1F8\U0001F1EC | @Raydikalx | 724C70"
   - "FI \U0001F1EB\U0001F1EE | @Raydikalx | E1D32C"
   - "FI \U0001F1EB\U0001F1EE | @Raydikalx | 8E870F"
-  - "FI \U0001F1EB\U0001F1EE | @Raydikalx | 75B681"
   - "FI \U0001F1EB\U0001F1EE | @Raydikalx | 233711"
   - "NL \U0001F1F3\U0001F1F1 | @Raydikalx | 7E1FEC"
   - "NL \U0001F1F3\U0001F1F1 | @Raydikalx | 4DF65A"
@@ -142521,6 +142555,7 @@ proxy-groups:
   - "DE \U0001F1E9\U0001F1EA | @Raydikalx | BE361E"
   - "SG \U0001F1F8\U0001F1EC | @Raydikalx | 6E1FEC"
   - "NL \U0001F1F3\U0001F1F1 | @Raydikalx | BA5100"
+  - "NL \U0001F1F3\U0001F1F1 | @Raydikalx | 70B5D4"
   - "NL \U0001F1F3\U0001F1F1 | @Raydikalx | 4C030A"
   - "NL \U0001F1F3\U0001F1F1 | @Raydikalx | F2EE8A"
   - "NL \U0001F1F3\U0001F1F1 | @Raydikalx | C2D8E0"
