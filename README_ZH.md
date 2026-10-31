@@ -66,6 +66,51 @@ https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/verified/con
 
 <img alt="" src="https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/assets/divider.svg">
 
+## 🧩 姊妹项目 —— Free Telegram Proxy
+
+<a href="https://github.com/0xRadikal/Free-Telegram-Proxy"><picture><source media="(max-width: 600px)" srcset="https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/assets/promo-proxy-mobile.svg" /><img src="https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/assets/promo-proxy.svg" width="100%" alt="姊妹项目 Free Telegram Proxy：免费的 Telegram MTProto 代理，经过三轮验证 —— 在 GitHub 上打开" /></picture></a>
+
+<div align="center">
+
+  <a href="https://github.com/0xRadikal/Free-Telegram-Proxy"><img alt="Free-Telegram-Proxy 星标" src="https://img.shields.io/github/stars/0xRadikal/Free-Telegram-Proxy?style=for-the-badge&amp;color=FBBF24&amp;logo=github&amp;label=Free-Telegram-Proxy" /></a>
+  <a href="https://raw.githubusercontent.com/0xRadikal/Free-Telegram-Proxy/main/index.json"><img alt="已验证的 Telegram 代理" src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2F0xRadikal%2FFree-Telegram-Proxy%2Fmain%2Findex.json&amp;query=%24.funnel.verified_links&amp;label=verified%20links&amp;color=16a34a&amp;style=for-the-badge" /></a>
+  <a href="https://raw.githubusercontent.com/0xRadikal/Free-Telegram-Proxy/main/index.json"><img alt="Telegram 代理服务器" src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2F0xRadikal%2FFree-Telegram-Proxy%2Fmain%2Findex.json&amp;query=%24.funnel.verified_servers&amp;label=real%20servers&amp;color=247EFD&amp;style=for-the-badge" /></a>
+
+</div>
+
+V2Ray 配置能承载整台设备的流量，但需要一个客户端应用。如果你只需要 **Telegram**，同一位作者还维护着
+**[Free-Telegram-Proxy](https://github.com/0xRadikal/Free-Telegram-Proxy)**（英文 README）—— 遵循同样的原则：从公开来源汇总、去重，每个代理都经过
+**三轮**验证（把一个真实请求转发到 Telegram 数据中心），大约每 15 分钟在 `main` 上发布一次，并有自己的
+[实时面板](https://0xradikal.github.io/Free-Telegram-Proxy/)：每一行都能直接在 Telegram 中打开 ——
+无需额外应用。最短路径：
+
+```text
+https://raw.githubusercontent.com/0xRadikal/Free-Telegram-Proxy/main/top100.txt
+```
+
+<details>
+<summary><b>V2Ray 配置还是 Telegram 代理 —— 我需要哪一个？</b></summary>
+
+| | Free V2Ray Configs（本仓库） | Free Telegram Proxy |
+|:--|:--|:--|
+| **承载** | 经由客户端的整台设备或应用的全部流量 | 仅 Telegram 流量 |
+| **协议** | VLESS、VMess、Trojan、Shadowsocks、Hysteria2、TUIC、… | MTProto —— 经典、`dd`、`ee`（FakeTLS） |
+| **你需要** | 一个客户端，如 v2rayNG、Hiddify、NekoBox、v2rayN、Clash Meta 或 Shadowrocket | 只需 Telegram |
+| **工作证明** | 通过代理发出的真实 HTTP 请求，3 轮；Clash 与 sing-box 文件由真实的、版本固定的 `sing-box` 与 `mihomo` 二进制检查 | `req_pq_multi` 转发到 Telegram 数据中心，3 轮 |
+| **格式** | `configs.txt` · `configs_base64.txt` · `clash.yaml` · `singbox.json` | `tg.txt` · `tme.txt` · `proxies.json` |
+
+每个不同的已验证服务器，每个服务器 IP 一条可直接点击的 `https://t.me/proxy?…` 链接：
+
+```text
+https://raw.githubusercontent.com/0xRadikal/Free-Telegram-Proxy/main/resilient/tme.txt
+```
+
+同样的提醒也适用于那里：「已验证」表示它在那个项目的测试机上可用，不一定在你的网络中可用。
+
+</details>
+
+<img alt="" src="https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/assets/divider.svg">
+
 <a name="-subscription-links"></a>
 
 # ⚡ 订阅链接

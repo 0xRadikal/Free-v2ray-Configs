@@ -68,6 +68,53 @@ https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/verified/con
 
 <img alt="" src="https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/assets/divider.svg">
 
+## 🧩 Sister project — Free Telegram Proxy
+
+<a href="https://github.com/0xRadikal/Free-Telegram-Proxy"><picture><source media="(max-width: 600px)" srcset="https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/assets/promo-proxy-mobile.svg" /><img src="https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/assets/promo-proxy.svg" width="100%" alt="Free Telegram Proxy, the sister project: free MTProto proxies for Telegram, verified in three rounds — open it on GitHub" /></picture></a>
+
+<div align="center">
+
+  <a href="https://github.com/0xRadikal/Free-Telegram-Proxy"><img alt="Free-Telegram-Proxy stars" src="https://img.shields.io/github/stars/0xRadikal/Free-Telegram-Proxy?style=for-the-badge&amp;color=FBBF24&amp;logo=github&amp;label=Free-Telegram-Proxy" /></a>
+  <a href="https://raw.githubusercontent.com/0xRadikal/Free-Telegram-Proxy/main/index.json"><img alt="Telegram proxies verified" src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2F0xRadikal%2FFree-Telegram-Proxy%2Fmain%2Findex.json&amp;query=%24.funnel.verified_links&amp;label=verified%20links&amp;color=16a34a&amp;style=for-the-badge" /></a>
+  <a href="https://raw.githubusercontent.com/0xRadikal/Free-Telegram-Proxy/main/index.json"><img alt="Telegram proxy servers" src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2F0xRadikal%2FFree-Telegram-Proxy%2Fmain%2Findex.json&amp;query=%24.funnel.verified_servers&amp;label=real%20servers&amp;color=247EFD&amp;style=for-the-badge" /></a>
+
+</div>
+
+A V2Ray config carries your whole device, but it needs a client app. If **Telegram** is all you need,
+the same author maintains **[Free-Telegram-Proxy](https://github.com/0xRadikal/Free-Telegram-Proxy)** — built on the same principles:
+aggregated from public sources, deduplicated, every proxy verified in **three rounds** by relaying a
+real request to a Telegram datacenter, and published on `main` about every 15 minutes, with its own
+[live dashboard](https://0xradikal.github.io/Free-Telegram-Proxy/) where every row opens straight in
+Telegram — no extra app. Its shortest path:
+
+```text
+https://raw.githubusercontent.com/0xRadikal/Free-Telegram-Proxy/main/top100.txt
+```
+
+<details>
+<summary><b>V2Ray config or Telegram proxy — which one do I need?</b></summary>
+
+| | Free V2Ray Configs (this repo) | Free Telegram Proxy |
+|:--|:--|:--|
+| **Carries** | all traffic of the device or app routed through the client | Telegram traffic only |
+| **Protocols** | VLESS, VMess, Trojan, Shadowsocks, Hysteria2, TUIC, … | MTProto — classic, `dd`, `ee` (FakeTLS) |
+| **You need** | a client such as v2rayNG, Hiddify, NekoBox, v2rayN, Clash Meta or Shadowrocket | only Telegram |
+| **Proof of work** | a real HTTP request through the proxy, 3 rounds; Clash and sing-box files checked by the real, version-pinned `sing-box` and `mihomo` binaries | `req_pq_multi` relayed to a Telegram DC, 3 rounds |
+| **Formats** | `configs.txt` · `configs_base64.txt` · `clash.yaml` · `singbox.json` | `tg.txt` · `tme.txt` · `proxies.json` |
+
+Every distinct verified server, one tappable `https://t.me/proxy?…` link per server IP:
+
+```text
+https://raw.githubusercontent.com/0xRadikal/Free-Telegram-Proxy/main/resilient/tme.txt
+```
+
+The same caveat applies there: "verified" means it worked from that project's test runner,
+not necessarily from your network.
+
+</details>
+
+<img alt="" src="https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/assets/divider.svg">
+
 # ⚡ Subscription links
 
 > **Not sure which one to take?** Use `verified` — every entry answered a real HTTP
