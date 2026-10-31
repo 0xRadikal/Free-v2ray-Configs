@@ -68,6 +68,52 @@ https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/verified/con
 
 <img alt="" src="https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/assets/divider.svg">
 
+## 🧩 پروژهٔ خواهر — پروکسی رایگان تلگرام
+
+<a href="https://github.com/0xRadikal/Free-Telegram-Proxy"><picture><source media="(max-width: 600px)" srcset="https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/assets/promo-proxy-mobile.svg" /><img src="https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/assets/promo-proxy.svg" width="100%" alt="پروژهٔ خواهر Free Telegram Proxy: پروکسی رایگان MTProto برای تلگرام که در سه دور تأیید شده — در GitHub باز کن" /></picture></a>
+
+<div align="center">
+
+  <a href="https://github.com/0xRadikal/Free-Telegram-Proxy"><img alt="ستاره‌های Free-Telegram-Proxy" src="https://img.shields.io/github/stars/0xRadikal/Free-Telegram-Proxy?style=for-the-badge&amp;color=FBBF24&amp;logo=github&amp;label=Free-Telegram-Proxy" /></a>
+  <a href="https://raw.githubusercontent.com/0xRadikal/Free-Telegram-Proxy/main/index.json"><img alt="پروکسی‌های تأییدشدهٔ تلگرام" src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2F0xRadikal%2FFree-Telegram-Proxy%2Fmain%2Findex.json&amp;query=%24.funnel.verified_links&amp;label=verified%20links&amp;color=16a34a&amp;style=for-the-badge" /></a>
+  <a href="https://raw.githubusercontent.com/0xRadikal/Free-Telegram-Proxy/main/index.json"><img alt="سرورهای پروکسی تلگرام" src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2F0xRadikal%2FFree-Telegram-Proxy%2Fmain%2Findex.json&amp;query=%24.funnel.verified_servers&amp;label=real%20servers&amp;color=247EFD&amp;style=for-the-badge" /></a>
+
+</div>
+
+کانفیگ V2Ray همهٔ ترافیکِ دستگاه را رد می‌کند، ولی به یک برنامهٔ کلاینت نیاز دارد. اگر فقط **تلگرام**
+لازم دارید، همین نویسنده پروژهٔ **[Free-Telegram-Proxy](https://github.com/0xRadikal/Free-Telegram-Proxy/blob/main/README_FA.md)** را نگه می‌دارد —
+با همان اصول: از منابعِ عمومی جمع می‌شود، تکراری‌ها حذف می‌شوند، هر پروکسی در **سه دور** با رساندنِ یک
+درخواستِ واقعی به دیتاسنترِ تلگرام تأیید می‌شود و تقریباً هر ۱۵ دقیقه روی `main` منتشر می‌شود؛ با
+[داشبوردِ زندهٔ](https://0xradikal.github.io/Free-Telegram-Proxy/fa/) خودش که هر ردیفش مستقیم در تلگرام
+باز می‌شود — بدونِ برنامهٔ اضافه. کوتاه‌ترین مسیرش:
+
+```text
+https://raw.githubusercontent.com/0xRadikal/Free-Telegram-Proxy/main/top100.txt
+```
+
+<details>
+<summary><b>کانفیگ V2Ray یا پروکسی تلگرام — کدام را لازم دارم؟</b></summary>
+
+| | Free V2Ray Configs (همین مخزن) | Free Telegram Proxy |
+|:--|:--|:--|
+| **چه چیزی را رد می‌کند** | همهٔ ترافیکِ دستگاه یا برنامه‌ای که از کلاینت عبور کند | فقط ترافیکِ تلگرام |
+| **پروتکل‌ها** | VLESS، VMess، Trojan، Shadowsocks، Hysteria2، TUIC، … | MTProto — معمولی، `dd`، `ee` (FakeTLS) |
+| **چه لازم دارید** | یک کلاینت مثل v2rayNG، Hiddify، NekoBox، v2rayN، Clash Meta یا Shadowrocket | فقط تلگرام |
+| **اثباتِ کار کردن** | یک درخواستِ HTTP واقعی از داخلِ پروکسی، ۳ دور؛ فایل‌های Clash و sing-box با خودِ باینری‌های واقعی و نسخه‌ثابتِ `sing-box` و `mihomo` بررسی می‌شوند | رساندنِ `req_pq_multi` به دیتاسنترِ تلگرام، ۳ دور |
+| **فرمت‌ها** | `configs.txt` · `configs_base64.txt` · `clash.yaml` · `singbox.json` | `tg.txt` · `tme.txt` · `proxies.json` |
+
+همهٔ سرورهای تأییدشدهٔ متمایز، برای هر IP یک لینکِ `https://t.me/proxy?…` که با یک لمس باز می‌شود:
+
+```text
+https://raw.githubusercontent.com/0xRadikal/Free-Telegram-Proxy/main/resilient/tme.txt
+```
+
+همین هشدار آن‌جا هم صدق می‌کند: «تأییدشده» یعنی از سرورِ تستِ همان پروژه کار کرده، نه لزوماً از شبکهٔ شما.
+
+</details>
+
+<img alt="" src="https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/assets/divider.svg">
+
 <a name="-subscription-links"></a>
 
 # ⚡ لینک‌های اشتراک

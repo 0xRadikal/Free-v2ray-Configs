@@ -33,7 +33,8 @@ def qr_matrix(payload):
     q=segno.make(payload,error='m',micro=False)
     return [''.join('1' if c else '0' for c in row) for row in q.matrix]
 FILES={'hero.svg','pipeline.svg','cta-links.svg','cta-telegram.svg','cta-star.svg',
-       'qr-top100.svg','qr-verified.svg','qr-telegram.svg','qr-donate-trc20.svg','qr-donate-evm.svg','qr-donate-ton.svg','divider.svg','social-preview.svg'}
+       'qr-top100.svg','qr-verified.svg','qr-telegram.svg','qr-donate-trc20.svg','qr-donate-evm.svg','qr-donate-ton.svg','divider.svg','social-preview.svg',
+       'promo-proxy.svg','promo-proxy-mobile.svg'}
 
 def txt(x,y,s,size=18,w=600,color=WHITE,anchor='',space='',family=FONT):
     a=f' text-anchor="{anchor}"' if anchor else ''
@@ -194,6 +195,8 @@ def main():
     donate('qr-donate-evm.svg')
     donate('qr-donate-ton.svg')
     divider();social()
+    import make_promo_proxy   # sister-project banner (Free-Telegram-Proxy)
+    make_promo_proxy.main()
     assert {p.name for p in DIR.glob('*.svg')}==FILES,'Extra/missing SVG outputs'
     print(f'Generated {len(FILES)} SVG files, including donation cards.')
 
