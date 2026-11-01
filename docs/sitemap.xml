@@ -2,8 +2,10 @@
 <!--
   Sitemap for https://0xradikal.github.io/Free-v2ray-Configs/
 
-  This site is a single page, so one entry is the correct and complete
-  answer, not an oversight.
+  The site has three pages: the landing page (/), its Persian translation
+  (/fa/) and the technical status dashboard (/status/). The two language
+  versions point at each other with xhtml:link hreflang entries, matching
+  the <link rel="alternate"> tags in each page's <head>.
 
   Three deliberate omissions. Per the sitemaps.org protocol only <loc> is
   required; <lastmod>, <changefreq> and <priority> are optional, and each of
@@ -11,7 +13,7 @@
 
   * No <lastmod>. The spec is explicit that this must be the date the page
     was last modified, not the date the sitemap was written. This page is
-    rebuilt by hand from /dashboard-src, so any date baked in here would
+    rebuilt by hand from /docs-src and /dashboard-src, so any date baked in here would
     start drifting the moment it was committed. A stale value is worse than
     none, because a crawler that trusts it schedules re-crawls from a false
     date.
@@ -32,8 +34,21 @@
   a different host, so they are exposed as links in the page body instead —
   which is the supported way to do it.
 -->
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
+        xmlns:xhtml="http://www.w3.org/1999/xhtml">
   <url>
     <loc>https://0xradikal.github.io/Free-v2ray-Configs/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://0xradikal.github.io/Free-v2ray-Configs/"/>
+    <xhtml:link rel="alternate" hreflang="fa" href="https://0xradikal.github.io/Free-v2ray-Configs/fa/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://0xradikal.github.io/Free-v2ray-Configs/"/>
+  </url>
+  <url>
+    <loc>https://0xradikal.github.io/Free-v2ray-Configs/fa/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://0xradikal.github.io/Free-v2ray-Configs/"/>
+    <xhtml:link rel="alternate" hreflang="fa" href="https://0xradikal.github.io/Free-v2ray-Configs/fa/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://0xradikal.github.io/Free-v2ray-Configs/"/>
+  </url>
+  <url>
+    <loc>https://0xradikal.github.io/Free-v2ray-Configs/status/</loc>
   </url>
 </urlset>

@@ -563,9 +563,12 @@ README。下面是上面那次快照的对应块（已精简）：
 
 **<https://0xradikal.github.io/Free-v2ray-Configs/>**
 
-一个完全自包含的页面，在你的浏览器里抓取 `index.json` 与 `health.json`，并渲染出级联
-过程、各档位、逐源健康状况、地理分布与转换器丢弃情况。它发出**零**个外部请求 —— 没有
-CDN、没有追踪器、没有外部字体 —— 并在 raw 不可达时自动回退到 jsDelivr 镜像。
+首页（英语 + 波斯语）：订阅中心（选择列表和格式，然后复制、扫描二维码，或一键导入
+v2rayNG / Hiddify / Clash Meta / sing-box）、可搜索的已验证配置浏览器、按国家订阅、验证漏斗
+与源健康状况 —— 全部实时读取 `index.json`、`health.json` 与 `Countries/index.json`，并自动回退到
+jsDelivr 镜像。字体与二维码库均自托管：没有 CDN、没有追踪器。源码：[`docs-src/`](docs-src/)。
+
+完整技术面板：**<https://0xradikal.github.io/Free-v2ray-Configs/status/>**。
 
 ---
 
