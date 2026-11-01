@@ -596,10 +596,16 @@ Three details worth knowing:
 
 **<https://0xradikal.github.io/Free-v2ray-Configs/>**
 
-A single self-contained page that fetches `index.json` and `health.json` in your browser
-and renders the cascade, the buckets, per-source health, the geo breakdown and the
-converter drops. It makes **zero** external requests — no CDN, no tracker, no fonts —
-and falls back to the jsDelivr mirror automatically if raw is unreachable.
+The landing page (English + [فارسی](https://0xradikal.github.io/Free-v2ray-Configs/fa/)): a
+subscription hub (pick a list and a format, then copy, scan the QR code or import in one tap
+into v2rayNG / Hiddify / Clash Meta / sing-box), a searchable explorer of every verified
+config, per-country subscriptions, the verification funnel and source health — all read live
+from `index.json`, `health.json` and `Countries/index.json`, with an automatic fallback to the
+jsDelivr mirror. Fonts and the QR library are self-hosted: no CDN, no tracker. Source:
+[`docs-src/`](docs-src/) (`python3 docs-src/build.py`).
+
+The full technical dashboard (cascade, converter drops, geo resolution) lives at
+**<https://0xradikal.github.io/Free-v2ray-Configs/status/>**.
 
 ---
 

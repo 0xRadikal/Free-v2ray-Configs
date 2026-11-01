@@ -1,4 +1,4 @@
-// Produces ../docs/index.html from bundle.html.
+// Produces ../docs/status/index.html from bundle.html.
 //
 // This step used to live in somebody's shell history, which is how the byte
 // figure in the banner went stale and how the exact splice recipe was twice
@@ -31,7 +31,7 @@ import { dirname, join } from 'node:path';
 const here = dirname(fileURLToPath(import.meta.url));
 const BUNDLE = join(here, 'bundle.html');
 const BANNER = join(here, 'docs-banner.txt');
-const OUT = join(here, '..', 'docs', 'index.html');
+const OUT = join(here, '..', 'docs', 'status', 'index.html');
 
 const DOCTYPE = '<!DOCTYPE html>';
 
@@ -105,7 +105,7 @@ must(out.endsWith(html.slice(DOCTYPE.length)), 'the spliced output does not end 
 writeFileSync(OUT, out);
 const oTag = out.indexOf('name=google-site-verification');
 console.log(
-  `make-docs: docs/index.html  ${out.length.toLocaleString('en-US')} B  ` +
+  `make-docs: docs/status/index.html  ${out.length.toLocaleString('en-US')} B  ` +
     `(banner ${stamped.length.toLocaleString('en-US')} + bundle ${bundleBytes.toLocaleString('en-US')} + 2 newlines)`,
 );
 console.log(`make-docs: verification tag at byte ${oTag.toLocaleString('en-US')}, inside <head> ... </head>`);

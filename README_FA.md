@@ -599,10 +599,15 @@ https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/health.json
 
 **<https://0xradikal.github.io/Free-v2ray-Configs/>**
 
-یک صفحهٔ کاملاً خودبسنده که `index.json` و `health.json` را در مرورگرِ شما واکشی می‌کند و
-آبشار، دسته‌ها، سلامتِ هر منبع، تفکیکِ جغرافیایی و حذفیاتِ مبدل را رسم می‌کند. **هیچ**
-درخواستِ بیرونی نمی‌فرستد — نه CDN، نه ردیاب، نه فونت — و اگر raw در دسترس نباشد به‌صورتِ
-خودکار به آینهٔ jsDelivr برمی‌گردد.
+صفحهٔ اصلی (انگلیسی + [فارسی](https://0xradikal.github.io/Free-v2ray-Configs/fa/)): مرکزِ اشتراک
+(فهرست و قالب را انتخاب کنید، بعد کپی کنید، QR را اسکن کنید یا با یک لمس در v2rayNG / Hiddify /
+Clash Meta / sing-box وارد کنید)، کاوشگرِ قابلِ جستجوی همهٔ کانفیگ‌های تأییدشده، اشتراکِ هر کشور،
+قیفِ تأیید و سلامتِ منابع — همه به‌صورتِ زنده از `index.json`، `health.json` و `Countries/index.json`
+خوانده می‌شوند و در صورتِ نیاز خودکار به آینهٔ jsDelivr برمی‌گردند. فونت‌ها و کتابخانهٔ QR روی
+خودِ سایت میزبانی می‌شوند: نه CDN، نه ردیاب. سورس: [`docs-src/`](docs-src/) (`python3 docs-src/build.py`).
+
+داشبوردِ کاملِ فنی (آبشار، حذفیاتِ مبدل، تفکیکِ جغرافیایی) در
+**<https://0xradikal.github.io/Free-v2ray-Configs/status/>** است.
 
 ---
 

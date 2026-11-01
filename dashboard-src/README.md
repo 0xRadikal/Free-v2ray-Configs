@@ -1,6 +1,6 @@
-# dashboard-src — source for `docs/index.html`
+# dashboard-src — source for `docs/status/index.html`
 
-`docs/index.html` is **generated**. This directory is the source it is generated
+`docs/status/index.html` (served at `/status/`) is **generated**. This directory is the source it is generated
 from. Edit here, rebuild, copy the result over — never hand-edit the published
 file, because the next rebuild will silently discard the edit.
 
@@ -31,11 +31,12 @@ cd dashboard-src
 pnpm install
 pnpm run typecheck        # tsc --noEmit, must exit 0
 pnpm run bundle           # parcel build + html-inline -> bundle.html
-cp bundle.html ../docs/index.html
+# make-docs.mjs (run by `bundle`) writes ../docs/status/index.html
 ```
 
-Then re-add the generated-file banner at the top of `docs/index.html` (the
-comment immediately after `<!DOCTYPE html>`), which the build does not emit.
+The generated-file banner is spliced in by `make-docs.mjs`; nothing needs to be
+re-added by hand. The landing page at `/` is a separate, build-free page — see
+`/docs-src`.
 
 `pnpm run dev` starts a Vite dev server for iteration; note that the dev server
 is only for editing convenience — the artifact that ships is the Parcel bundle.
