@@ -10637,7 +10637,7 @@ def test_zzz_f7_an_unreadable_age_opens_the_gate_instead_of_skipping():
     در حالی که heredocِ بالای همان بلوک نیتش را صریح نوشته است:
     `print(10**9)  # خطا → قدیمی فرض کن تا اجرا شود`.
 
-    چرا مهم است: ۱۷ گامِ پایین‌دستی به این خروجی بسته‌اند، و چون خطای
+    چرا مهم است: ۲۱ گامِ پایین‌دستی به این خروجی بسته‌اند، و چون خطای
     `test` داخلِ شرطِ `if` است `set -e` هم آن را نمی‌گیرد ⇒ گام «سبز»
     گزارش می‌شد. یعنی یک دورِ کاملاً پوچ، بی هیچ علامتِ خطا.
     """
@@ -10658,7 +10658,7 @@ def test_zzz_f7_an_unreadable_age_opens_the_gate_instead_of_skipping():
             f"دروازه نباید گام را بکشد. log={log[-300:]!r}")
         assert got == "true", (
             f"{label}: AGE={age!r} ⇒ should_run={got!r}؛ باید 'true' باشد. "
-            f"با 'false' هر ۱۷ گامِ بعدی بی‌صدا رد می‌شوند و دور پوچ "
+            f"با 'false' هر ۲۱ گامِ بعدی بی‌صدا رد می‌شوند و دور پوچ "
             f"ولی «سبز» تمام می‌شود.")
 
 
@@ -15207,6 +15207,384 @@ def test_subscription_check_with_the_real_mihomo_binary():
     assert r["files"]["heavy/configs.txt"]["loaded"] == 1, r
     assert r["status"] == "fail" and r["failed"] == [
         "all/configs.txt", "light/configs_base64.txt"], r
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# فاز VC — cacheِ آرشیوهای اعتبارسنج (sing-box / mihomo) — ۲۰۲۶-۱۱-۰۸
+# ══════════════════════════════════════════════════════════════════════════════
+# اجرای 42469466498 و شش اجرای دیگرِ همان روز در گامِ «🧰 Install sing-box &
+# mihomo» شکستند؛ لاگِ شش‌تایشان شش بار `curl: (22) … error: 504` دارد و
+# هفتمی یک تلاشِ ۱۲۰ ثانیه‌ای. در کلِ تاریخِ ورک‌فلو این گام ۱۵ بار و هر بار
+# در دانلود شکسته است. راه‌حل: دانلود از مسیرِ هر اجرا بیرون برود (cache)،
+# بی‌آنکه تأییدِ sha256 در هیچ مسیری حذف شود.
+#
+# آزمون‌های رفتاریِ زیر **همان بدنهٔ `run:`ِ ورک‌فلو** را با bash اجرا
+# می‌کنند و فقط curl جعلی است (آرشیوهای ساختگی با چیدمانِ واقعیِ انتشارها)،
+# پس هر تغییری در منطقِ گام — نه فقط در متنش — این‌جا دیده می‌شود.
+
+_VC_PATH = ".cache/validators"
+_VC_RUN_SUFFIX = "${{ github.run_id }}-${{ github.run_attempt }}"
+
+#: curlِ جعلی: هر فراخوانی را ثبت می‌کند و به‌جای شبکه از پوشهٔ assets سرو
+#: می‌کند. `hang` با `exec` می‌خوابد تا `timeout` خودِ همان فرآیند را بکشد و
+#: فرزندِ یتیمی لوله‌های خروجی را باز نگه ندارد.
+_VC_FAKE_CURL = r'''#!/usr/bin/env bash
+printf '%s\n' "$*" >> "$VC_CURL_LOG"
+out=""; url=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -o) out="$2"; shift 2; continue ;;
+    https://*) url="$1" ;;
+  esac
+  shift
+done
+case "${VC_CURL_MODE:-serve}" in
+  fail)   echo "curl: (22) The requested URL returned error: 504" >&2; exit 22 ;;
+  tamper) printf 'not the release asset' > "$out"; exit 0 ;;
+  hang)   exec sleep 30 ;;
+esac
+cp "$VC_ASSETS/${url##*/}" "$out"
+'''
+
+
+def _vc_steps() -> tuple:
+    """(steps, restore, install, save) — سه گامِ اعتبارسنج، از YAMLِ پارس‌شده.
+
+    گامِ نصب با کلیدِ env‌اش پیدا می‌شود، نه با نام: نامِ گامِ restore هم
+    می‌توانست «sing-box» داشته باشد و آزمونِ P3 (که با نام می‌گردد) را به گامِ
+    اشتباه بفرستد؛ به همین دلیل نامِ گام‌های cache عمداً «validator» است.
+    """
+    doc = yaml.safe_load(_workflow_text())
+    steps = doc["jobs"]["aggregate"]["steps"]
+    install = [i for i, s in enumerate(steps)
+               if "SING_BOX_TGZ_SHA256" in (s.get("env") or {})]
+    assert len(install) == 1, f"باید دقیقاً یک گامِ نصبِ sing-box/mihomo باشد: {install}"
+    caches = [i for i, s in enumerate(steps)
+              if str(s.get("uses", "")).split("@", 1)[0].startswith("actions/cache")
+              and _VC_PATH in str((s.get("with") or {}).get("path", ""))]
+    kinds = {i: str(steps[i]["uses"]).split("@", 1)[0] for i in caches}
+    restore = [i for i, k in kinds.items() if k == "actions/cache/restore"]
+    save = [i for i, k in kinds.items() if k == "actions/cache/save"]
+    assert len(caches) == 2 and len(restore) == 1 and len(save) == 1, (
+        f"برای {_VC_PATH} دقیقاً یک restore و یک save لازم است؛ یافته‌ها: "
+        f"{sorted(kinds.values())}")
+    return steps, restore[0], install[0], save[0]
+
+
+def _vc_key_problems(prefix: str, env: dict) -> list:
+    """کدام pinِ گامِ نصب در پیشوندِ کلید نیامده؟ لیستِ خالی یعنی سالم."""
+    return [k for k in ("SING_BOX_VERSION", "SING_BOX_TGZ_SHA256",
+                        "MIHOMO_VERSION", "MIHOMO_GZ_SHA256")
+            if str(env.get(k, "\0")) not in prefix]
+
+
+def _vc_fixture(root: str) -> tuple:
+    """آرشیوهای ساختگی با نام و چیدمانِ واقعیِ انتشارها → (envِ گام، پوشهٔ assets).
+
+    envِ واقعیِ گام خوانده می‌شود (نسخه‌ها و FETCH_BUDGET_SECONDS)؛ فقط چهار
+    sha256 با مقدارِ فایل‌های ساختگی جایگزین می‌شوند.
+    """
+    import gzip
+    import hashlib
+    import io
+    import tarfile
+
+    def sha(data: bytes) -> str:
+        return hashlib.sha256(data).hexdigest()
+
+    steps, _, i, _ = _vc_steps()
+    env = {k: str(v) for k, v in steps[i]["env"].items()}
+    sbv, mhv = env["SING_BOX_VERSION"], env["MIHOMO_VERSION"]
+    assets = os.path.join(root, "assets")
+    os.makedirs(assets)
+    sb_bin = f"#!/bin/sh\necho 'sing-box version {sbv}'\n".encode()
+    mh_bin = f"#!/bin/sh\necho 'Mihomo Meta {mhv}'\n".encode()
+    tgz = os.path.join(assets, f"sing-box-{sbv}-linux-amd64.tar.gz")
+    with tarfile.open(tgz, "w:gz") as tf:
+        info = tarfile.TarInfo(f"sing-box-{sbv}-linux-amd64/sing-box")
+        info.size, info.mode = len(sb_bin), 0o755
+        tf.addfile(info, io.BytesIO(sb_bin))
+    gz = os.path.join(assets, f"mihomo-linux-amd64-{mhv}.gz")
+    with gzip.open(gz, "wb") as fh:
+        fh.write(mh_bin)
+    with open(tgz, "rb") as fh:
+        tgz_sha = sha(fh.read())
+    with open(gz, "rb") as fh:
+        gz_sha = sha(fh.read())
+    env.update(SING_BOX_TGZ_SHA256=tgz_sha, MIHOMO_GZ_SHA256=gz_sha,
+               SING_BOX_BIN_SHA256=sha(sb_bin), MIHOMO_BIN_SHA256=sha(mh_bin))
+    return env, assets
+
+
+def _vc_urls(env: dict) -> list:
+    sbv, mhv = env["SING_BOX_VERSION"], env["MIHOMO_VERSION"]
+    return [f"https://github.com/SagerNet/sing-box/releases/download/v{sbv}/"
+            f"sing-box-{sbv}-linux-amd64.tar.gz",
+            f"https://github.com/MetaCubeX/mihomo/releases/download/{mhv}/"
+            f"mihomo-linux-amd64-{mhv}.gz"]
+
+
+def _vc_run(root: str, env_step: dict, assets: str, mode: str = "serve",
+            **override: str) -> dict:
+    """بدنهٔ واقعیِ `run:`ِ گامِ نصب را با bash اجرا کن.
+
+    workspace، HOME و TMPDIR همه زیرِ `root` اند، پس فراخوانیِ دوم روی همان
+    `root` همان چیزی را می‌بیند که restoreِ cache در CI می‌گذارد: پوشهٔ
+    `.cache/validators`ِ اجرای قبل.
+    """
+    import subprocess
+
+    steps, _, i, _ = _vc_steps()
+    fakebin, ws, home, tmp = (os.path.join(root, d) for d in ("bin", "ws", "home", "tmp"))
+    for d in (fakebin, ws, home, tmp):
+        os.makedirs(d, exist_ok=True)
+    curl = os.path.join(fakebin, "curl")
+    with open(curl, "w", encoding="utf-8", newline="\n") as fh:
+        fh.write(_VC_FAKE_CURL)
+    os.chmod(curl, 0o755)
+    log, out = os.path.join(root, "curl.log"), os.path.join(root, "github_output")
+    with open(log, "a", encoding="utf-8"):
+        pass
+    with open(log, encoding="utf-8") as fh:
+        before = len(fh.read().splitlines())
+    with open(out, "w", encoding="utf-8"):
+        pass
+    env = dict(os.environ)
+    env.update(env_step)
+    env.update({k: str(v) for k, v in override.items()})
+    env.update(HOME=home, TMPDIR=tmp, PATH=fakebin + os.pathsep + env.get("PATH", ""),
+               GITHUB_OUTPUT=out, GITHUB_PATH=os.path.join(root, "github_path"),
+               VC_CURL_LOG=log, VC_ASSETS=assets, VC_CURL_MODE=mode)
+    p = subprocess.run(["bash", "-e", "-c", steps[i]["run"]], cwd=ws, env=env,
+                       capture_output=True, text=True, timeout=90)
+    with open(log, encoding="utf-8") as fh:
+        calls = fh.read().splitlines()[before:]
+    with open(out, encoding="utf-8") as fh:
+        outputs = fh.read()
+    cache = os.path.join(ws, _VC_PATH)
+    return {"rc": p.returncode, "log": p.stdout + p.stderr, "calls": calls,
+            "outputs": outputs, "cache": cache,
+            "files": sorted(os.listdir(cache)) if os.path.isdir(cache) else [],
+            "bin": os.path.join(home, ".local", "bin")}
+
+
+def _vc_sha_of(path: str) -> str:
+    import hashlib
+    with open(path, "rb") as fh:
+        return hashlib.sha256(fh.read()).hexdigest()
+
+
+def test_zzz_vc_validator_archives_are_cached_under_a_key_that_carries_every_pin():
+    """کلیدِ cache باید با هر pin عوض شود و restore/save دقیقاً یک کلید بسازند.
+
+    اگر کلید نسخه یا sha256ِ یکی از آرشیوها را نداشته باشد، بالا بردنِ pin
+    آرشیوِ قدیمی را از cache برمی‌گرداند، گامِ نصب هر بار آن را دور می‌ریزد و
+    دوباره دانلود می‌کند — یعنی همان وابستگیِ هر‌اجرا به GitHub که این فاز حذف
+    کرد، این بار بی‌صدا.
+    """
+    steps, r, i, s = _vc_steps()
+    restore, install, save = steps[r], steps[i], steps[s]
+    env = install["env"]
+
+    # ① ترتیب: بازیابی پیش از نصب، ذخیره پس از آن.
+    assert r < i < s, f"ترتیب باید restore({r}) < install({i}) < save({s}) باشد"
+    # ② هر دو زیرِ دروازهٔ تازگی‌اند، مثلِ بقیهٔ گام‌های سنگین.
+    for st in (restore, save):
+        assert "steps.gate.outputs.should_run == 'true'" in str(st.get("if", "")), st.get("name")
+
+    rkey, skey = str(restore["with"]["key"]), str(save["with"]["key"])
+    assert rkey == skey, f"کلیدِ restore و save باید یکی باشد:\n{rkey}\n{skey}"
+    # ③ کلید در هر اجرا یکتاست (ورودیِ خراب با ذخیرهٔ بعدی کنار می‌رود) و
+    #    restore-keys دقیقاً پیشوندِ آن است.
+    assert rkey.endswith(_VC_RUN_SUFFIX), f"کلید باید با {_VC_RUN_SUFFIX} تمام شود: {rkey}"
+    prefix = rkey[: -len(_VC_RUN_SUFFIX)]
+    rkeys = [k.strip() for k in str(restore["with"].get("restore-keys", "")).splitlines()
+             if k.strip()]
+    assert rkeys == [prefix], f"restore-keys باید دقیقاً پیشوندِ کلید باشد: {rkeys!r}"
+    assert prefix.endswith("-"), "پیشوند باید با «-» تمام شود"
+
+    # ④ پیشوند همهٔ pinها را دارد — و خودِ سنجه می‌تواند سرخ شود.
+    assert not _vc_key_problems(prefix, env), _vc_key_problems(prefix, env)
+    mutated = prefix.replace(str(env["MIHOMO_GZ_SHA256"]), "0" * 64)
+    assert _vc_key_problems(mutated, env) == ["MIHOMO_GZ_SHA256"], "سنجهٔ کلید جهش را نگرفت"
+
+    # ⑤ قاعدهٔ خودِ اکشن (`checkKey` در bundleِ v6.1.0): ≤۵۱۲ نویسه و بی‌ویرگول.
+    #    کلیدِ نامعتبر تنها خطایی است که گامِ cache را می‌کشد.
+    realistic = rkey.replace(_VC_RUN_SUFFIX, "99999999999-99")
+    assert len(realistic) <= 512 and "," not in realistic, len(realistic)
+
+    # ⑥ ذخیره فقط پس از دانلودِ همین اجرا، و بدونِ تابعِ وضعیت (یعنی ضمناً
+    #    `success()`): آرشیوِ تأییدنشده هرگز cache نمی‌شود.
+    cond = str(save.get("if", ""))
+    assert f"steps.{install.get('id')}.outputs.downloaded == 'true'" in cond, cond
+    assert not re.search(r"\b(always|failure|cancelled)\s*\(", cond), cond
+    assert "downloaded=" in install["run"] and "GITHUB_OUTPUT" in install["run"]
+    assert _VC_PATH in install["run"], "گامِ نصب باید از همان مسیرِ cache بخواند"
+
+    # ⑦ بازیابیِ معلق و کلِ گام هر دو کرانمندند.
+    assert str((restore.get("env") or {}).get("SEGMENT_DOWNLOAD_TIMEOUT_MINS", "")).isdigit()
+    budget = int(env["FETCH_BUDGET_SECONDS"])
+    assert 0 < budget <= 300, budget
+    assert int(install["timeout-minutes"]) * 60 > budget, "سقفِ گام باید از بودجهٔ دانلود بزرگ‌تر باشد"
+
+
+def test_zzz_vc_cold_cache_downloads_each_pinned_archive_once_and_keeps_both():
+    """cacheِ خالی: هر آرشیو یک بار از همان URLِ pinشده، و هر دو در cache بمانند.
+
+    دامی که این آزمون می‌بندد: نسخهٔ پیشین `gunzip -f` داشت که آرشیوِ mihomo را
+    پاک می‌کرد؛ با cache یعنی ورودی‌ای بی‌mihomo و دانلودِ همیشگیِ آن.
+    """
+    import tempfile
+
+    with tempfile.TemporaryDirectory(prefix="vc_") as root:
+        env, assets = _vc_fixture(root)
+        r = _vc_run(root, env, assets)
+        assert r["rc"] == 0, r["log"]
+        urls = [next(t for t in c.split() if t.startswith("https://")) for c in r["calls"]]
+        assert urls == _vc_urls(env), urls
+        assert "downloaded=true" in r["outputs"], r["outputs"]
+        want = dict(zip((u.rsplit("/", 1)[1] for u in _vc_urls(env)),
+                        (env["SING_BOX_TGZ_SHA256"], env["MIHOMO_GZ_SHA256"])))
+        assert r["files"] == sorted(want), f"هر دو آرشیو باید در cache بمانند: {r['files']}"
+        for name, digest in want.items():
+            assert _vc_sha_of(os.path.join(r["cache"], name)) == digest, name
+        for tool in ("sing-box", "mihomo"):
+            assert os.access(os.path.join(r["bin"], tool), os.X_OK), tool
+
+
+def test_zzz_vc_warm_cache_installs_with_the_network_down():
+    """ریشهٔ 42469466498: با cacheِ گرم، شبکهٔ مرده (504) گام را نمی‌شکند.
+
+    اجرای دوم روی همان workspace با curlی اجرا می‌شود که همیشه کدِ ۲۲ می‌دهد؛
+    گام باید سبز شود، **هیچ** درخواستی نفرستد و `downloaded=false` بنویسد تا
+    گامِ ذخیره بی‌دلیل اجرا نشود.
+    """
+    import tempfile
+
+    with tempfile.TemporaryDirectory(prefix="vc_") as root:
+        env, assets = _vc_fixture(root)
+        assert _vc_run(root, env, assets)["rc"] == 0
+        r = _vc_run(root, env, assets, mode="fail")
+        assert r["rc"] == 0, r["log"]
+        assert r["calls"] == [], f"با cacheِ گرم نباید هیچ دانلودی رخ دهد: {r['calls']}"
+        assert "downloaded=false" in r["outputs"], r["outputs"]
+        assert r["log"].count("restored from cache") == 2, r["log"]
+        # تأیید روی cache هم حذف نشده است: هر چهار sha256 سنجیده شده‌اند.
+        assert r["log"].count("sha256 verified") == 4, r["log"]
+
+
+def test_zzz_vc_a_corrupt_cached_archive_is_replaced_and_marked_for_saving():
+    """ورودیِ خرابِ cache کشنده نیست: هشدار، یک دانلود، و `downloaded=true`.
+
+    `downloaded=true` همان چیزی است که گامِ ذخیره را روشن می‌کند؛ چون کلید در
+    هر اجرا یکتاست، ورودیِ سالم کنارِ ورودیِ خراب می‌نشیند و restore-keys از
+    اجرای بعد تازه‌ترین را برمی‌دارد — یعنی cache خودش را درمان می‌کند.
+    """
+    import tempfile
+
+    with tempfile.TemporaryDirectory(prefix="vc_") as root:
+        env, assets = _vc_fixture(root)
+        first = _vc_run(root, env, assets)
+        sb_name = _vc_urls(env)[0].rsplit("/", 1)[1]
+        with open(os.path.join(first["cache"], sb_name), "wb") as fh:
+            fh.write(b"corrupted in the cache")
+        r = _vc_run(root, env, assets)
+        assert r["rc"] == 0, r["log"]
+        assert len(r["calls"]) == 1 and _vc_urls(env)[0] in r["calls"][0], r["calls"]
+        assert "::warning::sing-box archive in the cache does not match the pin" in r["log"]
+        assert "downloaded=true" in r["outputs"], r["outputs"]
+        assert _vc_sha_of(os.path.join(r["cache"], sb_name)) == env["SING_BOX_TGZ_SHA256"]
+
+
+def test_zzz_vc_a_failed_download_on_a_cold_cache_still_fails_closed():
+    """بدونِ cache و بدونِ شبکه، گام باید مثلِ قبل بشکند — و چیزی جا نگذارد.
+
+    اعتبارسنجی بدونِ این دو باینری معنا ندارد، پس fail-closed درست است. ولی
+    نباید فایلِ نیمه‌ای زیرِ نامِ نهایی بماند و نباید `downloaded` نوشته شود.
+    """
+    import tempfile
+
+    with tempfile.TemporaryDirectory(prefix="vc_") as root:
+        env, assets = _vc_fixture(root)
+        r = _vc_run(root, env, assets, mode="fail")
+        assert r["rc"] == 22, (r["rc"], r["log"])
+        assert "::error::sing-box archive: download failed (exit 22" in r["log"], r["log"]
+        assert r["files"] == [], f"هیچ فایلی (حتی .part) نباید بماند: {r['files']}"
+        assert "downloaded=" not in r["outputs"], r["outputs"]
+        assert not os.path.exists(os.path.join(r["bin"], "sing-box"))
+
+
+def test_zzz_vc_a_tampered_download_is_rejected_and_never_reaches_the_cache():
+    """دانلودِ دست‌کاری‌شده با کدِ ۱ رد می‌شود و از cache بیرون می‌ماند."""
+    import tempfile
+
+    with tempfile.TemporaryDirectory(prefix="vc_") as root:
+        env, assets = _vc_fixture(root)
+        r = _vc_run(root, env, assets, mode="tamper")
+        assert r["rc"] == 1, (r["rc"], r["log"])
+        assert "sing-box archive checksum mismatch" in r["log"], r["log"]
+        assert r["files"] == [], r["files"]
+        assert "downloaded=" not in r["outputs"], r["outputs"]
+
+
+def test_zzz_vc_binary_digests_are_enforced_even_on_a_cache_hit():
+    """cache تنها آرشیو را می‌آورد؛ sha256ِ باینریِ استخراج‌شده همچنان کشنده است."""
+    import tempfile
+
+    with tempfile.TemporaryDirectory(prefix="vc_") as root:
+        env, assets = _vc_fixture(root)
+        assert _vc_run(root, env, assets)["rc"] == 0
+        r = _vc_run(root, dict(env, MIHOMO_BIN_SHA256="0" * 64), assets, mode="fail")
+        assert r["rc"] == 1, (r["rc"], r["log"])
+        assert "mihomo binary checksum mismatch" in r["log"], r["log"]
+        assert r["calls"] == [], r["calls"]
+
+
+def test_zzz_vc_a_hung_download_is_cut_at_the_budget():
+    """دانلودِ معلق در `FETCH_BUDGET_SECONDS` بسته می‌شود (کدِ ۱۲۴ از `timeout`).
+
+    curl به‌تنهایی این تضمین را نمی‌دهد: روی سرورِ ساختگی با
+    `--retry-max-time 40` آخرین تلاش در ثانیهٔ ۶۳ رخ داد، چون پیش از آخرین
+    وقفه فقط زمانِ گذشته سنجیده می‌شود.
+    """
+    import tempfile
+    import time
+
+    with tempfile.TemporaryDirectory(prefix="vc_") as root:
+        env, assets = _vc_fixture(root)
+        t0 = time.monotonic()
+        r = _vc_run(root, env, assets, mode="hang", FETCH_BUDGET_SECONDS="2")
+        took = time.monotonic() - t0
+        assert r["rc"] == 124, (r["rc"], r["log"])
+        assert took < 20, f"بودجهٔ ۲ ثانیه‌ای {took:.1f} ثانیه طول کشید"
+        assert "124 = budget" in r["log"], r["log"]
+        assert r["files"] == [], r["files"]
+
+
+def test_zzz_vc_downloads_use_the_measured_retry_policy():
+    """هر فراخوانیِ curl همان سیاستِ سنجیده‌شده را دارد.
+
+    • بی `--retry-delay`: فاصلهٔ ثابتِ ۲ ثانیه شش تلاش را در ده ثانیه تمام
+      می‌کرد (عینِ لاگِ 42469466498، روی سرورِ ساختگی بازتولید شد).
+    • `--max-time` ≤ ۱۸۰ ولی کم‌تر از آن نه وقتی بودجه هست: یک تلاشِ موفق در
+      42475970459 ۱۱۳ ثانیه طول کشید.
+    • `--retry-max-time` ≤ بودجه، و `--retry-all-errors` برای 5xx و reset.
+    """
+    import tempfile
+
+    with tempfile.TemporaryDirectory(prefix="vc_") as root:
+        env, assets = _vc_fixture(root)
+        r = _vc_run(root, env, assets)
+        assert r["rc"] == 0 and len(r["calls"]) == 2, (r["rc"], r["calls"])
+        budget = int(env["FETCH_BUDGET_SECONDS"])
+        for call in r["calls"]:
+            toks = call.split()
+            assert "--retry-delay" not in toks, call
+            assert "--retry-all-errors" in toks and "--connect-timeout" in toks, call
+            mt = int(toks[toks.index("--max-time") + 1])
+            rmt = int(toks[toks.index("--retry-max-time") + 1])
+            assert min(budget - 5, 180) <= mt <= 180, call
+            assert 0 < rmt <= budget, call
 
 
 if __name__ == "__main__":

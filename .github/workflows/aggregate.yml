@@ -177,7 +177,7 @@ jobs:
           #     مفسر exit 1        → rc=1
           #     مفسر SIGKILL (OOM) → rc=137
           # یعنی یک نقصِ محیطیِ گذرا در *خواندنِ سنِ فایل* کلِ jobِ تجمیع را
-          # شکست می‌داد، در حالی که هیچ‌یک از ۱۷ گامِ بعدی به این `python`
+          # شکست می‌داد، در حالی که هیچ‌یک از ۲۱ گامِ بعدی به این `python`
           # وابسته نیست. با `|| AGE=""` آن مرگ به «سنِ نامعلوم» بدل می‌شود و
           # گاردِ پایین‌تر آن را به fail-open (اجرا) می‌نگارد.
           # مسیرِ سالم بایت‌به‌بایت دست‌نخورده است: با `print(1200)` مقدارِ
@@ -215,7 +215,7 @@ jobs:
           #   • عددِ منفی چاپ شود (مُهرِ آینده)              → AGE='-3599'
           #   • عددِ بزرگ‌تر از عددِ ۶۴بیتی چاپ شود          → AGE='9…' (۱۹+ رقم)
           #
-          # شعاعِ انفجار: ۱۷ گامِ پایین‌دستی به `steps.gate.outputs.should_run
+          # شعاعِ انفجار: ۲۱ گامِ پایین‌دستی به `steps.gate.outputs.should_run
           # == 'true'` بسته‌اند. پس یک `$AGE`ِ ناخوانا = یک دورِ کاملاً پوچ که
           # «سبز» گزارش می‌شود.
           #
@@ -593,15 +593,88 @@ jobs:
       #      دادنِ ورودیِ نامعتمد به tar/gunzip.
       #   ۲) تأییدِ باینریِ استخراج‌شده **پیش از** install — یک استخراجِ خراب یا
       #      آرشیوی با محتوایِ عوض‌شده را هم می‌گیرد.
-      # عامدانه cache اضافه نشده: این گام هر بار دانلود می‌کند، پس «تأییدِ
-      # همیشگیِ باینری» به‌طورِ طبیعی برقرار است و پیچیدگیِ کلیدِ cache (که در
-      # گامِ xray-knife لازم بود) اینجا هزینهٔ بی‌دلیل است.
+      # «تأییدِ همیشگی» با cache هم برقرار می‌ماند: هر دو آرشیو و هر دو باینری
+      # در **هر** اجرا sha256 می‌شوند، چه از cache آمده باشند چه از شبکه.
+      # (دلیلِ افزودنِ cache در بلوکِ «چرا cache» در ادامه آمده است.)
       #
       # هر چهار مقدار از **دو منبعِ مستقل** تأیید شده‌اند: فیلدِ `digest`ِ خودِ
       # GitHub برای asset، و محاسبهٔ محلیِ `sha256sum` پس از دانلودِ جداگانه.
       # هر دو باینری اجرا شدند و همان نسخهٔ pinشده را گزارش کردند.
+      #
+      # ── چرا cache (۲۰۲۶-۱۱-۰۸) ─────────────────────────────────────────
+      # نسخهٔ پیشینِ این بلوک cache را «هزینهٔ بی‌دلیل» می‌دانست. سنجشِ همهٔ
+      # ۱۵۳ اجرای شکست‌خوردهٔ تاریخِ این ورک‌فلو (API + لاگِ خودِ هر اجرا)
+      # خلافش را نشان داد:
+      #   • این گام ۱۵ بار شکسته و هر بار در دانلود: ۹ بار HTTP 504، ۲ بار 503،
+      #     ۳ بار `Connection reset by peer` (کدِ ۳۵) و یک بار کدِ ۲۲ با لاگی
+      #     که از نگه‌داریِ ۹۰ روزه گذشته است.
+      #   • در نوامبرِ ۲۰۲۶ هر ۸ شکستِ ورک‌فلو همین گام بود. روزِ ۰۸ هفت اجرا
+      #     بینِ 08:44 و 12:14 UTC شکستند: شش‌تا ۶ تلاش با فاصلهٔ ثابتِ ۲ ثانیه
+      #     زدند و همه 504 گرفتند (کلِ پنجره ≈۱۰ ثانیه)؛ در هفتمی
+      #     (42479306852) یک تلاشِ ۱۲۰ ثانیه‌ای کلِ `--retry-max-time 60` را
+      #     مصرف کرد و تلاشِ دیگری انجام نشد. هر دو الگو با همین پرچم‌ها روی
+      #     یک سرورِ ساختگی بازتولید شد (۶ درخواست در ۱۰٫۰ ثانیه؛ ۱ درخواست).
+      #   • GitHub همان روز رخدادِ «Increase in timeouts for some unauthenticated
+      #     users» را ثبت کرد (10:36–12:32 UTC)؛ این دانلود بی‌احراز است.
+      #   • pinها و checksumها همیشه درست بودند: همان کامیتِ 6239a86 که در
+      #     42469466498 شکست، یک ربع بعد در 42470572812 سبز شد.
+      # پس ایراد در «دانلود در هر اجرا» بود، نه در بایت‌ها. با cache آرشیوها یک
+      # بار دانلود می‌شوند و اجراهای بعدی دیگر به انتشارهای GitHub نیاز ندارند.
+      #
+      # چرا restore و save جدا، و چرا کلیدِ یکتا در هر اجرا (برخلافِ xray-knife):
+      #   • ذخیره درست پس از موفقیتِ نصب انجام می‌شود، نه در پایانِ job.
+      #     post-stepِ `actions/cache` فقط روی jobِ موفق اجرا می‌شود
+      #     (`post-if: success()` در action.ymlِ همان نسخه)، و در ۲۰۲۶-۰۸-۲۴
+      #     گامِ اعتبارسنجی ۲۴ بار در کمتر از سه ساعت شکست؛ با آن الگو هیچ‌یک از
+      #     آن اجراها cache نمی‌ساخت و هر کدام دوباره دانلود می‌کرد.
+      #   • کلیدهای cache تغییرناپذیرند. با کلیدِ ثابت، یک ورودیِ خراب برای
+      #     همیشه سرِ جایش می‌ماند و هر اجرا را به دانلود برمی‌گرداند. با کلیدِ
+      #     یکتا و `restore-keys`، تازه‌ترین ورودی بازیابی می‌شود و ورودیِ خراب
+      #     با نخستین ذخیرهٔ بعدی کنار می‌رود.
+      #   • خطری که GeoIP را به همین تقسیم وادار کرد (ذخیرهٔ بایتِ ماهِ پیش زیرِ
+      #     کلیدِ ماهِ جاری) این‌جا راه ندارد: پیشوندِ کلید همهٔ pinها را دارد،
+      #     ذخیره فقط پس از تأییدِ هر چهار sha256 انجام می‌شود، و محتوای
+      #     بازیابی‌شده پیش از استفاده دوباره سنجیده می‌شود.
+      # رفتارِ اکشن از سورسِ همان v6.1.0 خوانده شد، نه از مستندات: خطاهای
+      # سرویسِ cache فقط هشدارند و گام را نمی‌شکنند؛ تنها کلیدِ نامعتبر (بیش از
+      # ۵۱۲ نویسه یا دارای ویرگول) گام را می‌کشد، که آزمون‌های `test_zzz_vc_*`
+      # قفلش کرده‌اند. `SEGMENT_DOWNLOAD_TIMEOUT_MINS` سقفِ یک بازیابیِ معلق را
+      # از ۱۰ دقیقهٔ پیش‌فرض به ۲ دقیقه می‌آورد؛ پس از آن، بازیابی کنار گذاشته
+      # می‌شود و گامِ نصب خودش دانلود می‌کند.
+      - name: 🧰 Restore validator archives cache
+        if: steps.gate.outputs.should_run == 'true'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        env:
+          SEGMENT_DOWNLOAD_TIMEOUT_MINS: "2"
+        with:
+          path: .cache/validators
+          # پیشوندِ این کلید باید با کلیدِ گامِ «Save validator archives cache» و
+          # با pinهای گامِ نصب یکی باشد؛ آزمون‌های `test_zzz_vc_*` هر دو را می‌سنجند.
+          key: validators-sing-box-1.13.14-f48703461a15476951ac4967cdad339d986f4b8096b4eb3ff0829a500502d697-mihomo-v1.19.29-60de76a35a6cbf7b4fa4a20f5c257c24345d1d635ab1aa3877022a1997ef413c-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            validators-sing-box-1.13.14-f48703461a15476951ac4967cdad339d986f4b8096b4eb3ff0829a500502d697-mihomo-v1.19.29-60de76a35a6cbf7b4fa4a20f5c257c24345d1d635ab1aa3877022a1997ef413c-
+
+      # دانلود فقط وقتی انجام می‌شود که نسخهٔ cacheشده نباشد یا با pin نخواند.
+      # سیاستِ تلاشِ دوباره با لاگِ همان اجراها و با بازتولید تنظیم شد:
+      #   • `--max-time 180` برای هر تلاش دست نخورد: در اجرای موفقِ 42475970459
+      #     یک تلاشِ تنها ۱۱۳ ثانیه طول کشید؛ سقفِ کوتاه‌تر آن موفقیت را به
+      #     شکست بدل می‌کرد.
+      #   • `--retry-delay 2` حذف شد تا curl فاصله را نمایی کند (۱، ۲، ۴، ۸، …
+      #     ثانیه؛ با curl 7.81 روی سرورِ ساختگی اندازه‌گیری شد). با فاصلهٔ
+      #     ثابت، شش تلاش در ده ثانیه تمام می‌شد.
+      #   • پنجرهٔ تلاش = بودجهٔ باقی‌ماندهٔ کلِ گام (`FETCH_BUDGET_SECONDS`)، نه
+      #     ۶۰ ثانیهٔ ثابت. و چون curl پیش از آخرین وقفه فقط زمانِ گذشته را
+      #     می‌سنجد (اندازه‌گیری شد: با `--retry-max-time 40` آخرین تلاش در
+      #     ثانیهٔ ۶۳ انجام شد)، `timeout` همان بودجه را سقفِ سخت می‌کند
+      #     (اندازه‌گیری شد: `timeout 8` حلقه را در ۸٫۰ ثانیه با کدِ ۱۲۴ بست). پس
+      #     دانلودِ هر دو آرشیو روی هم از ۳۰۰ ثانیه نمی‌گذرد. jobِ کامل p95=۵٫۹ و
+      #     بیشینه ۹٫۳ دقیقه است (۲۳۹ اجرای موفقِ ۲۰۲۶-۱۱-۰۶ تا ۰۸)، پس با این
+      #     سقف هم زیرِ `timeout-minutes: 15` می‌ماند.
       - name: 🧰 Install sing-box & mihomo (pinned + checksum verified)
         if: steps.gate.outputs.should_run == 'true'
+        id: validators
+        # سقفِ سختِ کلِ گام؛ خودِ دانلود با `FETCH_BUDGET_SECONDS` به ۵ دقیقه محدود است.
+        timeout-minutes: 8
         env:
           SING_BOX_VERSION: "1.13.14"
           MIHOMO_VERSION: "v1.19.29"
@@ -611,9 +684,16 @@ jobs:
           # sha256ِ خودِ باینری‌های استخراج‌شده (پیش از install)
           SING_BOX_BIN_SHA256: "68aeab83cc4ab2659a5b92232261a20746ccdafc3b3d1e19b2d63247eec3bbf7"
           MIHOMO_BIN_SHA256: "9c397be7489538628fae781bc005e4c5b8cd7b0961b8bb2ca815c8150f193577"
+          # سقفِ زمانِ دانلودِ هر دو آرشیو روی هم (ثانیه)؛ فقط وقتی cache نباشد خرج می‌شود.
+          FETCH_BUDGET_SECONDS: "300"
         run: |
           set -euo pipefail
-          mkdir -p "$HOME/.local/bin"
+          mkdir -p "$HOME/.local/bin" .cache/validators
+          WORK="$(mktemp -d)"
+          SB_TGZ=".cache/validators/sing-box-${SING_BOX_VERSION}-linux-amd64.tar.gz"
+          MH_GZ=".cache/validators/mihomo-linux-amd64-${MIHOMO_VERSION}.gz"
+          DEADLINE=$(( $(date +%s) + FETCH_BUDGET_SECONDS ))
+          DOWNLOADED=false
 
           # verify <file> <expected-sha256> <label>
           # یک تابعِ مشترک، تا دو مسیرِ تأیید هرگز از هم واگرا نشوند.
@@ -630,30 +710,73 @@ jobs:
             echo "  ✓ $3 sha256 verified"
           }
 
+          # fetch <url> <dest> <expected-sha256> <label>
+          # نسخهٔ cacheشده اگر با pin بخواند همان استفاده می‌شود؛ وگرنه دور ریخته و
+          # در بودجهٔ باقی‌ماندهٔ گام دانلود می‌شود. تأیید همیشه بعد از این تابع و
+          # با `verify` انجام می‌شود، پس هر دو مسیر از یک دروازه می‌گذرند.
+          fetch() {
+            local left rc
+            if [ -f "$2" ]; then
+              if [ "$(sha256sum "$2" | cut -d' ' -f1)" = "$3" ]; then
+                echo "  ✓ $4 restored from cache"
+                return 0
+              fi
+              echo "::warning::$4 in the cache does not match the pin — downloading it again"
+              rm -f "$2"
+            fi
+            left=$(( DEADLINE - $(date +%s) ))
+            if [ "$left" -le 0 ]; then
+              echo "::error::$4: the ${FETCH_BUDGET_SECONDS}s download budget is used up"
+              exit 1
+            fi
+            echo "→ downloading $4 (budget ${left}s): $1"
+            timeout "$left" curl -fsSL --retry 10 --retry-all-errors \
+              --retry-max-time "$left" --connect-timeout 15 \
+              --max-time "$(( left < 180 ? left : 180 ))" \
+              "$1" -o "$2.part" || {
+              rc=$?
+              rm -f "$2.part"
+              echo "::error::$4: download failed (exit $rc; 124 = budget of ${FETCH_BUDGET_SECONDS}s reached)"
+              exit "$rc"
+            }
+            mv "$2.part" "$2"
+            DOWNLOADED=true
+          }
+
           # ── sing-box ────────────────────────────────────────────────────
-          curl -fsSL --retry 5 --retry-delay 2 --retry-all-errors \
-            --retry-max-time 60 --connect-timeout 15 --max-time 180 \
-            "https://github.com/SagerNet/sing-box/releases/download/v${SING_BOX_VERSION}/sing-box-${SING_BOX_VERSION}-linux-amd64.tar.gz" \
-            -o /tmp/sb.tar.gz
-          verify /tmp/sb.tar.gz "$SING_BOX_TGZ_SHA256" "sing-box archive"
-          tar -xzf /tmp/sb.tar.gz -C /tmp
-          verify "/tmp/sing-box-${SING_BOX_VERSION}-linux-amd64/sing-box" \
+          fetch "https://github.com/SagerNet/sing-box/releases/download/v${SING_BOX_VERSION}/sing-box-${SING_BOX_VERSION}-linux-amd64.tar.gz" \
+                "$SB_TGZ" "$SING_BOX_TGZ_SHA256" "sing-box archive"
+          verify "$SB_TGZ" "$SING_BOX_TGZ_SHA256" "sing-box archive"
+          tar -xzf "$SB_TGZ" -C "$WORK"
+          verify "$WORK/sing-box-${SING_BOX_VERSION}-linux-amd64/sing-box" \
                  "$SING_BOX_BIN_SHA256" "sing-box binary"
-          install -m 755 "/tmp/sing-box-${SING_BOX_VERSION}-linux-amd64/sing-box" "$HOME/.local/bin/sing-box"
+          install -m 755 "$WORK/sing-box-${SING_BOX_VERSION}-linux-amd64/sing-box" "$HOME/.local/bin/sing-box"
 
           # ── mihomo (فایل .gz تک‌فایلی است، نه tar) ──────────────────────
-          curl -fsSL --retry 5 --retry-delay 2 --retry-all-errors \
-            --retry-max-time 60 --connect-timeout 15 --max-time 180 \
-            "https://github.com/MetaCubeX/mihomo/releases/download/${MIHOMO_VERSION}/mihomo-linux-amd64-${MIHOMO_VERSION}.gz" \
-            -o /tmp/mihomo.gz
-          verify /tmp/mihomo.gz "$MIHOMO_GZ_SHA256" "mihomo archive"
-          gunzip -f /tmp/mihomo.gz
-          verify /tmp/mihomo "$MIHOMO_BIN_SHA256" "mihomo binary"
-          install -m 755 /tmp/mihomo "$HOME/.local/bin/mihomo"
+          fetch "https://github.com/MetaCubeX/mihomo/releases/download/${MIHOMO_VERSION}/mihomo-linux-amd64-${MIHOMO_VERSION}.gz" \
+                "$MH_GZ" "$MIHOMO_GZ_SHA256" "mihomo archive"
+          verify "$MH_GZ" "$MIHOMO_GZ_SHA256" "mihomo archive"
+          # `-c` تا آرشیوِ cacheشده سرِ جایش بماند؛ `gunzip -f` آن را پاک می‌کرد و
+          # گامِ ذخیره، cacheِ بی‌mihomo می‌ساخت.
+          gunzip -c "$MH_GZ" > "$WORK/mihomo"
+          verify "$WORK/mihomo" "$MIHOMO_BIN_SHA256" "mihomo binary"
+          install -m 755 "$WORK/mihomo" "$HOME/.local/bin/mihomo"
 
+          echo "downloaded=$DOWNLOADED" >> "$GITHUB_OUTPUT"
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
           "$HOME/.local/bin/sing-box" version
           "$HOME/.local/bin/mihomo" -v
+
+      # ذخیره فقط وقتی همین اجرا چیزی دانلود کرده و گامِ نصب — یعنی هر چهار
+      # sha256 — موفق بوده است. `if` بدونِ تابعِ وضعیت ضمناً `success()` است،
+      # پس آرشیوِ تأییدنشده یا نیمه هرگز به cache نمی‌رسد. خطای این گام (مثلاً
+      # در دسترس نبودنِ سرویسِ cache) در سورسِ v6.1.0 فقط هشدار است.
+      - name: 🧰 Save validator archives cache
+        if: steps.gate.outputs.should_run == 'true' && steps.validators.outputs.downloaded == 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .cache/validators
+          key: validators-sing-box-1.13.14-f48703461a15476951ac4967cdad339d986f4b8096b4eb3ff0829a500502d697-mihomo-v1.19.29-60de76a35a6cbf7b4fa4a20f5c257c24345d1d635ab1aa3877022a1997ef413c-${{ github.run_id }}-${{ github.run_attempt }}
 
       # ── نصبِ xray-knife: ابزارِ آزمونِ واقعیِ پروکسی (لایهٔ L3) ─────────────
       #
