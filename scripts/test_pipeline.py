@@ -16208,6 +16208,88 @@ def test_zzz_gr_too_few_geo_readings_are_clamped_not_fatal() -> None:
     assert out.stdout.strip() == str(googleready.GEO_MIN_READABLE), out.stdout
     assert "GR_GEO_READINGS=1" in out.stderr
 
+
+def test_zzz_gr_geo_parser_accepts_language_tags_with_digits() -> None:
+    """بازبینیِ پس از انتشار: از ۵۳۷ پاسخِ واقعی دقیقاً یکی تجزیه نمی‌شد —
+    `"es-419","MX"` (BCP-47 رقم دارد). آن کانفیگِ سالمِ مکزیک هر دور حذف می‌شد.
+    آغازِ پاسخِ واقعی، با IPِ مستندسازیِ RFC 5737 به‌جای IPِ اصلی."""
+    real = (b')]}\'\n\n[["yt.sw.adr",null,[[["es-419","MX",null,"192.0.2.30",null,null,'
+            b'null,null,null,null,null,"Robot","Bot or Crawler"')
+    assert googleready.parse_geo(real) == "MX"
+    for tag, cc in (("zh-Hant-TW", "TW"), ("sr-Latn", "RS"), ("en", "US"), ("", "DE")):
+        body = b'[["yt.sw.adr",null,[[["' + tag.encode() + b'","' + cc.encode() + b'"'
+        assert googleready.parse_geo(body) == cc, tag
+    for bad in (b'[["yt.sw.adr",null,[[["es-419","mx"', b'[["yt.sw.adr",null,[[["es-419","MEX"'):
+        assert googleready.parse_geo(bad) is None, bad
+
+
+def _gr_purge_script() -> str:
+    steps = _gr_workflow()["jobs"]["aggregate"]["steps"]
+    run = [s for s in steps if (s.get("name") or "").startswith("🧹 Purge")][0]["run"]
+    return re.search(r"python - <<'PY'\n(.*?)\nPY", run, re.S).group(1)
+
+
+def test_zzz_gr_purge_refreshes_cascade_mirrors_in_a_separate_request() -> None:
+    """آینهٔ jsDelivr برای `verified/` ۵٫۸ ساعت و برای `google/` یک دور عقب بود،
+    چون تنها `all/heavy/light` پاک می‌شد. درخواستِ اول باید دست‌نخورده بماند و
+    شکستِ درخواستِ دوم هرگز به آن یا به بقیهٔ گام نرسد."""
+    import contextlib
+    import io as _io
+    import tempfile
+    import urllib.request as _ur
+    src = _gr_purge_script()
+    ast_mod = __import__("ast")
+    ast_mod.parse(src)
+
+    def run_once(fail_second: bool):
+        calls = []
+
+        class _R(_io.BytesIO):
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+
+        def fake(req, timeout=None):
+            url = req if isinstance(req, str) else req.full_url
+            if url == "https://purge.jsdelivr.net/":
+                paths = json.loads(req.data)["path"]
+                calls.append(paths)
+                if fail_second and len(calls) == 2:
+                    raise OSError("simulated outage")
+                return _R(json.dumps({"id": "j", "status": "finished", "paths": {
+                    q: {"throttled": False, "providers": {"a": True}} for q in paths}}).encode())
+            return _R(b"x")
+        with tempfile.TemporaryDirectory(prefix="gr_purge_") as d:
+            cwd = os.getcwd()
+            os.chdir(d)
+            try:
+                json.dump({"protocols": {}, "cascade_categories": {"google": {}, "secure": {}}},
+                          open("index.json", "w"))
+                os.makedirs("google")
+                for f in ("configs.txt", "configs_base64.txt", "clash.yaml", "singbox.json"):
+                    open(os.path.join("google", f), "w").write("x")
+                old, _ur.urlopen = _ur.urlopen, fake
+                out = _io.StringIO()
+                try:
+                    with contextlib.redirect_stdout(out):
+                        exec(compile(src, "purge_step", "exec"), {"__name__": "__main__"})
+                finally:
+                    _ur.urlopen = old
+            finally:
+                os.chdir(cwd)
+        return calls, out.getvalue()
+    calls, out = run_once(False)
+    assert len(calls) == 2, calls
+    assert not any("/google/" in q for q in calls[0]), "first request must stay unchanged"
+    assert sorted(q.rsplit("@main/", 1)[1] for q in calls[1]) == sorted(
+        f"google/{f}" for f in ("configs.txt", "configs_base64.txt", "clash.yaml", "singbox.json")), calls[1]
+    assert "mirror google/configs.txt" in out, "google mirror freshness must be measured"
+    calls_f, out_f = run_once(True)
+    assert calls_f[0] == calls[0] and "cascade purge failed" in out_f, out_f
+    assert "mirror agreement" in out_f, "a failed second request must not stop the step"
+
 def _gr_workflow():
     p = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..",
                      ".github", "workflows", "aggregate.yml")
@@ -16231,7 +16313,14 @@ def test_zzz_gr_workflow_runs_google_after_cascade_and_before_the_gate() -> None
     rm_i = next(i for i, ln in enumerate(run_lines) if ln.startswith("rm -rf google"))
     py_i = next(i for i, ln in enumerate(run_lines) if "googleready.py" in ln)
     assert rm_i < py_i and "google.tmp" in run_lines[rm_i], run_lines
-    assert int(g["timeout-minutes"]) <= 8
+    # بودجه (سنجیده): پس از مهلتِ گام باید جا برای validate + publish + دو
+    # درخواستِ purge بماند (۹ + ۱ + ۱۱ + ۶۵ ثانیه و درخواستِ دوم ⇒ دست‌کم ۱۲۰ ثانیه)،
+    # و سقفِ خودِ گام نباید گام را **پیش از** مهلت بکشد (زودترین آغاز: ۳۲۶ ثانیه).
+    job_cap = int(_gr_workflow()["jobs"]["aggregate"]["timeout-minutes"]) * 60
+    offset = int(re.search(r"JOB_STARTED_EPOCH \+ (\d+)", g["run"]).group(1))
+    assert job_cap - offset >= 120, (job_cap, offset)
+    assert 300 + int(g["timeout-minutes"]) * 60 >= offset, "the step cap would fire before its deadline"
+    assert int(g["timeout-minutes"]) * 60 + 300 <= job_cap + 60, "step cap far beyond the job cap"
     first = steps[0]
     assert "JOB_STARTED_EPOCH" in (first.get("run") or ""), "job clock must start first"
 
