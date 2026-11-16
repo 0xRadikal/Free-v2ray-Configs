@@ -426,7 +426,8 @@ def build_argv(in_path: str, out_path: str, *,
                mdelay_ms: Optional[int] = None,
                timeout_ms: Optional[int] = None,
                max_passed: int = 0,
-               retries: int = 0) -> List[str]:
+               retries: int = 0,
+               test_urls: Optional[Sequence[str]] = None) -> List[str]:
     """
     خطِ فرمانِ کامل. هیچ پرچمی به پیش‌فرض واگذار نمی‌شود مگر آن‌که
     پیش‌فرضش سنجیده و پذیرفته شده باشد.
@@ -434,6 +435,12 @@ def build_argv(in_path: str, out_path: str, *,
     `--rip` عمداً دست‌کاری نمی‌شود: پیش‌فرضش `true` است و سنجشِ A/B نشان
     داد با `--rip=false` ستونِ `location` در **صفر** سطر پر می‌شود، که
     بندِ B6b (کشور از xray-knife) را ناممکن می‌کند.
+
+    `test_urls` (اختیاری) پنلِ چندمقصدیِ xray-knife را فعال می‌کند
+    (`--test-urls`، که در سورسِ v10.1.1 خوانده شد: `-u` را نادیده می‌گیرد،
+    برای هر نشانیِ `generate_204` دقیقاً 204 می‌خواهد و نتیجهٔ هر مقصد را در
+    ستونِ `endpoints` می‌نویسد). وقتی `None` است — حالتِ L3 — خطِ فرمان
+    **بایت‌به‌بایت** همانِ پیش است. مصرف‌کننده: `googleready.py`.
     """
     argv = [
         binary, "http",
@@ -444,8 +451,19 @@ def build_argv(in_path: str, out_path: str, *,
         "-d", str(int(mdelay_ms if mdelay_ms is not None else MDELAY_MS)),
         "--timeout", str(int(timeout_ms if timeout_ms is not None
                              else TIMEOUT_MS)),
-        "-u", test_url if test_url is not None else TEST_URL,
     ]
+    if test_urls is None:
+        argv += ["-u", test_url if test_url is not None else TEST_URL]
+    else:
+        urls = [str(u).strip() for u in test_urls]
+        if not urls or any(not u for u in urls):
+            raise ValueError("test_urls must be a non-empty list of URLs")
+        # ابزار فهرست را با کاما جدا می‌کند؛ نشانیِ کامادار بی‌صدا دو تکه
+        # می‌شد و مقصدِ اشتباهی سنجیده می‌شد.
+        bad = [u for u in urls if "," in u or not u.startswith(("http://", "https://"))]
+        if bad:
+            raise ValueError(f"test_urls entries must be http(s) URLs without commas: {bad!r}")
+        argv += ["--test-urls", ",".join(urls)]
     if max_passed:
         argv += ["--max-passed", str(int(max_passed))]
     if retries:
@@ -462,7 +480,8 @@ def run_test(in_path: str, *,
              timeout_ms: Optional[int] = None,
              max_passed: int = 0,
              retries: int = 0,
-             hard_timeout: Optional[int] = None) -> Dict[str, Any]:
+             hard_timeout: Optional[int] = None,
+             test_urls: Optional[Sequence[str]] = None) -> Dict[str, Any]:
     """
     L3 را روی یک فایلِ ورودی اجرا می‌کند و نتیجهٔ داوری‌شده را برمی‌گرداند.
 
@@ -530,7 +549,8 @@ def run_test(in_path: str, *,
         argv = build_argv(in_path, out_path, binary=resolved,
                           test_url=test_url, threads=threads,
                           mdelay_ms=mdelay_ms, timeout_ms=timeout_ms,
-                          max_passed=max_passed, retries=retries)
+                          max_passed=max_passed, retries=retries,
+                          test_urls=test_urls)
         limit = int(hard_timeout if hard_timeout is not None else HARD_TIMEOUT)
 
         started = time.time()
@@ -573,7 +593,8 @@ def run_test(in_path: str, *,
         result["stats"]["lines_in"] = n_lines
         result["stats"]["unique_in"] = len(unique_in)
         result["stats"]["test_url"] = (
-            test_url if test_url is not None else TEST_URL)
+            ",".join(test_urls) if test_urls is not None
+            else (test_url if test_url is not None else TEST_URL))
         result["stats"]["threads"] = int(
             threads if threads is not None else THREADS)
         # `out_path` هم‌چنان گزارش می‌شود تا قرارداد نشکند، ولی اگر مالِ ما

@@ -131,7 +131,7 @@ https://raw.githubusercontent.com/0xRadikal/Free-Telegram-Proxy/main/resilient/t
 
 ## 🎛️ Выберите категорию (tier)
 
-Каждый запуск публикует шесть категорий. Это не разные источники — это **один и тот же
+Каждый запуск публикует семь категорий. Это не разные источники — это **один и тот же
 пул, отфильтрованный по тому, сколько есть доказательств, что конфиг действительно
 работает**.
 
@@ -140,6 +140,7 @@ https://raw.githubusercontent.com/0xRadikal/Free-Telegram-Proxy/main/resilient/t
 | 🏆 **`verified`** | прошёл реальный запрос через прокси во **всех 3** раундах — *рекомендуется* | [txt](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/verified/configs.txt) | [b64](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/verified/configs_base64.txt) | [yaml](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/verified/clash.yaml) | [json](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/verified/singbox.json) |
 | ⚡ **`fast`** | `verified` **и** медианная задержка `< 800 мс` | [txt](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/fast/configs.txt) | [b64](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/fast/configs_base64.txt) | [yaml](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/fast/clash.yaml) | [json](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/fast/singbox.json) |
 | 🔐 **`secure`** | `verified` **и** forward secrecy, **и** ссылка не отключает проверку сертификата | [txt](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/secure/configs.txt) | [b64](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/secure/configs_base64.txt) | [yaml](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/secure/clash.yaml) | [json](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/secure/singbox.json) |
+| 🟢 **`google`** | `verified` **и** в **обоих** раундах Google-теста дошёл до gstatic, YouTube и Play (`generate_204`), до репозитория Google Maven **и до Gemini** (не заблокирован, без CAPTCHA), **и** сам Google относит выход к стране, где доступен Gemini — измерено с раннера CI; ваш аккаунт Google тоже должен соответствовать требованиям. Отсутствует в запуске, где тест не удалось провести | [txt](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/google/configs.txt) | [b64](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/google/configs_base64.txt) | [yaml](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/google/clash.yaml) | [json](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/google/singbox.json) |
 | 🌐 **`all`** | всё, с дедупликацией — самый большой список, в основном непроверенный | [txt](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/all/configs.txt) | [b64](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/all/configs_base64.txt) | [yaml](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/all/clash.yaml) | [json](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/all/singbox.json) |
 | 📦 **`heavy`** | только 5 объёмных источников | [txt](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/heavy/configs.txt) | [b64](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/heavy/configs_base64.txt) | [yaml](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/heavy/clash.yaml) | [json](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/heavy/singbox.json) |
 | ⭐ **`light`** | только 8 отобранных источников, прошедших тест скорости | [txt](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/light/configs.txt) | [b64](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/light/configs_base64.txt) | [yaml](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/light/clash.yaml) | [json](https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/light/singbox.json) |
@@ -170,6 +171,12 @@ https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/secure/confi
 https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/secure/configs_base64.txt
 https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/secure/clash.yaml
 https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/secure/singbox.json
+
+# ── google — verified и доступ к сервисам Google + Gemini (gstatic · YouTube · Play · Maven · Gemini) ──
+https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/google/configs.txt
+https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/google/configs_base64.txt
+https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/google/clash.yaml
+https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/google/singbox.json
 
 # ── all — light + heavy, с дедупликацией ───────────────────────────────────────
 https://raw.githubusercontent.com/0xRadikal/Free-v2ray-Configs/main/all/configs.txt
@@ -407,6 +414,7 @@ mihomo -t -f <file>           # mihomo   v1.19.29
 verified/   configs.txt · configs_base64.txt · clash.yaml · singbox.json   прошли все 3 раунда L3
 fast/       configs.txt · configs_base64.txt · clash.yaml · singbox.json   verified + медиана < 800 мс
 secure/     configs.txt · configs_base64.txt · clash.yaml · singbox.json   verified + forward secrecy
+google/     configs.txt · configs_base64.txt · clash.yaml · singbox.json   verified + сервисы Google + Gemini (gstatic · YouTube · Play · Maven · Gemini)
 all/        configs.txt · configs_base64.txt · clash.yaml · singbox.json   light + heavy, с дедупликацией
 heavy/      configs.txt · configs_base64.txt · clash.yaml · singbox.json   5 объёмных источников
 light/      configs.txt · configs_base64.txt · clash.yaml · singbox.json   8 отобранных источников
