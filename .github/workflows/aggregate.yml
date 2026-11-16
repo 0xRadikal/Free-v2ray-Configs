@@ -109,12 +109,18 @@ env:
 jobs:
   aggregate:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # ۱۵ → ۲۰ دقیقه (۲۰۲۶-۱۱-۱۷): گامِ Google Ready در ۶ اجرای واقعی تا ۳۷۰ ثانیه
+    # گرفت و حاشیه‌اش تا مهلتِ ۷۵۰ ثانیه به ۳۰ ثانیه رسید. هر راهِ سریع‌کردنی
+    # سنجیده شد و دقت را می‌کاست (۲۴ کارگر: ۱۰× شکستِ بیشتر؛ خواندنِ هم‌زمان:
+    # ۲ تا ۵ برابر حذفِ کانفیگِ سالم؛ قطعِ زودِ کانفیگِ کُند: ۳ از ۶ بعداً
+    # بازمی‌گشتند). پس به‌جای حذفِ کانفیگِ سالم، بودجه با نیازِ سنجیده هم‌تراز شد.
+    # اجرای عادی ۱۰ تا ۱۲ دقیقه است و این سقف فقط دورِ کُند را نجات می‌دهد.
+    timeout-minutes: 20
     steps:
       # ── ساعتِ شروعِ job — برای بودجهٔ زمانیِ گامِ Google Ready ─────────────
-      # آن گام باید پیش از `JOB_STARTED_EPOCH + 750` تمام شود تا validate و
-      # publish و purge (بیشینهٔ سنجیده در ۱۲ اجرای واقعی: ۹ + ۱۱ + ۶۵ ثانیه)
-      # در سقفِ ۹۰۰ ثانیهٔ `timeout-minutes: 15` جا شوند.
+      # آن گام باید پیش از `JOB_STARTED_EPOCH + 1050` تمام شود تا validate و
+      # publish و دو درخواستِ purge (بیشینهٔ سنجیده: ۹ + ۱ + ۱۱ + ۶۵ ثانیه، به‌علاوهٔ
+      # درخواستِ دوم) در سقفِ ۱۲۰۰ ثانیهٔ `timeout-minutes: 20` جا شوند.
       - name: ⏱️ Record job start
         run: echo "JOB_STARTED_EPOCH=$(date +%s)" >> "$GITHUB_ENV"
 
@@ -918,7 +924,20 @@ jobs:
         if: steps.gate.outputs.should_run == 'true'
         continue-on-error: true
         timeout-minutes: 15
-        run: python scripts/pipeline.py all/configs.txt --out . --json pipeline.json
+        # ⚠️ پاک‌سازیِ پیشاپیشِ خروجی‌های آبشار (۲۰۲۶-۱۱-۱۷): گامِ انتشار درخت را
+        #    از **پوشهٔ کاری** می‌سازد و پوشهٔ کاری checkoutِ انتشارِ قبلی است. اگر
+        #    آبشار شکست بخورد (شبکه، مهلت، باینری)، این پنج مسیر از دورِ قبل باقی
+        #    می‌مانند و دوباره منتشر می‌شوند — با سرآیندی که می‌گوید «در همهٔ ۳ اجرای
+        #    *همین* دور» موفق بود. بازتولید شد: با xray-knifeِ غایب rc=1 و
+        #    `verified/configs.txt` بایت‌به‌بایت دست‌نخورده ماند؛ `aggregate.py`
+        #    `index.json`/`health.json` را از نو می‌سازد، پس آن‌ها دیگر تبلیغشان
+        #    نمی‌کنند ولی خودِ فایل‌ها منتشر می‌شدند. همان قاعدهٔ «۴۰۴ بهتر از دادهٔ
+        #    کهنه» که `aggregate.py` و `countries.py` دارند. در ۲۰۰ اجرای اخیر آبشار
+        #    هرگز شکست نخورد (هیچ `##[error]`ی در لاگ‌ها)، پس اثرش تنها در دورِ
+        #    خراب دیده می‌شود.
+        run: |
+          rm -rf verified fast secure top100.txt Countries
+          python scripts/pipeline.py all/configs.txt --out . --json pipeline.json
 
       # ── Google Ready: آزمونِ واقعیِ سرویس‌های گوگل روی `verified/`ِ همین دور ──
       #
@@ -939,7 +958,9 @@ jobs:
         id: google
         if: steps.gate.outputs.should_run == 'true'
         continue-on-error: true
-        timeout-minutes: 8
+        # زودترین آغازِ سنجیده ۳۲۶ ثانیه ⇒ ۳۲۶ + ۸۴۰ = ۱۱۶۶ < ۱۲۰۰؛ و سقفِ ۸ دقیقهٔ
+        # پیشین گام را **پیش از** مهلتِ ۱۰۵۰ ثانیه می‌کشت.
+        timeout-minutes: 14
         env:
           CASCADE_OUTCOME: ${{ steps.cascade.outcome }}
         run: |
@@ -949,7 +970,7 @@ jobs:
           rm -rf google google.tmp
           DEADLINE=0
           if [ -n "${JOB_STARTED_EPOCH:-}" ]; then
-            DEADLINE=$((JOB_STARTED_EPOCH + 750))
+            DEADLINE=$((JOB_STARTED_EPOCH + 1050))
           fi
           python scripts/googleready.py --out . \
             --cascade-outcome "$CASCADE_OUTCOME" \
@@ -1641,6 +1662,61 @@ jobs:
           for p in failed[:10]:
               print(f"   ⚠️ provider miss: {p} -> {done[p].get('providers')}")
 
+          # ── درخواستِ دوم: دسته‌های آبشاری که index.json برایشان آینه تبلیغ می‌کند ──
+          # سنجش (۲۰۲۶-۱۱-۱۶): آینهٔ `verified/configs.txt` ۵٫۸ ساعت کهنه بود
+          # (age=21025، ۱۱۷۵ در برابرِ ۱۰۹۱ کانفیگ) و آینهٔ `google/` یک دورِ قبل را
+          # می‌داد، در حالی که `all/` (که همین بالا پاک می‌شود) تنها ۳۱۷ ثانیه
+          # عقب بود. jsDelivr شاخه را تا ۱۲ ساعت cache می‌کند (s-maxage=43200).
+          # چرا درخواستِ **جدا**: سقفِ مسیر در هر درخواست مستند نیست؛ در ۶ اجرای
+          # واقعی ۲۸ مسیر همیشه پذیرفته شد و تنها throttle (هر ۲۸ با هم، در اجرایی
+          # که ۹ دقیقه پس از قبلی آمد) زمان‌محور بود. پس درخواستِ اول بایت‌به‌بایت
+          # همان می‌ماند و شکستِ این یکی هرگز به `all/heavy/light` نمی‌رسد.
+          # تنها فایل‌هایی که واقعاً روی دیسک‌اند فرستاده می‌شوند.
+          def purge_extra():
+              extra = []
+              try:
+                  cascade = json.load(open("index.json", encoding="utf-8")).get("cascade_categories") or {}
+              except Exception as e:
+                  print(f"   ⚠️ cascade purge: could not read index.json: {e}")
+                  return
+              for cat in sorted(cascade):
+                  for f in ("configs.txt", "configs_base64.txt", "clash.yaml", "singbox.json"):
+                      if os.path.isfile(os.path.join(cat, f)):
+                          extra.append(f"{base}/{cat}/{f}")
+              for f in ("top100.txt", "Countries/index.json"):
+                  if os.path.isfile(f):
+                      extra.append(f"{base}/{f}")
+              if not extra:
+                  print("   (no cascade paths to purge)")
+                  return
+              print(f"🧹 purging {len(extra)} cascade paths (second request)")
+              try:
+                  r2 = json.load(urllib.request.urlopen(urllib.request.Request(
+                      "https://purge.jsdelivr.net/",
+                      data=json.dumps({"path": extra}).encode(),
+                      headers={"content-type": "application/json", "cache-control": "no-cache"},
+                  ), timeout=60))
+                  for _ in range(10):
+                      if r2.get("status") == "finished":
+                          break
+                      time.sleep(3)
+                      r2 = json.load(urllib.request.urlopen(
+                          f"https://purge.jsdelivr.net/status/{r2.get('id')}", timeout=30))
+              except Exception as e:
+                  print(f"   ⚠️ cascade purge failed: {e}")
+                  return
+              d2 = r2.get("paths", {}) or {}
+              t2 = [p for p, v in d2.items() if v.get("throttled")]
+              f2 = [p for p, v in d2.items() if not all((v.get("providers") or {}).values())]
+              print(f"   status={r2.get('status')} purged={len(d2)}"
+                    f" throttled={len(t2)} provider-failures={len(f2)}")
+          # هر خطای پیش‌بینی‌نشده (مثلاً پاسخی با شکلِ دیگر) همین‌جا می‌ماند و
+          # کاوشِ آینه در ادامه همچنان اجرا می‌شود.
+          try:
+              purge_extra()
+          except Exception as e:
+              print(f"   ⚠️ cascade purge aborted: {type(e).__name__}: {e}")
+
           # ── تأییدِ واقعیِ اثر، نه فقط «درخواست فرستادم» ────────────────────
           # اگر md5ِ نسخهٔ آینه با نسخهٔ raw یکی شد، purge مؤثر بوده است.
           # اگر نه، لاگ صادقانه می‌گوید کدام فایل عقب مانده — چون سنجش نشان
@@ -1659,7 +1735,8 @@ jobs:
               except Exception:
                   return None
 
-          probes = ["index.json", "all/configs.txt"]
+          probes = ["index.json", "all/configs.txt"] + (
+              ["google/configs.txt"] if os.path.isfile("google/configs.txt") else [])
           agree = 0
           for f in probes:
               m_raw = md5_of(f"https://raw.githubusercontent.com/{repo_slug}/{branch}/{f}")
