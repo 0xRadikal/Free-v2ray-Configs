@@ -16241,7 +16241,7 @@ def test_zzz_gr_purge_refreshes_cascade_mirrors_in_a_separate_request() -> None:
     ast_mod = __import__("ast")
     ast_mod.parse(src)
 
-    def run_once(fail_second: bool):
+    def run_once(fail_second: bool, weird_second: bool = False):
         calls = []
 
         class _R(_io.BytesIO):
@@ -16258,6 +16258,10 @@ def test_zzz_gr_purge_refreshes_cascade_mirrors_in_a_separate_request() -> None:
                 calls.append(paths)
                 if fail_second and len(calls) == 2:
                     raise OSError("simulated outage")
+                if weird_second and len(calls) == 2:
+                    # پاسخِ موفق ولی با شکلِ نامنتظر: `paths` مقدارِ غیرِ dict دارد
+                    return _R(json.dumps({"id": "j", "status": "finished",
+                                          "paths": {q: "odd" for q in paths}}).encode())
                 return _R(json.dumps({"id": "j", "status": "finished", "paths": {
                     q: {"throttled": False, "providers": {"a": True}} for q in paths}}).encode())
             return _R(b"x")
@@ -16289,6 +16293,29 @@ def test_zzz_gr_purge_refreshes_cascade_mirrors_in_a_separate_request() -> None:
     calls_f, out_f = run_once(True)
     assert calls_f[0] == calls[0] and "cascade purge failed" in out_f, out_f
     assert "mirror agreement" in out_f, "a failed second request must not stop the step"
+    calls_w, out_w = run_once(False, weird_second=True)
+    assert calls_w[0] == calls[0] and "cascade purge aborted" in out_w, out_w
+    assert "mirror agreement" in out_w, "a malformed purge reply must not stop the step"
+
+
+def test_zzz_gr_cascade_outputs_are_cleared_before_the_cascade_runs() -> None:
+    """بازتولید شد: آبشارِ شکسته (rc=1) `verified/configs.txt` را بایت‌به‌بایت
+    دست‌نخورده می‌گذاشت و گامِ انتشار آن را با سرآیندِ «همین دور» دوباره منتشر
+    می‌کرد. پاک‌سازی باید در shell و **پیش از** pipeline.py باشد و دقیقاً همان
+    مسیرهایی را بگیرد که آبشار خودش می‌سازد."""
+    steps = _gr_workflow()["jobs"]["aggregate"]["steps"]
+    step = [x for x in steps if x.get("id") == "cascade"][0]
+    lines = [ln.strip() for ln in step["run"].splitlines()
+             if ln.strip() and not ln.strip().startswith("#")]
+    rm_i = next(i for i, ln in enumerate(lines) if ln.startswith("rm -rf "))
+    py_i = next(i for i, ln in enumerate(lines) if "scripts/pipeline.py" in ln)
+    assert rm_i < py_i, lines
+    cleared = set(lines[rm_i].split()[2:])
+    produced = set(pipeline.CATEGORIES) | {"top100.txt", countries.COUNTRIES_DIR}
+    assert cleared == produced, (cleared, produced)
+    # و هرگز چیزی که آبشار نمی‌سازد (حذفِ all/ یعنی انتشارِ تهی)
+    for core_out in ("all", "heavy", "light", "index.json", "health.json", "protocols"):
+        assert core_out not in cleared, core_out
 
 def _gr_workflow():
     p = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..",

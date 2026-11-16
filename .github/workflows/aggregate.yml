@@ -924,7 +924,20 @@ jobs:
         if: steps.gate.outputs.should_run == 'true'
         continue-on-error: true
         timeout-minutes: 15
-        run: python scripts/pipeline.py all/configs.txt --out . --json pipeline.json
+        # ⚠️ پاک‌سازیِ پیشاپیشِ خروجی‌های آبشار (۲۰۲۶-۱۱-۱۷): گامِ انتشار درخت را
+        #    از **پوشهٔ کاری** می‌سازد و پوشهٔ کاری checkoutِ انتشارِ قبلی است. اگر
+        #    آبشار شکست بخورد (شبکه، مهلت، باینری)، این پنج مسیر از دورِ قبل باقی
+        #    می‌مانند و دوباره منتشر می‌شوند — با سرآیندی که می‌گوید «در همهٔ ۳ اجرای
+        #    *همین* دور» موفق بود. بازتولید شد: با xray-knifeِ غایب rc=1 و
+        #    `verified/configs.txt` بایت‌به‌بایت دست‌نخورده ماند؛ `aggregate.py`
+        #    `index.json`/`health.json` را از نو می‌سازد، پس آن‌ها دیگر تبلیغشان
+        #    نمی‌کنند ولی خودِ فایل‌ها منتشر می‌شدند. همان قاعدهٔ «۴۰۴ بهتر از دادهٔ
+        #    کهنه» که `aggregate.py` و `countries.py` دارند. در ۲۰۰ اجرای اخیر آبشار
+        #    هرگز شکست نخورد (هیچ `##[error]`ی در لاگ‌ها)، پس اثرش تنها در دورِ
+        #    خراب دیده می‌شود.
+        run: |
+          rm -rf verified fast secure top100.txt Countries
+          python scripts/pipeline.py all/configs.txt --out . --json pipeline.json
 
       # ── Google Ready: آزمونِ واقعیِ سرویس‌های گوگل روی `verified/`ِ همین دور ──
       #
@@ -1697,7 +1710,12 @@ jobs:
               f2 = [p for p, v in d2.items() if not all((v.get("providers") or {}).values())]
               print(f"   status={r2.get('status')} purged={len(d2)}"
                     f" throttled={len(t2)} provider-failures={len(f2)}")
-          purge_extra()
+          # هر خطای پیش‌بینی‌نشده (مثلاً پاسخی با شکلِ دیگر) همین‌جا می‌ماند و
+          # کاوشِ آینه در ادامه همچنان اجرا می‌شود.
+          try:
+              purge_extra()
+          except Exception as e:
+              print(f"   ⚠️ cascade purge aborted: {type(e).__name__}: {e}")
 
           # ── تأییدِ واقعیِ اثر، نه فقط «درخواست فرستادم» ────────────────────
           # اگر md5ِ نسخهٔ آینه با نسخهٔ raw یکی شد، purge مؤثر بوده است.
