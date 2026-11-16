@@ -111,6 +111,13 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
+      # ── ساعتِ شروعِ job — برای بودجهٔ زمانیِ گامِ Google Ready ─────────────
+      # آن گام باید پیش از `JOB_STARTED_EPOCH + 750` تمام شود تا validate و
+      # publish و purge (بیشینهٔ سنجیده در ۱۲ اجرای واقعی: ۹ + ۱۱ + ۶۵ ثانیه)
+      # در سقفِ ۹۰۰ ثانیهٔ `timeout-minutes: 15` جا شوند.
+      - name: ⏱️ Record job start
+        run: echo "JOB_STARTED_EPOCH=$(date +%s)" >> "$GITHUB_ENV"
+
       - name: ⬇️ Checkout
         # ★ SHA-pinned, not a moving tag ★
         #   A major tag such as `v4` is mutable: the owner can repoint it, so the
@@ -913,6 +920,37 @@ jobs:
         timeout-minutes: 15
         run: python scripts/pipeline.py all/configs.txt --out . --json pipeline.json
 
+      # ── Google Ready: آزمونِ واقعیِ سرویس‌های گوگل روی `verified/`ِ همین دور ──
+      #
+      # سنجش (۱٬۱۷۶ کانفیگِ verified، ۳ دور): از کانفیگ‌هایی که کنترلِ
+      # Cloudflare در همهٔ دورها برایشان موفق بود، ۲۱٪ از Google Maven پاسخِ
+      # 404ِ واقعیِ گوگل گرفتند و ۶۵٫۵٪ همهٔ مقصدها را باز کردند. جزئیات و
+      # هفت تصمیمِ طراحی در docstringِ `scripts/googleready.py`.
+      #
+      # ⚠️ چرا `--cascade-outcome`: اگر آبشار شکسته باشد، `verified/` همان
+      #    خروجیِ انتشارِ قبلی است (checkout). آزمون روی آن یعنی برچسبِ تازه روی
+      #    دادهٔ کهنه؛ پس ماژول در آن حالت فقط `google/`ِ قبلی را پاک می‌کند.
+      #    `outcome` (و نه `conclusion`) نتیجهٔ واقعی پیش از
+      #    `continue-on-error` است.
+      # ⚠️ چرا `continue-on-error`: این لایه افزوده است؛ شکستش نباید انتشارِ
+      #    بقیه را بشکند. ماژول نخست `google/` را حذف و سپس اتمیک می‌نویسد،
+      #    پس هر شکستی به «نبودِ دسته» می‌رسد، نه «دستهٔ بایات یا نیمه‌نوشته».
+      - name: 🟢 Google Ready (real proxied requests to Google services)
+        id: google
+        if: steps.gate.outputs.should_run == 'true'
+        continue-on-error: true
+        timeout-minutes: 8
+        env:
+          CASCADE_OUTCOME: ${{ steps.cascade.outcome }}
+        run: |
+          DEADLINE=0
+          if [ -n "${JOB_STARTED_EPOCH:-}" ]; then
+            DEADLINE=$((JOB_STARTED_EPOCH + 750))
+          fi
+          python scripts/googleready.py --out . \
+            --cascade-outcome "$CASCADE_OUTCOME" \
+            --deadline-epoch "$DEADLINE"
+
       # ── دروازهٔ اعتبارسنجی: خروجیِ خراب هرگز commit نمی‌شود ───────────────
       #
       # ⚠️ ترتیب مهم است و تصادفی نیست: این گام **بعد** از آبشار می‌آید.
@@ -1020,6 +1058,24 @@ jobs:
               print(f"- **published:** verified={b['verified']}"
                     f" fast={b['fast']} secure={b['secure']} top={b['top']}")
               print(f"- **cascade time:** {c['total_seconds']}s")
+          # Google Ready — `googleready.py` همیشه بلوکِ `google` را می‌نویسد،
+          # حتی وقتی رد شده باشد، تا دلیلِ نبودِ `google/` دیده شود.
+          g = h.get("google")
+          if g:
+              print(f"\n### 🟢 Google Ready — {g.get('status')}"
+                    + (f" ({g.get('reason')})" if g.get("reason") else ""))
+              if "ready" in g:
+                  print(f"\n- **ready:** {g['ready']} of {g.get('judged')} judged"
+                        f" ({g.get('ready_pct_of_judged')}%) · fail {g.get('fail')}"
+                        f" · unknown {g.get('unknown')} · input {g.get('input')}")
+                  print("\n| Service | all rounds ok | always failed | mixed | failure outcomes |")
+                  print("|---|---|---|---|---|")
+                  for name, s in (g.get("per_service") or {}).items():
+                      print(f"| {name} | {s['all_ok']} | {s['all_fail']} | {s['mixed']}"
+                            f" | {s['fail_outcomes']} |")
+              rs = g.get("per_round_seconds")
+              print(f"\n- **time:** total {g.get('seconds')}s"
+                    + (f" · per round {rs} s" if rs else ""))
           PY
           fi
           # ── بارگذاریِ واقعیِ اشتراک‌های متنی در mihomo ──────────────────────
@@ -1159,12 +1215,14 @@ jobs:
           #    این‌ها اختیاری‌اند (آبشار `continue-on-error` است) و منطقِ
           #    «فقط مسیرهای موجود stage می‌شوند» همان پایین از نبودشان
           #    عبور می‌کند.
-          OUTPUT_PATHS="all heavy light protocols archive index.json health.json verified fast secure top100.txt state.json Countries"
+          #    `google/` (لایهٔ Google Ready) به همین دلیل این‌جاست.
+          OUTPUT_PATHS="all heavy light protocols archive index.json health.json verified fast secure top100.txt state.json Countries google"
 
           is_output_path() {
             case "$1" in
               all/*|heavy/*|light/*|protocols/*|archive/*|index.json|health.json) return 0 ;;
               verified/*|fast/*|secure/*|top100.txt|state.json) return 0 ;;
+              google/*) return 0 ;;
               Countries/*) return 0 ;;
               *) return 1 ;;
             esac
