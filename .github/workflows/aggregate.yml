@@ -943,6 +943,10 @@ jobs:
         env:
           CASCADE_OUTCOME: ${{ steps.cascade.outcome }}
         run: |
+          # پاک‌سازیِ مستقل از پایتون: اگر ماژول حتی import نشود (خطای نحوی،
+          # وابستگیِ گم‌شده)، `remove_outputs` اجرا نمی‌شود و `google/`ِ انتشارِ
+          # قبلی از checkout دوباره منتشر می‌شد. این سطر آن مسیر را می‌بندد.
+          rm -rf google google.tmp
           DEADLINE=0
           if [ -n "${JOB_STARTED_EPOCH:-}" ]; then
             DEADLINE=$((JOB_STARTED_EPOCH + 750))
@@ -1073,6 +1077,13 @@ jobs:
                   for name, s in (g.get("per_service") or {}).items():
                       print(f"| {name} | {s['all_ok']} | {s['all_fail']} | {s['mixed']}"
                             f" | {s['fail_outcomes']} |")
+                  geo = g.get("geo")
+                  if geo:
+                      print(f"\n- **Gemini region (Google's own geolocation):**"
+                            f" passed panel {g.get('panel_ready')} → kept {g['ready']}"
+                            f" · unsupported country {geo.get('dropped_unsupported_country')}"
+                            f" · unknown {geo.get('dropped_unknown')}"
+                            f" · retried {geo.get('retried')} · {geo.get('seconds')}s")
               rs = g.get("per_round_seconds")
               print(f"\n- **time:** total {g.get('seconds')}s"
                     + (f" · per round {rs} s" if rs else ""))

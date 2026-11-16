@@ -15602,10 +15602,10 @@ import googleready  # noqa: E402
 #: (کپیِ عینی از خروجیِ سنجش؛ برچسب‌ها و قالب از خودِ ابزار آمده‌اند).
 _GR_REAL_EP = ("cp.cloudflare.com=ok(318ms); gstatic.com=slow(5898ms); "
                "youtube.com=ok(363ms); play.google.com=ok(322ms); "
-               "dl.google.com=status404")
+               "dl.google.com=status404; gemini.google.com=ok(90ms)")
 _GR_ALL_OK = ("cp.cloudflare.com=ok(300ms); gstatic.com=ok(310ms); "
               "youtube.com=ok(320ms); play.google.com=ok(330ms); "
-              "dl.google.com=ok(340ms)")
+              "dl.google.com=ok(340ms); gemini.google.com=ok(90ms)")
 _GR_LINKS = (
     "vless://11111111-1111-1111-1111-111111111111@1.2.3.4:443?security=tls"
     "&type=tcp&sni=a.example.com#a",
@@ -15651,6 +15651,25 @@ def _gr_rounds(*per_round):
     return fn
 
 
+#: آغازِ واقعیِ پاسخِ `www.youtube.com/sw.js_data` (کپیِ عینیِ خروجیِ سنجش از
+#: سرورِ آلمان؛ IP عمداً با نشانیِ مستندسازیِ RFC 3849 جایگزین شد).
+_GR_SW_BODY = (b')]}\'\n\n[["yt.sw.adr",null,[[["de","DE",null,"2001:db8::a",null,'
+               b'null,null,null,null,null,null,"Robot","Bot or Crawler"')
+
+
+def _gr_geo(by_link=None, default="US"):
+    """جایگزینِ `geo_fn`: کشورِ هر لینک از `by_link`، وگرنه `default`."""
+    by_link = dict(by_link or {})
+
+    def fn(links, deadline_epoch, clock):
+        out = {}
+        for L in links:
+            gl = by_link.get(L, default)
+            out[L] = {"gl": gl, "why": "ok" if gl else "fetch_failed", "tries": 1}
+        return out
+    return fn
+
+
 def test_zzz_gr_l3_command_line_is_byte_identical_without_test_urls() -> None:
     """افزودنِ پنل نباید حتی یک پرچمِ L3 را عوض کند (L3 دست‌نخورده می‌ماند)."""
     base = realtest.build_argv("in", "out", binary="xk")
@@ -15682,7 +15701,8 @@ def test_zzz_gr_labels_match_what_xray_knife_actually_wrote() -> None:
     assert set(parsed) == set(googleready.LABELS.values()), parsed
     assert parsed == {"cp.cloudflare.com": "ok", "gstatic.com": "slow",
                       "youtube.com": "ok", "play.google.com": "ok",
-                      "dl.google.com": "status404"}, parsed
+                      "dl.google.com": "status404",
+                      "gemini.google.com": "ok"}, parsed
     assert googleready.xk_label("https://www.gstatic.com/generate_204") == "gstatic.com"
 
 
@@ -15732,6 +15752,8 @@ def test_zzz_gr_ready_keeps_the_verified_order() -> None:
 
 def test_zzz_gr_reference_rejects_captive_200_and_wrong_maven_body() -> None:
     good_pom = b"<project><artifactId>annotation</artifactId></project>"
+    robots = (b"User-agent: *\nAllow: /app/download\nDisallow: /app/\n"
+              b"Disallow: /chat/\n")
 
     def fetch_factory(table):
         def fetch(url, timeout):
@@ -15742,7 +15764,13 @@ def test_zzz_gr_reference_rejects_captive_200_and_wrong_maven_body() -> None:
         return fetch
 
     def ok_table(url):
-        return (200, good_pom) if "maven2" in url else (204, b"")
+        if "maven2" in url:
+            return (200, good_pom)
+        if url.endswith("/robots.txt"):
+            return (200, robots)
+        if url == googleready.GEO_URL:
+            return (200, _GR_SW_BODY)
+        return (204, b"")
     assert googleready.reference_check(fetch_factory(ok_table))["ok"] is True
 
     def captive(url):
@@ -15751,14 +15779,14 @@ def test_zzz_gr_reference_rejects_captive_200_and_wrong_maven_body() -> None:
     assert rep["ok"] is False and rep["endpoints"]["gstatic"]["ok"] is False
 
     def bad_body(url):
-        return (200, b"<html>hi</html>") if "maven2" in url else (204, b"")
+        return (200, b"<html>hi</html>") if "maven2" in url else ok_table(url)
     rep = googleready.reference_check(fetch_factory(bad_body))
     assert rep["ok"] is False and rep["endpoints"]["maven"]["ok"] is False, rep
 
     calls = {"n": 0}
 
     def flaky(url):
-        if "youtube" in url:
+        if url == "https://www.youtube.com/generate_204":
             calls["n"] += 1
             if calls["n"] == 1:
                 return OSError("reset")
@@ -15774,7 +15802,7 @@ def test_zzz_gr_publish_writes_four_files_and_advertises_them() -> None:
         a, b, c = _GR_LINKS
         rounds = _gr_rounds({a: _gr_ep(), b: _gr_ep(), c: _gr_ep(youtube="error")},
                             {a: _gr_ep(), b: _gr_ep(), c: _gr_ep()})
-        block = googleready.run(root, rounds=2, reference=_gr_ref_ok, round_fn=rounds)
+        block = googleready.run(root, rounds=2, geo_fn=_gr_geo(), reference=_gr_ref_ok, round_fn=rounds)
         assert block["status"] == "published", block
         assert (block["ready"], block["fail"], block["unknown"]) == (2, 1, 0), block
         gdir = os.path.join(root, "google")
@@ -15816,7 +15844,7 @@ def test_zzz_gr_stale_google_dir_is_removed_when_the_round_cannot_judge() -> Non
             json.dump(doc, open(idx_path, "w", encoding="utf-8"))
             kw.setdefault("reference", _gr_ref_ok)
             kw.setdefault("round_fn", _gr_rounds({}, {}))
-            block = googleready.run(root, rounds=2, **kw)
+            block = googleready.run(root, rounds=2, geo_fn=_gr_geo(), **kw)
             assert block["status"] in ("skipped", "failed", "empty"), (kw, block)
             assert not os.path.exists(os.path.join(root, "google")), kw
             idx = json.load(open(idx_path, encoding="utf-8"))
@@ -15835,13 +15863,13 @@ def test_zzz_gr_no_round_starts_without_the_time_budget() -> None:
     with tempfile.TemporaryDirectory(prefix="gr_") as root:
         _gr_tree(root)
         now = 1_000_000.0
-        block = googleready.run(root, rounds=2, reference=_gr_ref_ok, round_fn=round_fn,
+        block = googleready.run(root, rounds=2, geo_fn=_gr_geo(), reference=_gr_ref_ok, round_fn=round_fn,
                                 deadline_epoch=now + 100, clock=lambda: now)
         assert block["status"] == "skipped" and "time budget" in block["reason"], block
         assert calls == [] and not os.path.exists(os.path.join(root, "google"))
     with tempfile.TemporaryDirectory(prefix="gr_") as root:
         _gr_tree(root)
-        block = googleready.run(root, rounds=2, reference=_gr_ref_ok, round_fn=round_fn,
+        block = googleready.run(root, rounds=2, geo_fn=_gr_geo(), reference=_gr_ref_ok, round_fn=round_fn,
                                 deadline_epoch=now + 400, clock=lambda: now)
         assert block["status"] == "published", block
         # سقفِ هر دور هرگز از بودجهٔ باقی‌مانده بیشتر نیست
@@ -15861,7 +15889,7 @@ def test_zzz_gr_a_converter_crash_leaves_no_half_written_category() -> None:
             _gr_tree(root)
             rounds = _gr_rounds({L: _gr_ep() for L in _GR_LINKS},
                                 {L: _gr_ep() for L in _GR_LINKS})
-            block = googleready.run(root, rounds=2, reference=_gr_ref_ok, round_fn=rounds)
+            block = googleready.run(root, rounds=2, geo_fn=_gr_geo(), reference=_gr_ref_ok, round_fn=rounds)
             assert block["status"] == "failed", block
             assert not os.path.exists(os.path.join(root, "google"))
             assert not os.path.exists(os.path.join(root, "google.tmp"))
@@ -15914,11 +15942,271 @@ def test_zzz_gr_a_failed_cascade_never_tests_the_stale_verified_list() -> None:
     for outcome in ("failure", "cancelled", "skipped", ""):
         with tempfile.TemporaryDirectory(prefix="gr_") as root:
             _gr_tree(root)
-            block = googleready.run(root, rounds=2, reference=_gr_ref_ok,
+            block = googleready.run(root, rounds=2, geo_fn=_gr_geo(), reference=_gr_ref_ok,
                                     round_fn=round_fn, cascade_outcome=outcome)
             assert block["status"] == "skipped", (outcome, block)
             assert not os.path.exists(os.path.join(root, "google")), outcome
     assert calls == [], calls
+
+
+def test_zzz_gr_gemini_is_in_the_panel_as_robots_txt() -> None:
+    """robots.txt (۱۱۶ بایت) با /app (۹۳۰ کیلوبایت) در ۵۰۱/۵۲۵ هم‌خوان بود."""
+    names = {n: (u, e) for n, u, e in googleready.SERVICES}
+    assert names["gemini"] == ("https://gemini.google.com/robots.txt", 200), names
+    assert googleready.LABELS["gemini"] == "gemini.google.com"
+
+
+def test_zzz_gr_a_blocked_or_captcha_gemini_is_never_ready() -> None:
+    """403 = IP مسدود؛ 404 = CAPTCHAی google.com/sorry (هر دو با curl دیده شد)."""
+    a, b, c = _GR_LINKS
+    rows = [{a: {"endpoints": _gr_ep()},
+             b: {"endpoints": _gr_ep(gemini="status403")},
+             c: {"endpoints": _gr_ep(gemini="status404")}}]
+    v = googleready.classify_rounds([a, b, c], rows)
+    assert v["ready"] == [a] and v["fail"] == [b, c], v
+    assert v["per_service"]["gemini"]["fail_outcomes"] == {"status403": 1, "status404": 1}
+
+
+def test_zzz_gr_geo_parser_reads_googles_country_only() -> None:
+    assert googleready.parse_geo(_GR_SW_BODY) == "DE"
+    for bad in (b"", b"garbage", b'[["yt.sw.adr",null,[[["de","de"',
+                b'[["other",null,[[["de","DE"', b"<html>Error 404</html>"):
+        assert googleready.parse_geo(bad) is None, bad
+
+
+def test_zzz_gr_gemini_country_allowlist_invariants() -> None:
+    """فهرستِ سفید از صفحهٔ رسمی (۲۴۲ نام → ۲۴۱ کد؛ «Mainland China (Workspace
+    only)» عمداً بیرون). کشورهایی که در آن صفحه **نیستند** نباید بیایند."""
+    codes = googleready.GEMINI_COUNTRIES
+    assert len(codes) == 241 and all(re.fullmatch(r"[A-Z]{2}", c) for c in codes)
+    for absent in ("RU", "IR", "CN", "BY", "CU", "SY", "KP"):
+        assert absent not in codes, absent
+    for present in ("US", "DE", "TR", "HK", "AE", "IQ", "CZ", "KZ", "GB", "XK"):
+        assert present in codes, present
+
+
+def test_zzz_gr_only_gemini_supported_countries_are_published() -> None:
+    """کشورِ ناپشتیبان و کشورِ نامعلوم هر دو حذف می‌شوند (نامعلوم = سمتِ امن)."""
+    import tempfile
+    a, b, c = _GR_LINKS
+    with tempfile.TemporaryDirectory(prefix="gr_") as root:
+        _gr_tree(root)
+        rounds = _gr_rounds({L: _gr_ep() for L in _GR_LINKS}, {L: _gr_ep() for L in _GR_LINKS})
+        block = googleready.run(root, rounds=2, reference=_gr_ref_ok, round_fn=rounds,
+                                geo_fn=_gr_geo({a: "US", b: "RU", c: None}))
+        assert block["status"] == "published", block
+        assert (block["panel_ready"], block["ready"]) == (3, 1), block
+        g = block["geo"]
+        assert g["kept_by_country"] == {"US": 1}, g
+        assert g["dropped_unsupported_country"] == {"RU": 1}, g
+        assert g["dropped_unknown"] == {"fetch_failed": 1}, g
+        body = open(os.path.join(root, "google", "configs.txt"), encoding="utf-8").read()
+        assert a in body and b not in body and c not in body
+    with tempfile.TemporaryDirectory(prefix="gr_") as root:
+        _gr_tree(root)
+        rounds = _gr_rounds({L: _gr_ep() for L in _GR_LINKS}, {L: _gr_ep() for L in _GR_LINKS})
+        block = googleready.run(root, rounds=2, reference=_gr_ref_ok, round_fn=rounds,
+                                geo_fn=_gr_geo(default="RU"))
+        assert block["status"] == "empty" and block["ready"] == 0, block
+        assert not os.path.exists(os.path.join(root, "google"))
+
+
+def test_zzz_gr_no_geo_phase_without_time_for_it() -> None:
+    import tempfile
+    called = []
+
+    def geo(links, deadline, clock):
+        called.append(1)
+        return {}
+    with tempfile.TemporaryDirectory(prefix="gr_") as root:
+        _gr_tree(root)
+        now = [1_000_000.0]
+
+        def clock():
+            return now[0]
+
+        def round_fn(lines, limit):
+            now[0] += 200          # هر دور ۲۰۰ ثانیه «طول می‌کشد»
+            return {L: {"endpoints": _gr_ep()} for L in lines}
+        block = googleready.run(root, rounds=2, reference=_gr_ref_ok, round_fn=round_fn,
+                                geo_fn=geo, deadline_epoch=now[0] + 420, clock=clock)
+        assert block["status"] == "skipped" and "Gemini region" in block["reason"], block
+        assert called == [] and not os.path.exists(os.path.join(root, "google"))
+
+
+def test_zzz_gr_geo_phase_retries_failures_once_with_fewer_workers() -> None:
+    seen = {}
+
+    def probe(link, port):
+        seen.setdefault(link, []).append(port)
+        if link == "flaky" and len(seen[link]) == 1:
+            return None, "fetch_failed"
+        if link == "dead":
+            return None, "inbound_not_ready"
+        return "US", "ok"
+    r = googleready.geo_phase(["ok", "flaky", "dead"], probe=probe, workers=3, retry_workers=1)
+    assert r["ok"] == {"gl": "US", "why": "ok", "tries": 1}, r
+    assert r["flaky"] == {"gl": "US", "why": "ok", "tries": 2}, r
+    assert r["dead"]["gl"] is None and r["dead"]["tries"] == 2, r
+    assert all(googleready.GEO_PORT_BASE <= p < googleready.GEO_PORT_BASE + 3
+               for ports in seen.values() for p in ports), seen
+
+
+def test_zzz_gr_geo_phase_never_starts_work_past_the_deadline() -> None:
+    calls = []
+
+    def probe(link, port):
+        calls.append(link)
+        return "US", "ok"
+    now = 1_000_000.0
+    r = googleready.geo_phase(["a", "b"], probe=probe, deadline_epoch=now + 5,
+                              clock=lambda: now)
+    assert calls == [] and all(v["why"] == "deadline" and v["gl"] is None
+                               for v in r.values()), r
+
+
+def test_zzz_gr_geo_probe_cleans_up_its_inbound_process() -> None:
+    """پروسهٔ inbound در هر مسیر بسته می‌شود؛ پروسهٔ مرده ⇒ نامعلوم، نه کشور."""
+    import socket as _socket
+    import stat
+    import tempfile
+    with tempfile.TemporaryDirectory(prefix="gr_geo_") as d:
+        pidfile = os.path.join(d, "pid")
+        alive = os.path.join(d, "xk_alive")
+        with open(alive, "w", encoding="utf-8") as fh:
+            fh.write(
+                "#!" + sys.executable + "\n"
+                "import os, socket, sys, time, re\n"
+                "port = int(re.search(r':(\\d+)#', sys.argv[sys.argv.index('-I') + 1]).group(1))\n"
+                f"open({pidfile!r}, 'w').write(str(os.getpid()))\n"
+                "s = socket.socket(); s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)\n"
+                "s.bind(('127.0.0.1', port)); s.listen(5)\n"
+                "time.sleep(60)\n")
+        dead = os.path.join(d, "xk_dead")
+        with open(dead, "w", encoding="utf-8") as fh:
+            fh.write("#!/bin/sh\nexit 1\n")
+        for p in (alive, dead):
+            os.chmod(p, os.stat(p).st_mode | stat.S_IEXEC)
+        probe_s = _socket.socket()
+        probe_s.bind(("127.0.0.1", 0))
+        port = probe_s.getsockname()[1]
+        probe_s.close()
+        got = {}
+
+        def fetch(proxy_url, url, timeout):
+            got["proxy"], got["url"] = proxy_url, url
+            return _GR_SW_BODY
+        code, why = googleready.geo_probe("vless://x@1.2.3.4:443#a", port, binary=alive,
+                                          password="pw", fetch=fetch)
+        assert (code, why) == ("DE", "ok"), (code, why)
+        assert got["url"] == googleready.GEO_URL
+        assert got["proxy"] == f"socks5h://gr:pw@127.0.0.1:{port}", got
+        pid = int(open(pidfile).read())
+        try:
+            os.kill(pid, 0)
+            raise AssertionError("the inbound process outlived the probe")
+        except ProcessLookupError:
+            pass
+        # پروسهٔ مرده باید **فوراً** دیده شود، نه پس از پایانِ مهلت: هر ثانیه از
+        # بودجهٔ ۷۵۰ ثانیه‌ای کم می‌شود. مهلت عمداً ۳۰ ثانیه است.
+        import time as _time
+        t0 = _time.monotonic()
+        code, why = googleready.geo_probe("vless://x@1.2.3.4:443#a", port, binary=dead,
+                                          password="pw", fetch=fetch, ready_timeout=30)
+        took = _time.monotonic() - t0
+        assert (code, why) == (None, "inbound_not_ready"), (code, why)
+        assert took < 5, f"a dead inbound took {took:.1f}s to detect (timeout was 30s)"
+
+
+def test_zzz_gr_reference_needs_gemini_content_and_a_readable_runner_country() -> None:
+    robots = b"User-agent: *\nDisallow: /app/\n"
+    pom = b"<project><artifactId>annotation</artifactId></project>"
+
+    def table(robots_body, sw_body):
+        def fetch(url, timeout):
+            if "maven2" in url:
+                return 200, pom
+            if url.endswith("/robots.txt"):
+                return 200, robots_body
+            if url == googleready.GEO_URL:
+                return 200, sw_body
+            return 204, b""
+        return fetch
+    assert googleready.reference_check(table(robots, _GR_SW_BODY))["ok"] is True
+    rep = googleready.reference_check(table(b"<html>portal</html>", _GR_SW_BODY))
+    assert rep["ok"] is False and rep["endpoints"]["gemini"]["ok"] is False, rep
+    rep = googleready.reference_check(table(robots, b"<html>changed</html>"))
+    assert rep["ok"] is False and rep["endpoints"]["geo"]["ok"] is False, rep
+
+
+def test_zzz_gr_any_unsupported_reading_drops_the_config() -> None:
+    """سنجش: یک سرور از IPv4 «US» و از IPv6 «RU» دیده می‌شد، در هر اتصال متفاوت."""
+    J = googleready.judge_readings
+    assert J(["US", "US", "US"]) == ("US", "ok")
+    assert J(["US", "RU", "US"]) == ("RU", "ok")       # یک خواندنِ بد کافی است
+    assert J(["RU"]) == ("RU", "ok")
+    assert J(["US", None, None]) == (None, "too_few_readings")
+    assert J([None, None, None]) == (None, "too_few_readings")
+    assert J(["DE", "US", "DE"]) == ("DE", "ok")       # هر دو پشتیبانی‌شده‌اند
+
+
+def test_zzz_gr_geo_probe_reads_three_times_and_stops_at_the_first_bad_one() -> None:
+    import socket as _socket
+    import stat
+    import tempfile
+    with tempfile.TemporaryDirectory(prefix="gr_geo_") as d:
+        alive = os.path.join(d, "xk_alive")
+        with open(alive, "w", encoding="utf-8") as fh:
+            fh.write(
+                "#!" + sys.executable + "\n"
+                "import socket, sys, time, re\n"
+                "port = int(re.search(r':(\\d+)#', sys.argv[sys.argv.index('-I') + 1]).group(1))\n"
+                "s = socket.socket(); s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)\n"
+                "s.bind(('127.0.0.1', port)); s.listen(5)\n"
+                "time.sleep(60)\n")
+        os.chmod(alive, os.stat(alive).st_mode | stat.S_IEXEC)
+
+        def free_port():
+            t = _socket.socket(); t.bind(("127.0.0.1", 0)); p = t.getsockname()[1]; t.close()
+            return p
+
+        def body(code):
+            return _GR_SW_BODY.replace(b'"de","DE"', b'"en","' + code.encode() + b'"')
+
+        def scripted(seq):
+            calls = []
+
+            def fetch(proxy_url, url, timeout):
+                calls.append(url)
+                item = seq[len(calls) - 1]
+                return None if item is None else body(item)
+            return fetch, calls
+        fetch, calls = scripted(["US", "US", "US"])
+        assert googleready.geo_probe("x", free_port(), binary=alive, password="pw",
+                                     fetch=fetch) == ("US", "ok")
+        assert len(calls) == googleready.GEO_READINGS == 3
+        fetch, calls = scripted(["US", "RU", "US"])
+        assert googleready.geo_probe("x", free_port(), binary=alive, password="pw",
+                                     fetch=fetch) == ("RU", "ok")
+        assert len(calls) == 2, "must stop at the first unsupported reading"
+        fetch, calls = scripted([None, None, None])
+        assert googleready.geo_probe("x", free_port(), binary=alive, password="pw",
+                                     fetch=fetch) == (None, "fetch_failed")
+        fetch, calls = scripted(["US", None, None])
+        assert googleready.geo_probe("x", free_port(), binary=alive, password="pw",
+                                     fetch=fetch) == (None, "too_few_readings")
+
+
+def test_zzz_gr_too_few_geo_readings_are_clamped_not_fatal() -> None:
+    """`GR_GEO_READINGS=1` می‌توانست بی‌صدا هر کانفیگی را «نامعلوم» کند."""
+    import subprocess as _sp
+    here = os.path.dirname(os.path.abspath(__file__))
+    out = _sp.run([sys.executable, "-c", "import googleready as g; print(g.GEO_READINGS)"],
+                  cwd=here, env=dict(os.environ, GR_GEO_READINGS="1"),
+                  capture_output=True, text=True, timeout=60)
+    assert out.returncode == 0, out.stderr
+    assert out.stdout.strip() == str(googleready.GEO_MIN_READABLE), out.stdout
+    assert "GR_GEO_READINGS=1" in out.stderr
 
 def _gr_workflow():
     p = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..",
@@ -15937,6 +16225,12 @@ def test_zzz_gr_workflow_runs_google_after_cascade_and_before_the_gate() -> None
     assert g["env"]["CASCADE_OUTCOME"] == "${{ steps.cascade.outcome }}", \
         "`outcome` is the result before continue-on-error; `conclusion` is always success"
     assert "--cascade-outcome" in g["run"] and "--deadline-epoch" in g["run"]
+    # پاک‌سازی باید **پیش از** پایتون و در خودِ shell باشد: اگر ماژول import
+    # نشود، `remove_outputs` هرگز اجرا نمی‌شود و `google/`ِ کهنه منتشر می‌شد.
+    run_lines = [ln.strip() for ln in g["run"].splitlines() if ln.strip() and not ln.strip().startswith("#")]
+    rm_i = next(i for i, ln in enumerate(run_lines) if ln.startswith("rm -rf google"))
+    py_i = next(i for i, ln in enumerate(run_lines) if "googleready.py" in ln)
+    assert rm_i < py_i and "google.tmp" in run_lines[rm_i], run_lines
     assert int(g["timeout-minutes"]) <= 8
     first = steps[0]
     assert "JOB_STARTED_EPOCH" in (first.get("run") or ""), "job clock must start first"
