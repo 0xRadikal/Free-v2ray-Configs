@@ -73,6 +73,7 @@ import filters  # noqa: E402
 import converters  # noqa: E402
 import core  # noqa: E402
 import countries  # noqa: E402
+import lkg  # noqa: E402
 
 # ──────────────────────────────────────────────────────────────────────────────
 # ثابت‌ها
@@ -353,18 +354,21 @@ def write_buckets(out_dir: str, buckets: Dict[str, Any]) -> Dict[str, str]:
     # (`criterion`/`note`/`measured`/…) با هیچ‌کدام از ۲۳ کلیدِ
     # `overridable:"true"`ِ Hiddify تلاقی ندارند ⇒ کاملاً بی‌اثرند.
     hh = {cat: core.hiddify_profile_header(cat.upper()) for cat in CATEGORIES}
+    # زمانِ آزمون در خودِ فایل: اگر دورِ بعد آبشار شکست بخورد و `lkg.py` همین
+    # خروجی را نگه دارد، کاربر سنِ واقعیِ فهرست را می‌بیند، نه «همین دور».
+    tested = lkg.tested_line()
 
     heads = {
         "verified": (
             hh["verified"] +
-            f"# @Raydikalx — VERIFIED — {st['verified']} configs\n"
+            f"# @Raydikalx — VERIFIED — {st['verified']} configs\n" + tested +
             f"# criterion: a real proxied request to {realtest.TEST_URL} succeeded\n"
             f"# in ALL {rounds} independent runs of this round.\n"
             f"# measured: {st['flaky_pct']}% of everything that ever worked is "
             f"flaky, so a single run is not enough.\n"),
         "fast": (
             hh["fast"] +
-            f"# @Raydikalx — FAST — {st['fast']} configs\n"
+            f"# @Raydikalx — FAST — {st['fast']} configs\n" + tested +
             f"# criterion: verified AND median delay across {rounds} runs "
             f"< {st['fast_threshold_ms']}ms.\n"
             f"# the median (not one sample) is used because configs cross this "
@@ -373,7 +377,7 @@ def write_buckets(out_dir: str, buckets: Dict[str, Any]) -> Dict[str, str]:
             f"as the reason for using a median, not as a constant.\n"),
         "secure": (
             hh["secure"] +
-            f"# @Raydikalx — SECURE — {st['secure']} configs\n"
+            f"# @Raydikalx — SECURE — {st['secure']} configs\n" + tested +
             f"# criterion: verified AND forward secrecy — the session key comes\n"
             f"# from an (EC)DHE handshake (TLS/REALITY, or QUIC which mandates\n"
             f"# TLS 1.3 per RFC 9001 §4.2) AND the link does not disable\n"
@@ -428,7 +432,7 @@ def write_buckets(out_dir: str, buckets: Dict[str, Any]) -> Dict[str, str]:
     short = st["top_short_by"]
     top_head = (
         core.hiddify_profile_header(f"TOP {len(buckets['top'])}") +
-        f"# @Raydikalx — TOP {len(buckets['top'])} — sorted by median delay\n"
+        f"# @Raydikalx — TOP {len(buckets['top'])} — sorted by median delay\n" + tested +
         f"# every entry passed a real proxied request in all {rounds} runs.\n")
     if short:
         # اعلامِ صریح به‌جای پرکردنِ مصنوعی. کاربر باید بداند استخر کوچک بود.

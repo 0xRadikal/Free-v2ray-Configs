@@ -145,6 +145,7 @@ import converters  # noqa: E402
 import core  # noqa: E402
 import pipeline  # noqa: E402
 import realtest  # noqa: E402
+import lkg  # noqa: E402
 
 # ──────────────────────────────────────────────────────────────────────────────
 # ثابت‌ها
@@ -678,7 +679,7 @@ def _header(count: int, rounds: int) -> str:
     services = ", ".join(f"{name} ({url})" for name, url, _ in SERVICES)
     return (
         core.hiddify_profile_header("GOOGLE READY") +
-        f"# @Raydikalx — GOOGLE READY — {count} configs\n"
+        f"# @Raydikalx — GOOGLE READY — {count} configs\n" + lkg.tested_line() +
         f"# criterion: verified AND, in ALL {rounds} runs of this round, a real\n"
         f"# proxied request succeeded to each of: {services}.\n"
         f"# generate_204 must answer exactly 204; Maven and Gemini must answer 2xx\n"
