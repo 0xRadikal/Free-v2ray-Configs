@@ -340,6 +340,57 @@ jobs:
           python-version: "3.12"
           cache: pip
 
+      # ── هم‌گام‌سازیِ خروجی‌ها با تازه‌ترین انتشار (اجرای صف‌کشیده) ─────────
+      #
+      # چرا: `actions/checkout` کامیتِ «لحظهٔ رویداد» (GITHUB_SHA) را می‌گیرد، نه
+      # نوکِ فعلیِ شاخه. اجرایی که پشتِ اجرای دیگری در صف مانده، روی خروجی‌های
+      # یک انتشارِ عقب‌تر شروع می‌کند: اگر آبشارش شکست بخورد، lkg همان خروجیِ
+      # کهنه‌تر را برمی‌گرداند و گامِ انتشار (که روی نوکِ تازه anchor می‌شود) آن
+      # را روی خروجیِ تازه‌تر force-push می‌کند؛ state.json (حافظهٔ منابع) هم یک
+      # دور عقب می‌رود. سنجش (۲۴ ساعتِ منتهی به 2026-11-17): ۵ از ۹۷ اجرای
+      # بی‌شرط ۶۲ تا ۴۸۳ ثانیه در صف ماندند؛ اجرای 43994010849 روی ab75ec3 نشست
+      # در حالی که نوکِ شاخه 1b77ce9 بود.
+      # چه می‌کند: نوکِ شاخه را می‌گیرد؛ اگر تنها تفاوتش با این checkout در
+      # OUTPUT_PATHS باشد (یعنی کد یکی است)، checkout را به آن می‌برد — دقیقاً
+      # همان درختی که اجرای بی‌صف می‌گرفت. اگر سورس هم فرق کند، خروجی‌ها را با
+      # کدِ همین اجرا هم‌خوان نگه می‌دارد (رفتارِ پیشین). خطای fetch/diff ⇒ همان
+      # رفتارِ پیشین؛ خطای reset ⇒ شکستِ کار، تا شاخه دست‌نخورده بماند.
+      # OUTPUT_PATHS باید عیناً همانِ گامِ انتشار باشد (آزمون قفلش کرده است).
+      - name: 🔄 Sync outputs with the newest publish
+        id: sync_outputs
+        if: steps.gate.outputs.should_run == 'true'
+        timeout-minutes: 3
+        run: |
+          OUTPUT_PATHS="all heavy light protocols archive index.json health.json verified fast secure top100.txt state.json Countries google"
+          HEAD_SHA=$(git rev-parse HEAD)
+          if ! timeout 60 git fetch --no-tags --force --depth=1 origin \
+               "+refs/heads/$PUBLISH_BRANCH:refs/remotes/origin/$PUBLISH_BRANCH"; then
+            echo "::warning title=Output sync skipped::could not fetch '$PUBLISH_BRANCH' — keeping the outputs of ${HEAD_SHA:0:8}"
+            exit 0
+          fi
+          if ! TIP=$(git rev-parse --verify -q "refs/remotes/origin/$PUBLISH_BRANCH^{commit}"); then
+            echo "::warning title=Output sync skipped::no '$PUBLISH_BRANCH' tip after the fetch — keeping the outputs of ${HEAD_SHA:0:8}"
+            exit 0
+          fi
+          if [ "$TIP" = "$HEAD_SHA" ]; then
+            echo "✅ checkout ${HEAD_SHA:0:8} is the newest '$PUBLISH_BRANCH' — nothing to sync"
+            exit 0
+          fi
+          EXCLUDE=()
+          for p in $OUTPUT_PATHS; do EXCLUDE+=(":(exclude)$p"); done
+          if ! SOURCE_DIFF=$(git diff --no-renames --name-only "$HEAD_SHA" "$TIP" -- . "${EXCLUDE[@]}"); then
+            echo "::warning title=Output sync skipped::could not compare ${HEAD_SHA:0:8} with ${TIP:0:8} — keeping this checkout's outputs"
+            exit 0
+          fi
+          if [ -n "$SOURCE_DIFF" ]; then
+            echo "::notice title=Output sync skipped::source changed since this run was triggered (${HEAD_SHA:0:8} → ${TIP:0:8}: $(printf '%s' "$SOURCE_DIFF" | tr '\n' ' ' | cut -c1-300)) — keeping the outputs that match this code"
+            exit 0
+          fi
+          CHANGED=$(git diff --no-renames --name-only "$HEAD_SHA" "$TIP" | wc -l) || CHANGED="?"
+          # تنها گامِ کشنده: reset نیمه‌کاره ⇒ شکستِ کار ⇒ انتشاری رخ نمی‌دهد.
+          git reset -q --hard "$TIP"
+          echo "🔄 queued run: outputs synced ${HEAD_SHA:0:8} → ${TIP:0:8} (${CHANGED} output files differ, source identical)"
+
       # ── آخرین خروجیِ سالم (last-known-good): کنار گذاشتن پیش از aggregate ──
       #
       # چرا: اگر آبشار یا Google Ready در یک دور شکست بخورد، کاربر نباید

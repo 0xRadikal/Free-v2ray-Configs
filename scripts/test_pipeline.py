@@ -16686,6 +16686,219 @@ def test_zzz_lkg_headers_carry_the_test_time() -> None:
             assert lkg._header_tested(os.path.join(r, p)), p
 
 
+# ── اجرای صف‌کشیده: هم‌گام‌سازیِ خروجی‌ها با تازه‌ترین انتشار ─────────────────
+#
+# `actions/checkout` کامیتِ لحظهٔ رویداد را می‌گیرد. اجرای 43994010849 (۴۳۲
+# ثانیه در صف) روی ab75ec3 نشست در حالی که نوکِ main خروجیِ تازه‌تری داشت؛ با
+# شکستِ آبشار، lkg همان خروجیِ کهنه‌تر را برمی‌گرداند و انتشار آن را روی
+# خروجیِ تازه force-push می‌کرد (بازتولیدشده با دادهٔ واقعی: VERIFIED 1492 ⇐
+# 1381، دو ساعت عقب‌گرد). این آزمون‌ها خودِ shellِ گام را روی مخزن‌های git
+# واقعی اجرا می‌کنند — همان فرمان‌های fetch/checkoutِ actions/checkout.
+
+def _sync_step() -> dict:
+    steps = _gr_workflow()["jobs"]["aggregate"]["steps"]
+    return next(s for s in steps if s.get("id") == "sync_outputs")
+
+
+def _sync_env() -> dict:
+    env = dict(os.environ, GIT_CONFIG_GLOBAL=os.devnull, GIT_CONFIG_NOSYSTEM="1",
+               GIT_AUTHOR_NAME="t", GIT_AUTHOR_EMAIL="t@example.invalid",
+               GIT_COMMITTER_NAME="t", GIT_COMMITTER_EMAIL="t@example.invalid",
+               GIT_TERMINAL_PROMPT="0")
+    for k in ("GITHUB_OUTPUT", "GH_TOKEN", "GITHUB_TOKEN"):
+        env.pop(k, None)
+    return env
+
+
+def _sync_git(cwd: str, *args: str) -> str:
+    import subprocess
+    p = subprocess.run(["git", *args], cwd=cwd, env=_sync_env(), capture_output=True, text=True,
+                       timeout=60)
+    assert p.returncode == 0, f"git {args}: {p.stderr}"
+    return p.stdout.strip()
+
+
+def _sync_write(root: str, files: dict) -> None:
+    import shutil
+    for rel, body in files.items():
+        full = os.path.join(root, rel)
+        if body is None:
+            shutil.rmtree(full) if os.path.isdir(full) else os.remove(full)
+            continue
+        os.makedirs(os.path.dirname(full) or root, exist_ok=True)
+        with open(full, "w", encoding="utf-8") as f:
+            f.write(body)
+
+
+def _sync_fixture(td: str, *, newer: dict, newer_source: dict | None = None) -> tuple:
+    """origin: S (سورس) ← O1 (خروجیِ قدیمی، [auto-output]). کار‌فضا مثلِ actions/checkout
+    روی O1 ساخته می‌شود؛ سپس origin به‌جای O1 نوکِ تازه‌تر می‌گیرد (force-push، مثلِ
+    گامِ انتشار): O2 روی S، یا — با `newer_source` — S2 ← O3. خروجی: (ws, o1, tip)."""
+    author, origin, ws = (os.path.join(td, n) for n in ("author", "origin.git", "ws"))
+    os.makedirs(author)
+    _sync_git(author, "init", "-q", "-b", "main")
+    _sync_write(author, {"scripts/a.py": "print(1)\n", "README.md": "readme\n"})
+    _sync_git(author, "add", "-A")
+    _sync_git(author, "commit", "-q", "-m", "source")
+    _sync_write(author, _SYNC_O1)
+    _sync_git(author, "add", "-A")
+    _sync_git(author, "commit", "-q", "-m", "chore: update configs [auto-output]")
+    o1 = _sync_git(author, "rev-parse", "HEAD")
+    _sync_git(td, "init", "-q", "--bare", origin)
+    _sync_git(author, "push", "-q", origin, "HEAD:refs/heads/main")
+    # actions/checkout (لاگِ اجرای 43994010849، سطرهای ۱۲۲ تا ۱۳۵)
+    os.makedirs(ws)
+    _sync_git(ws, "init", "-q")
+    _sync_git(ws, "remote", "add", "origin", "file://" + origin)
+    _sync_git(ws, "-c", "protocol.version=2", "fetch", "-q", "--no-tags", "--prune",
+              "--no-recurse-submodules", "--depth=1", "origin", f"+{o1}:refs/remotes/origin/main")
+    _sync_git(ws, "checkout", "-q", "--force", "-B", "main", "refs/remotes/origin/main")
+    # در صف: اجرای دیگری منتشر می‌کند.
+    _sync_git(author, "reset", "-q", "--hard", "HEAD~1")
+    if newer_source:
+        _sync_write(author, newer_source)
+        _sync_git(author, "add", "-A")
+        _sync_git(author, "commit", "-q", "-m", "owner change")
+    _sync_write(author, _SYNC_O1)       # یک دورِ کامل: خروجی‌های O1 با تغییراتِ `newer`
+    _sync_write(author, newer)
+    _sync_git(author, "add", "-A")
+    _sync_git(author, "commit", "-q", "-m", "chore: update configs [auto-output]")
+    tip = _sync_git(author, "rev-parse", "HEAD")
+    _sync_git(author, "push", "-q", "--force", origin, "HEAD:refs/heads/main")
+    return ws, o1, tip
+
+
+def _sync_run(ws: str) -> tuple:
+    """گام را همان‌گونه اجرا کن که Actions می‌کند: `bash -eo pipefail` + envِ سطحِ بالا."""
+    import subprocess
+    env = _sync_env()
+    env["PUBLISH_BRANCH"] = str(_gr_workflow()["env"]["PUBLISH_BRANCH"])
+    p = subprocess.run(["bash", "--noprofile", "--norc", "-eo", "pipefail", "-c", _sync_step()["run"]],
+                       cwd=ws, env=env, capture_output=True, text=True, timeout=120)
+    return p.returncode, p.stdout + p.stderr
+
+
+_SYNC_O1 = {"verified/configs.txt": "old\n", "Countries/A.txt": "a\n", "state.json": '{"round": 1}\n',
+            "index.json": "{}\n", "top100.txt": "old top\n"}
+_SYNC_NEWER = {"verified/configs.txt": "new\n", "Countries/A.txt": None, "Countries/B.txt": "b\n",
+               "state.json": '{"round": 2}\n', "top100.txt": "new top\n"}
+
+
+def _sync_read(ws: str, rel: str):
+    full = os.path.join(ws, rel)
+    return open(full, encoding="utf-8").read() if os.path.exists(full) else None
+
+
+def test_zzz_lkg_sync_runs_after_the_gate_and_before_the_stash() -> None:
+    """جای گام: پس از دروازه، پیش از stash و aggregate؛ هم‌شرطِ دروازه؛ و **بدونِ**
+    continue-on-error — resetِ نیمه‌کاره باید کار را بکشد تا چیزی منتشر نشود."""
+    wf = _gr_workflow()
+    steps = wf["jobs"]["aggregate"]["steps"]
+    names = [x["name"] for x in steps]
+    ids = [x.get("id") for x in steps]
+    sy = ids.index("sync_outputs")
+    gate = ids.index("gate")
+    st = next(i for i, n in enumerate(names) if n.startswith("🗄️ Stash"))
+    agg = next(i for i, n in enumerate(names) if n.startswith("🚀 Run aggregator"))
+    assert gate < sy < st < agg, (gate, sy, st, agg)
+    s = steps[sy]
+    assert s["if"] == steps[st]["if"] == "steps.gate.outputs.should_run == 'true'", s.get("if")
+    assert "continue-on-error" not in s, "a half-applied reset must fail the job, not be ignored"
+    cap = s.get("timeout-minutes")
+    assert isinstance(cap, int) and 0 < cap <= int(wf["jobs"]["aggregate"]["timeout-minutes"]), cap
+    assert re.search(r"git reset -q --hard \"\$TIP\"", s["run"]), "the sync must move to the tip"
+
+
+def test_zzz_lkg_sync_output_paths_are_the_publish_steps_own() -> None:
+    """فهرستِ خروجی‌ها یکی است: هر مسیری که sync «خروجی» می‌داند، انتشار هم خروجی
+    می‌داند (وگرنه sync می‌تواند فایلی را عوض کند که انتشار سورس می‌شمارد)."""
+    import subprocess
+    steps = _gr_workflow()["jobs"]["aggregate"]["steps"]
+    pub = next(x for x in steps if x["name"].startswith("🚀 Publish"))["run"]
+    sync_paths = re.search(r'OUTPUT_PATHS="([^"]+)"', _sync_step()["run"]).group(1)
+    pub_paths = re.search(r'OUTPUT_PATHS="([^"]+)"', pub).group(1)
+    assert sync_paths == pub_paths, (sync_paths, pub_paths)
+    m = re.search(r"is_output_path\(\)\s*\{(.*?)\n\s*\}\s*\n", pub, re.S)
+    assert m, "is_output_path not found in the publish step"
+    probes = []
+    for p in pub_paths.split():
+        probes.append(p if "." in p else f"{p}/x.txt")
+    script = ("is_output_path() {" + m.group(1) + "\n}\n"
+              'for p in "$@"; do is_output_path "$p" && echo "OUT $p" || echo "SRC $p"; done\n')
+    out = subprocess.run(["bash", "-c", script, "bash", *probes], capture_output=True, text=True).stdout
+    assert all(ln.startswith("OUT ") for ln in out.strip().splitlines()) and len(out.strip().splitlines()) == len(probes), out
+
+
+def test_zzz_lkg_sync_brings_a_queued_checkout_to_the_newest_publish() -> None:
+    """هستهٔ اصلاح: کار‌فضا دقیقاً درختِ نوک می‌شود — فایلِ حذف‌شده در نوک از دیسک
+    هم می‌رود، فایلِ تازه می‌آید، state.json جلو می‌رود، سورس دست نمی‌خورد."""
+    import tempfile
+    with tempfile.TemporaryDirectory(prefix="sync_q_") as td:
+        ws, o1, tip = _sync_fixture(td, newer=_SYNC_NEWER)
+        assert _sync_read(ws, "verified/configs.txt") == "old\n"
+        rc, out = _sync_run(ws)
+        assert rc == 0, out
+        assert "outputs synced" in out and "source identical" in out, out
+        assert _sync_git(ws, "rev-parse", "HEAD^{tree}") == _sync_git(ws, "rev-parse", f"{tip}^{{tree}}")
+        assert _sync_git(ws, "status", "--porcelain") == "", "worktree must equal the tip exactly"
+        assert _sync_read(ws, "verified/configs.txt") == "new\n"
+        assert _sync_read(ws, "top100.txt") == "new top\n"
+        assert _sync_read(ws, "state.json") == '{"round": 2}\n', "state memory must not go back a round"
+        assert _sync_read(ws, "Countries/A.txt") is None, "a file the tip dropped must not survive"
+        assert _sync_read(ws, "Countries/B.txt") == "b\n"
+        assert _sync_read(ws, "scripts/a.py") == "print(1)\n"
+
+
+def test_zzz_lkg_sync_keeps_the_checkout_when_the_source_changed() -> None:
+    """کد هم عوض شده ⇒ خروجی‌ها با کدِ همین اجرا هم‌خوان می‌مانند (رفتارِ پیشین)."""
+    import tempfile
+    with tempfile.TemporaryDirectory(prefix="sync_s_") as td:
+        ws, o1, tip = _sync_fixture(td, newer=_SYNC_NEWER, newer_source={"scripts/a.py": "print(2)\n"})
+        rc, out = _sync_run(ws)
+        assert rc == 0, out
+        assert "::notice title=Output sync skipped::source changed" in out and "scripts/a.py" in out, out
+        assert _sync_git(ws, "rev-parse", "HEAD") == o1
+        assert _sync_git(ws, "status", "--porcelain") == ""
+        assert _sync_read(ws, "verified/configs.txt") == "old\n"
+        assert _sync_read(ws, "scripts/a.py") == "print(1)\n"
+
+
+def test_zzz_lkg_sync_is_a_no_op_when_the_run_was_not_queued() -> None:
+    import tempfile
+    with tempfile.TemporaryDirectory(prefix="sync_n_") as td:
+        ws, o1, tip = _sync_fixture(td, newer=_SYNC_NEWER)
+        _sync_git(ws, "fetch", "-q", "--depth=1", "origin", f"+{tip}:refs/remotes/origin/main")
+        _sync_git(ws, "checkout", "-q", "--force", "-B", "main", "refs/remotes/origin/main")
+        rc, out = _sync_run(ws)
+        assert rc == 0 and "nothing to sync" in out, out
+        assert _sync_git(ws, "rev-parse", "HEAD") == tip
+
+
+def test_zzz_lkg_sync_fails_open_when_the_fetch_fails() -> None:
+    """شبکه/origin در دسترس نیست ⇒ هشدار و همان رفتارِ پیشین، نه شکستِ دور."""
+    import tempfile
+    with tempfile.TemporaryDirectory(prefix="sync_f_") as td:
+        ws, o1, tip = _sync_fixture(td, newer=_SYNC_NEWER)
+        _sync_git(ws, "remote", "set-url", "origin", "file://" + os.path.join(td, "missing.git"))
+        rc, out = _sync_run(ws)
+        assert rc == 0, out
+        assert "::warning title=Output sync skipped::could not fetch" in out, out
+        assert _sync_git(ws, "rev-parse", "HEAD") == o1
+        assert _sync_read(ws, "verified/configs.txt") == "old\n"
+
+
+def test_zzz_lkg_sync_fails_the_job_when_the_reset_fails() -> None:
+    """resetِ نیمه‌کاره نباید منتشر شود: گام شکست می‌خورد ⇒ انتشار اجرا نمی‌شود و
+    شاخه همان خروجیِ تازه را نگه می‌دارد."""
+    import tempfile
+    with tempfile.TemporaryDirectory(prefix="sync_r_") as td:
+        ws, o1, tip = _sync_fixture(td, newer=_SYNC_NEWER)
+        open(os.path.join(ws, ".git", "index.lock"), "w").close()
+        rc, out = _sync_run(ws)
+        assert rc != 0, out
+        assert "outputs synced" not in out, out
+
+
 
 if __name__ == "__main__":
     sys.exit(_run_all())
