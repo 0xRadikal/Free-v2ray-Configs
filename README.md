@@ -544,8 +544,14 @@ The verification cascade is published separately under **`cascade_categories`**
 (`verified` / `fast` / `secure`) plus a top-level **`top100`** block, each carrying a
 one-line machine-readable `criterion` next to its file URLs. They are a separate key on
 purpose: the cascade runs after the main build and is allowed to be skipped, so anything
-that iterates `categories` keeps working unchanged and never renders a link for a run
-that produced no cascade.
+that iterates `categories` keeps working unchanged.
+
+If a round's cascade or Google Ready step fails, the **last-known-good** output stays
+published instead of disappearing (a 24-hour-old `verified` list was measured to still
+work 82% of the time, versus 0% for a 404). The files are kept byte-for-byte, their
+`index.json` / `health.json` blocks carry `"stale": true` and `tested_at`, a top-level
+`freshness` block says which tiers are fresh, and every `configs.txt` states its own
+`# tested: … UTC` time.
 
 If you are building anything on top of this repository, read `index.json` instead of
 hardcoding paths — it is the contract, and it can never advertise a file that does not

@@ -340,6 +340,22 @@ jobs:
           python-version: "3.12"
           cache: pip
 
+      # ── آخرین خروجیِ سالم (last-known-good): کنار گذاشتن پیش از aggregate ──
+      #
+      # چرا: اگر آبشار یا Google Ready در یک دور شکست بخورد، کاربر نباید
+      # «هیچ» بگیرد. شبیه‌سازیِ سه شکستِ پیاپی با رفتارِ پیشین نشان داد این شش
+      # مسیر از دورِ اول به بعد **هرگز** منتشر نمی‌شدند. و سنجش: فهرستِ
+      # verifiedِ ۲۴ ساعته هنوز ۸۲٫۳٪ کار می‌کرد (۱۵ دقیقه‌ای: ۹۲٫۲٪).
+      # چرا این‌جا: `aggregate.py` index.json/health.json را از نو می‌سازد؛ بلوک‌های
+      # توصیفیِ خروجیِ قبلی باید پیش از آن خوانده شوند. منطق و آزمون‌ها در
+      # `scripts/lkg.py`؛ پس از هر گامِ تولیدکننده گامِ «settle» تصمیم می‌گیرد.
+      - name: 🗄️ Stash last-known-good tiers
+        if: steps.gate.outputs.should_run == 'true'
+        continue-on-error: true
+        run: |
+          python scripts/lkg.py stash --set cascade --out .
+          python scripts/lkg.py stash --set google --out .
+
       - name: 📦 Install dependencies
         if: steps.gate.outputs.should_run == 'true'
         run: pip install -r requirements.txt
@@ -924,20 +940,32 @@ jobs:
         if: steps.gate.outputs.should_run == 'true'
         continue-on-error: true
         timeout-minutes: 15
-        # ⚠️ پاک‌سازیِ پیشاپیشِ خروجی‌های آبشار (۲۰۲۶-۱۱-۱۷): گامِ انتشار درخت را
-        #    از **پوشهٔ کاری** می‌سازد و پوشهٔ کاری checkoutِ انتشارِ قبلی است. اگر
-        #    آبشار شکست بخورد (شبکه، مهلت، باینری)، این پنج مسیر از دورِ قبل باقی
-        #    می‌مانند و دوباره منتشر می‌شوند — با سرآیندی که می‌گوید «در همهٔ ۳ اجرای
-        #    *همین* دور» موفق بود. بازتولید شد: با xray-knifeِ غایب rc=1 و
-        #    `verified/configs.txt` بایت‌به‌بایت دست‌نخورده ماند؛ `aggregate.py`
-        #    `index.json`/`health.json` را از نو می‌سازد، پس آن‌ها دیگر تبلیغشان
-        #    نمی‌کنند ولی خودِ فایل‌ها منتشر می‌شدند. همان قاعدهٔ «۴۰۴ بهتر از دادهٔ
-        #    کهنه» که `aggregate.py` و `countries.py` دارند. در ۲۰۰ اجرای اخیر آبشار
-        #    هرگز شکست نخورد (هیچ `##[error]`ی در لاگ‌ها)، پس اثرش تنها در دورِ
-        #    خراب دیده می‌شود.
+        # خروجیِ دورِ قبل این‌جا نیست: گامِ «Stash last-known-good» آن را کنار
+        # گذاشته است. پس هرچه این گام می‌نویسد تازه است، و اگر بشکند، گامِ بعدی
+        # (settle) خروجیِ ناقص را برمی‌دارد و آخرین خروجیِ سالم را برمی‌گرداند.
+        run: python scripts/pipeline.py all/configs.txt --out . --json pipeline.json
+
+      # ── تازه یا آخرین‌سالم: همیشه اجرا می‌شود، حتی اگر آبشار کشته شده باشد ──
+      #
+      # کامل و ناتهی ⇒ خروجیِ تازه. وگرنه خروجیِ قبلی بایت‌به‌بایت برمی‌گردد و
+      # index.json/health.json آن را با `stale: true` و زمانِ آزمونِ واقعی‌اش
+      # تبلیغ می‌کنند (هر configs.txt خودش سطرِ `# tested:` دارد).
+      # تورِ ایمنی: اگر خودِ lkg.py بشکند، هر مسیرِ غایب از stash برمی‌گردد —
+      # تا آخرین خروجیِ سالم تحتِ هیچ شرایطی از دست نرود.
+      - name: 🧯 Settle cascade outputs (fresh or last-known-good)
+        id: settle_cascade
+        if: always() && steps.gate.outputs.should_run == 'true'
+        continue-on-error: true
+        env:
+          CASCADE_OUTCOME: ${{ steps.cascade.outcome }}
         run: |
-          rm -rf verified fast secure top100.txt Countries
-          python scripts/pipeline.py all/configs.txt --out . --json pipeline.json
+          python scripts/lkg.py settle --set cascade --out . --outcome "$CASCADE_OUTCOME" || {
+            echo "::error title=lkg settle failed::restoring every missing stashed cascade path"
+            for p in .cache/lkg/cascade/files/*; do
+              [ -e "$p" ] || continue
+              b=$(basename "$p"); [ -e "$b" ] || mv "$p" "$b"
+            done
+          }
 
       # ── Google Ready: آزمونِ واقعیِ سرویس‌های گوگل روی `verified/`ِ همین دور ──
       #
@@ -962,12 +990,14 @@ jobs:
         # پیشین گام را **پیش از** مهلتِ ۱۰۵۰ ثانیه می‌کشت.
         timeout-minutes: 14
         env:
-          CASCADE_OUTCOME: ${{ steps.cascade.outcome }}
+          # تنها وقتی `verified/` تازهٔ همین دور است آزمون می‌زنیم؛ اگر settle
+          # آخرین‌سالم را برگردانده باشد (یا اصلاً اجرا نشده باشد) مقدار `stale`
+          # است و googleready رد می‌شود ⇒ settleِ گوگل نسخهٔ قبلی را نگه می‌دارد.
+          CASCADE_OUTCOME: ${{ steps.settle_cascade.outputs.cascade_fresh == 'true' && 'success' || 'stale' }}
         run: |
-          # پاک‌سازیِ مستقل از پایتون: اگر ماژول حتی import نشود (خطای نحوی،
-          # وابستگیِ گم‌شده)، `remove_outputs` اجرا نمی‌شود و `google/`ِ انتشارِ
-          # قبلی از checkout دوباره منتشر می‌شد. این سطر آن مسیر را می‌بندد.
-          rm -rf google google.tmp
+          # `google/`ِ دورِ قبل این‌جا نیست (گامِ stash کنارش گذاشته)؛ فقط تکه‌ی
+          # نیمه‌نوشتهٔ یک اجرای کشته‌شده پاک می‌شود.
+          rm -rf google.tmp
           DEADLINE=0
           if [ -n "${JOB_STARTED_EPOCH:-}" ]; then
             DEADLINE=$((JOB_STARTED_EPOCH + 1050))
@@ -975,6 +1005,18 @@ jobs:
           python scripts/googleready.py --out . \
             --cascade-outcome "$CASCADE_OUTCOME" \
             --deadline-epoch "$DEADLINE"
+
+      - name: 🧯 Settle Google Ready (fresh or last-known-good)
+        id: settle_google
+        if: always() && steps.gate.outputs.should_run == 'true'
+        continue-on-error: true
+        run: |
+          python scripts/lkg.py settle --set google --out . || {
+            echo "::error title=lkg settle failed::restoring the stashed google/ if missing"
+            if [ -e .cache/lkg/google/files/google ] && [ ! -e google ]; then
+              mv .cache/lkg/google/files/google google
+            fi
+          }
 
       # ── دروازهٔ اعتبارسنجی: خروجیِ خراب هرگز commit نمی‌شود ───────────────
       #
@@ -1063,8 +1105,12 @@ jobs:
               where = f"{geo.get('loc', '?')}/{geo.get('colo', '?')}"
               pool = L["l0_l1"]["in"] or 1
               pct = lambda n: round(100.0 * n / pool, 2)
-              print(f"\n### 🧬 How many actually work — measured this run"
-                    f" (runner exit: {where})")
+              if c.get("stale"):
+                  print(f"\n### 🧬 ⚠️ This round's cascade did not complete — the numbers below are the"
+                        f" last-known-good round (tested {c.get('tested_at')}), not this run")
+              else:
+                  print(f"\n### 🧬 How many actually work — measured this run"
+                        f" (runner exit: {where})")
               print("\n| Layer | In | Out | Note |")
               print("|---|---|---|---|")
               print(f"| L0+L1 structure | {L['l0_l1']['in']} |"
@@ -1085,10 +1131,25 @@ jobs:
               print(f"- **cascade time:** {c['total_seconds']}s")
           # Google Ready — `googleready.py` همیشه بلوکِ `google` را می‌نویسد،
           # حتی وقتی رد شده باشد، تا دلیلِ نبودِ `google/` دیده شود.
+          # آخرین‌سالم: اگر یک دسته از دورِ قبل برگردانده شده باشد، این‌جا دیده شود.
+          fr = h.get("freshness") or {}
+          if fr:
+              print("\n### 🗄️ Tier freshness")
+              for name, b in fr.items():
+                  icon = {"fresh": "✅", "stale": "⚠️"}.get(b.get("state"), "❌")
+                  print(f"- {icon} **{name}**: {b.get('state')} — tested {b.get('tested_at')}"
+                        f" ({b.get('age_minutes')} min ago)"
+                        + (f" — {b.get('reason')}" if b.get("state") != "fresh" else ""))
           g = h.get("google")
           if g:
-              print(f"\n### 🟢 Google Ready — {g.get('status')}"
-                    + (f" ({g.get('reason')})" if g.get("reason") else ""))
+              if g.get("stale"):
+                  ga = h.get("google_attempt") or {}
+                  print(f"\n### 🟢 Google Ready — ⚠️ serving last-known-good (tested {g.get('tested_at')})"
+                        f" · this round: {ga.get('status')}"
+                        + (f" ({ga.get('reason')})" if ga.get("reason") else ""))
+              else:
+                  print(f"\n### 🟢 Google Ready — {g.get('status')}"
+                        + (f" ({g.get('reason')})" if g.get("reason") else ""))
               if "ready" in g:
                   print(f"\n- **ready:** {g['ready']} of {g.get('judged')} judged"
                         f" ({g.get('ready_pct_of_judged')}%) · fail {g.get('fail')}"

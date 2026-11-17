@@ -13764,6 +13764,10 @@ def test_zzz_cty_the_live_verified_bucket_splits_cleanly() -> None:
     root = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
     path = os.path.join(root, "verified", "configs.txt")
     if not os.path.isfile(path):
+        # در CI گامِ «Stash last-known-good» پیش از آزمون‌ها `verified/` را کنار
+        # می‌گذارد؛ همان فایلِ منتشرشده آن‌جاست و پوششِ این آزمون نباید گم شود.
+        path = os.path.join(root, ".cache", "lkg", "cascade", "files", "verified", "configs.txt")
+    if not os.path.isfile(path):
         return
     with open(path, encoding="utf-8") as fh:
         lines = [ln.strip() for ln in fh
@@ -15597,6 +15601,7 @@ def test_zzz_vc_downloads_use_the_measured_retry_policy():
 # در docstringِ `scripts/googleready.py`.
 
 import googleready  # noqa: E402
+import lkg  # noqa: E402
 
 #: سطرِ واقعیِ ستونِ `endpoints` که xray-knife 10.1.1 روی همین پنل نوشت
 #: (کپیِ عینی از خروجیِ سنجش؛ برچسب‌ها و قالب از خودِ ابزار آمده‌اند).
@@ -16298,24 +16303,37 @@ def test_zzz_gr_purge_refreshes_cascade_mirrors_in_a_separate_request() -> None:
     assert "mirror agreement" in out_w, "a malformed purge reply must not stop the step"
 
 
-def test_zzz_gr_cascade_outputs_are_cleared_before_the_cascade_runs() -> None:
-    """بازتولید شد: آبشارِ شکسته (rc=1) `verified/configs.txt` را بایت‌به‌بایت
-    دست‌نخورده می‌گذاشت و گامِ انتشار آن را با سرآیندِ «همین دور» دوباره منتشر
-    می‌کرد. پاک‌سازی باید در shell و **پیش از** pipeline.py باشد و دقیقاً همان
-    مسیرهایی را بگیرد که آبشار خودش می‌سازد."""
+def test_zzz_lkg_workflow_stashes_early_and_settles_always() -> None:
+    """آخرین‌خروجیِ‌سالم در ورک‌فلو: stash پیش از aggregate (که index/health را از
+    نو می‌سازد)، هیچ حذفی پیش از آبشار، settle با `always()` پس از هر تولیدکننده،
+    و تورِ ایمنیِ shell که مسیرِ غایب را از stash برمی‌گرداند."""
     steps = _gr_workflow()["jobs"]["aggregate"]["steps"]
-    step = [x for x in steps if x.get("id") == "cascade"][0]
-    lines = [ln.strip() for ln in step["run"].splitlines()
-             if ln.strip() and not ln.strip().startswith("#")]
-    rm_i = next(i for i, ln in enumerate(lines) if ln.startswith("rm -rf "))
-    py_i = next(i for i, ln in enumerate(lines) if "scripts/pipeline.py" in ln)
-    assert rm_i < py_i, lines
-    cleared = set(lines[rm_i].split()[2:])
-    produced = set(pipeline.CATEGORIES) | {"top100.txt", countries.COUNTRIES_DIR}
-    assert cleared == produced, (cleared, produced)
-    # و هرگز چیزی که آبشار نمی‌سازد (حذفِ all/ یعنی انتشارِ تهی)
-    for core_out in ("all", "heavy", "light", "index.json", "health.json", "protocols"):
-        assert core_out not in cleared, core_out
+    names = [x["name"] for x in steps]
+    ids = [x.get("id") for x in steps]
+    st = next(i for i, n in enumerate(names) if n.startswith("🗄️ Stash"))
+    py = next(i for i, n in enumerate(names) if n.startswith("🐍 Setup Python"))
+    agg = next(i for i, n in enumerate(names) if n.startswith("🚀 Run aggregator"))
+    assert py < st < agg, (py, st, agg)
+    stash_run = steps[st]["run"]
+    assert "lkg.py stash --set cascade" in stash_run and "lkg.py stash --set google" in stash_run
+    assert steps[st].get("continue-on-error") is True
+    casc = steps[ids.index("cascade")]
+    assert "rm -rf" not in casc["run"], "deleting before the cascade loses the last-known-good"
+    sc, gi, sg = ids.index("settle_cascade"), ids.index("google"), ids.index("settle_google")
+    vi = next(i for i, x in enumerate(steps) if "validate.py" in (x.get("run") or ""))
+    assert ids.index("cascade") + 1 == sc and sc < gi and gi + 1 == sg and sg < vi, (sc, gi, sg, vi)
+    for k in (sc, sg):
+        assert "always()" in steps[k]["if"], steps[k]["if"]
+        assert steps[k].get("continue-on-error") is True
+        assert ".cache/lkg/" in steps[k]["run"] and "mv " in steps[k]["run"], "shell safety net missing"
+    assert steps[sc]["env"]["CASCADE_OUTCOME"] == "${{ steps.cascade.outcome }}"
+    pub = [x for x in steps if x["name"].startswith("🚀 Publish")][0]["run"]
+    out_paths = re.search(r'OUTPUT_PATHS="([^"]+)"', pub).group(1).split()
+    for name, spec in lkg.SETS.items():
+        assert set(spec["paths"]) <= set(out_paths), (name, spec["paths"])
+    assert not any(p.startswith(".cache") for p in out_paths), "the stash must never be published"
+    assert set(lkg.SETS["cascade"]["paths"]) == set(pipeline.CATEGORIES) | {"top100.txt", countries.COUNTRIES_DIR}
+
 
 def _gr_workflow():
     p = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..",
@@ -16331,15 +16349,15 @@ def test_zzz_gr_workflow_runs_google_after_cascade_and_before_the_gate() -> None
     assert ci < gi < vi, (ci, gi, vi)
     g = steps[gi]
     assert g.get("continue-on-error") is True
-    assert g["env"]["CASCADE_OUTCOME"] == "${{ steps.cascade.outcome }}", \
-        "`outcome` is the result before continue-on-error; `conclusion` is always success"
+    # گوگل تنها روی `verified/`ِ **تازه** آزمون می‌زند: تصمیم از settleِ آبشار
+    # می‌آید (نه از outcomeِ خامِ آبشار، که «موفق با فهرستِ تهی» را هم success می‌داند).
+    assert g["env"]["CASCADE_OUTCOME"] == (
+        "${{ steps.settle_cascade.outputs.cascade_fresh == 'true' && 'success' || 'stale' }}"), g["env"]
     assert "--cascade-outcome" in g["run"] and "--deadline-epoch" in g["run"]
-    # پاک‌سازی باید **پیش از** پایتون و در خودِ shell باشد: اگر ماژول import
-    # نشود، `remove_outputs` هرگز اجرا نمی‌شود و `google/`ِ کهنه منتشر می‌شد.
+    # `google/`ِ دورِ قبل نباید در shell پاک شود: آخرین‌سالم است و settle به آن
+    # نیاز دارد (پیش از این، همین سطر آن را برای همیشه از دست می‌داد).
     run_lines = [ln.strip() for ln in g["run"].splitlines() if ln.strip() and not ln.strip().startswith("#")]
-    rm_i = next(i for i, ln in enumerate(run_lines) if ln.startswith("rm -rf google"))
-    py_i = next(i for i, ln in enumerate(run_lines) if "googleready.py" in ln)
-    assert rm_i < py_i and "google.tmp" in run_lines[rm_i], run_lines
+    assert not any(re.match(r"rm -rf .*\bgoogle\b(?!\.tmp)", ln) for ln in run_lines), run_lines
     # بودجه (سنجیده): پس از مهلتِ گام باید جا برای validate + publish + دو
     # درخواستِ purge بماند (۹ + ۱ + ۱۱ + ۶۵ ثانیه و درخواستِ دوم ⇒ دست‌کم ۱۲۰ ثانیه)،
     # و سقفِ خودِ گام نباید گام را **پیش از** مهلت بکشد (زودترین آغاز: ۳۲۶ ثانیه).
@@ -16364,6 +16382,309 @@ def test_zzz_gr_workflow_publishes_and_classifies_google_as_output() -> None:
 def test_zzz_gr_validate_gate_knows_google_as_optional() -> None:
     assert "google" in validate.OPTIONAL_CATEGORIES
     assert "google" not in validate.CORE_CATEGORIES
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# آخرین خروجیِ سالم — `lkg.py`
+# ══════════════════════════════════════════════════════════════════════════════
+# بازتولید (۲۰۲۶-۱۱-۱۷): با پاک‌سازیِ پیش از آبشار، سه شکستِ پیاپی این شش مسیر را
+# از دورِ اول به بعد برای همیشه از انتشار بیرون می‌برد. سنجش: فهرستِ verifiedِ
+# ۲۴ ساعته هنوز ۸۲٫۳٪ کار می‌کرد. آزمون‌های زیر هر سناریوی شکست را قفل می‌کنند.
+
+import datetime as _lkg_dt  # noqa: E402
+
+_LKG_T0 = _lkg_dt.datetime(2026, 11, 17, 10, 0, tzinfo=_lkg_dt.timezone.utc)
+_LKG_ALL = ("verified", "fast", "secure", "top100.txt", "Countries", "google")
+
+
+def _lkg_round(root: str, tag: str, n: int, tested, *, countries_on=True) -> None:
+    """خروجیِ یک دورِ موفقِ آبشار + گوگل را می‌سازد (همان مسیرها و کلیدها)."""
+    tl = lkg.tested_line(tested)
+    for cat in ("verified", "fast", "secure", "google"):
+        d = os.path.join(root, cat)
+        os.makedirs(d, exist_ok=True)
+        lines = [f"vless://{tag}-{cat}-{i}@1.2.3.{i % 250}:443#x" for i in range(n)]
+        with open(os.path.join(d, "configs.txt"), "w", encoding="utf-8") as fh:
+            fh.write(f"# @Raydikalx — {cat.upper()} — {n} configs\n" + tl
+                     + "\n".join(lines) + ("\n" if lines else ""))
+        for f in ("configs_base64.txt", "clash.yaml", "singbox.json"):
+            with open(os.path.join(d, f), "w", encoding="utf-8") as fh:
+                fh.write(f"{tag}:{cat}:{f}\n")
+    with open(os.path.join(root, "top100.txt"), "w", encoding="utf-8") as fh:
+        fh.write("# TOP\n" + tl + f"vless://{tag}-top@1.1.1.1:443#t\n")
+    if countries_on:
+        os.makedirs(os.path.join(root, "Countries"), exist_ok=True)
+        with open(os.path.join(root, "Countries", "DE.txt"), "w", encoding="utf-8") as fh:
+            fh.write(f"{tag}-de\n")
+        with open(os.path.join(root, "Countries", "index.json"), "w", encoding="utf-8") as fh:
+            json.dump({"generated_at": tag}, fh)
+    idx = {"primary_base": "https://p/x", "categories": {"all": {}, "heavy": {}, "light": {}},
+           "cascade_categories": {c: {"unique": n, "files": {"configs_txt": f"https://p/x/{c}/configs.txt"}}
+                                  for c in ("verified", "fast", "secure", "google")},
+           "top100": {"count": 1}}
+    if countries_on:
+        idx["countries"] = {"count": 1, "configs": 1}
+    with open(os.path.join(root, "index.json"), "w", encoding="utf-8") as fh:
+        json.dump(idx, fh)
+    with open(os.path.join(root, "health.json"), "w", encoding="utf-8") as fh:
+        json.dump({"checked_at": tested.isoformat(),
+                   "cascade": {"buckets": {"verified": n, "fast_threshold_ms": 800}},
+                   "google": {"status": "published", "ready": n}}, fh)
+
+
+def _lkg_aggregate(root: str) -> None:
+    """کارِ aggregate.py: index.json/health.json را **از نو** می‌سازد (بی بلوکِ آبشار)."""
+    with open(os.path.join(root, "index.json"), "w", encoding="utf-8") as fh:
+        json.dump({"primary_base": "https://p/x", "categories": {"all": {}, "heavy": {}, "light": {}}}, fh)
+    with open(os.path.join(root, "health.json"), "w", encoding="utf-8") as fh:
+        json.dump({"checked_at": "2026-11-17T12:00:00+00:00"}, fh)
+
+
+def _lkg_tree_md5(root: str, paths) -> dict:
+    import hashlib
+    out = {}
+    for p in paths:
+        full = os.path.join(root, p)
+        if os.path.isdir(full):
+            for dp, _dn, fns in os.walk(full):
+                for f in fns:
+                    fp = os.path.join(dp, f)
+                    out[os.path.relpath(fp, root)] = hashlib.md5(open(fp, "rb").read()).hexdigest()
+        elif os.path.isfile(full):
+            out[p] = hashlib.md5(open(full, "rb").read()).hexdigest()
+    return out
+
+
+def test_zzz_lkg_fresh_round_keeps_fresh_output_and_stamps_it() -> None:
+    import tempfile
+    with tempfile.TemporaryDirectory(prefix="lkg_") as r:
+        _lkg_round(r, "old", 5, _LKG_T0)
+        lkg.stash(r, "cascade")
+        assert not any(os.path.exists(os.path.join(r, p)) for p in lkg.SETS["cascade"]["paths"])
+        _lkg_aggregate(r)
+        t1 = _LKG_T0 + _lkg_dt.timedelta(minutes=15)
+        _lkg_round(r, "new", 7, t1)
+        b = lkg.settle(r, "cascade", producer_ok=True, now=t1 + _lkg_dt.timedelta(minutes=5))
+        assert b["state"] == "fresh" and b["tested_at"] == lkg.stamp(t1) and b["age_minutes"] == 5, b
+        assert "new-verified-0" in open(os.path.join(r, "verified", "configs.txt")).read()
+        assert not os.path.exists(os.path.join(r, lkg.STASH_ROOT, "cascade")), "stash must be cleaned"
+        h = json.load(open(os.path.join(r, "health.json")))
+        assert h["freshness"]["cascade"]["state"] == "fresh"
+
+
+def test_zzz_lkg_failed_round_restores_previous_output_byte_for_byte() -> None:
+    import tempfile
+    with tempfile.TemporaryDirectory(prefix="lkg_") as r:
+        _lkg_round(r, "old", 5, _LKG_T0)
+        before = _lkg_tree_md5(r, lkg.SETS["cascade"]["paths"])
+        lkg.stash(r, "cascade")
+        _lkg_aggregate(r)
+        # آبشار وسطِ کار مُرد: verified نیمه‌نوشته، بقیه ساخته نشد
+        os.makedirs(os.path.join(r, "verified"))
+        open(os.path.join(r, "verified", "configs.txt"), "w").write("vless://partial@9.9.9.9:443#p\n")
+        now = _LKG_T0 + _lkg_dt.timedelta(minutes=40)
+        b = lkg.settle(r, "cascade", producer_ok=False, reason="cascade outcome: 'failure'", now=now)
+        assert b["state"] == "stale" and b["tested_at"] == lkg.stamp(_LKG_T0) and b["age_minutes"] == 40, b
+        assert _lkg_tree_md5(r, lkg.SETS["cascade"]["paths"]) == before, "must be byte-identical"
+        idx = json.load(open(os.path.join(r, "index.json")))
+        for c in ("verified", "fast", "secure"):
+            assert idx["cascade_categories"][c]["stale"] is True, idx
+            assert idx["cascade_categories"][c]["unique"] == 5
+        assert idx["top100"]["stale"] is True and idx["countries"]["stale"] is True
+        assert set(idx["categories"]) == {"all", "heavy", "light"}, "closed categories untouched"
+        h = json.load(open(os.path.join(r, "health.json")))
+        assert h["cascade"]["stale"] is True and h["cascade"]["buckets"]["fast_threshold_ms"] == 800
+        assert h["freshness"]["cascade"]["state"] == "stale"
+
+
+def test_zzz_lkg_success_with_an_empty_list_is_not_fresh() -> None:
+    """«موفق ولی تهی» (مثلاً شبکهٔ رانر خراب) هرگز جای فهرستِ سالم را نمی‌گیرد."""
+    import tempfile
+    with tempfile.TemporaryDirectory(prefix="lkg_") as r:
+        _lkg_round(r, "old", 5, _LKG_T0)
+        before = _lkg_tree_md5(r, lkg.SETS["cascade"]["paths"])
+        lkg.stash(r, "cascade")
+        _lkg_aggregate(r)
+        _lkg_round(r, "empty", 0, _LKG_T0 + _lkg_dt.timedelta(minutes=15))
+        b = lkg.settle(r, "cascade", producer_ok=True, now=_LKG_T0 + _lkg_dt.timedelta(minutes=20))
+        assert b["state"] == "stale" and "no configs" in b["reason"], b
+        assert _lkg_tree_md5(r, lkg.SETS["cascade"]["paths"]) == before
+
+
+
+def test_zzz_lkg_a_failed_producer_never_wins_even_with_complete_looking_files() -> None:
+    """گامِ کشته‌شده/لغوشده ممکن است همهٔ فایل‌ها را نوشته باشد ولی سنجش را تمام
+    نکرده باشد (مثلاً merge_index/Countries). چیزی که outcomeِ موفق ندارد تازه نیست."""
+    import tempfile
+    with tempfile.TemporaryDirectory(prefix="lkg_") as r:
+        _lkg_round(r, "old", 5, _LKG_T0)
+        before = _lkg_tree_md5(r, lkg.SETS["cascade"]["paths"])
+        lkg.stash(r, "cascade")
+        _lkg_aggregate(r)
+        _lkg_round(r, "killed", 9, _LKG_T0 + _lkg_dt.timedelta(minutes=15))
+        b = lkg.settle(r, "cascade", producer_ok=False, reason="cascade outcome: 'cancelled'")
+        assert b["state"] == "stale", b
+        assert _lkg_tree_md5(r, lkg.SETS["cascade"]["paths"]) == before
+
+def test_zzz_lkg_first_run_failure_without_previous_output_does_not_crash() -> None:
+    import tempfile
+    with tempfile.TemporaryDirectory(prefix="lkg_") as r:
+        _lkg_aggregate(r)
+        meta = lkg.stash(r, "cascade")
+        assert meta["moved"] == [] and meta["tested_at"] is None
+        b = lkg.settle(r, "cascade", producer_ok=False, reason="x")
+        assert b["state"] == "missing" and b["restored"] == [], b
+
+
+def test_zzz_lkg_without_a_stash_the_previous_output_stays_and_is_dated() -> None:
+    """اگر گامِ stash نتوانسته باشد اجرا شود، خروجیِ قبلی سرِ جایش می‌ماند و سنش
+    از سطرِ `# tested:` خوانده می‌شود — نه «missing» و نه حذف."""
+    import tempfile
+    with tempfile.TemporaryDirectory(prefix="lkg_") as r:
+        _lkg_round(r, "old", 5, _LKG_T0)
+        before = _lkg_tree_md5(r, lkg.SETS["cascade"]["paths"])
+        b = lkg.settle(r, "cascade", producer_ok=False, reason="x",
+                       now=_LKG_T0 + _lkg_dt.timedelta(minutes=30))
+        assert b["state"] == "stale" and b["tested_at"] == lkg.stamp(_LKG_T0) and b["age_minutes"] == 30, b
+        assert _lkg_tree_md5(r, lkg.SETS["cascade"]["paths"]) == before
+
+
+def test_zzz_lkg_fresh_round_without_countries_keeps_the_previous_countries() -> None:
+    import tempfile
+    with tempfile.TemporaryDirectory(prefix="lkg_") as r:
+        _lkg_round(r, "old", 5, _LKG_T0)
+        old_de = open(os.path.join(r, "Countries", "DE.txt")).read()
+        lkg.stash(r, "cascade")
+        _lkg_aggregate(r)
+        _lkg_round(r, "new", 6, _LKG_T0 + _lkg_dt.timedelta(minutes=15), countries_on=False)
+        b = lkg.settle(r, "cascade", producer_ok=True)
+        assert b["state"] == "fresh" and b.get("restored_optional") == ["Countries"], b
+        assert open(os.path.join(r, "Countries", "DE.txt")).read() == old_de
+        assert "new-verified-0" in open(os.path.join(r, "verified", "configs.txt")).read()
+        assert json.load(open(os.path.join(r, "index.json")))["countries"]["stale"] is True
+
+
+def test_zzz_lkg_google_keeps_previous_tier_when_the_step_did_not_publish() -> None:
+    import tempfile
+    with tempfile.TemporaryDirectory(prefix="lkg_") as r:
+        _lkg_round(r, "old", 4, _LKG_T0)
+        before = _lkg_tree_md5(r, ["google"])
+        lkg.stash(r, "google")
+        _lkg_aggregate(r)
+        hl = json.load(open(os.path.join(r, "health.json")))
+        hl["google"] = {"status": "skipped", "reason": "time budget"}       # گزارشِ همین دور
+        json.dump(hl, open(os.path.join(r, "health.json"), "w"))
+        b = lkg.settle(r, "google", producer_ok=False, reason="google step status: 'skipped'")
+        assert b["state"] == "stale", b
+        h = json.load(open(os.path.join(r, "health.json")))
+        assert h["google_attempt"] == {"status": "skipped", "reason": "time budget"}, \
+            "this round's own report must not be hidden by the restored one"
+        assert _lkg_tree_md5(r, ["google"]) == before
+        idx = json.load(open(os.path.join(r, "index.json")))
+        assert idx["cascade_categories"]["google"]["stale"] is True
+        assert json.load(open(os.path.join(r, "health.json")))["google"]["stale"] is True
+
+
+def test_zzz_lkg_corrupt_index_and_health_never_block_the_file_restore() -> None:
+    import tempfile
+    with tempfile.TemporaryDirectory(prefix="lkg_") as r:
+        _lkg_round(r, "old", 3, _LKG_T0)
+        before = _lkg_tree_md5(r, lkg.SETS["cascade"]["paths"])
+        lkg.stash(r, "cascade")
+        for f in ("index.json", "health.json"):
+            open(os.path.join(r, f), "w").write("{not json")
+        b = lkg.settle(r, "cascade", producer_ok=False, reason="x")
+        assert b["state"] == "stale" and _lkg_tree_md5(r, lkg.SETS["cascade"]["paths"]) == before
+
+
+def test_zzz_lkg_multi_round_simulation_never_loses_a_tier() -> None:
+    """S F F S ⇒ تهی ⇒ F، با «انتشار» = کپیِ مسیرهای خروجی به checkoutِ دورِ
+    بعد، دقیقاً مثلِ CI. در هیچ دوری هیچ‌یک از شش مسیر نباید غایب شود، و سنِ
+    خروجیِ کهنه باید از زمانِ آزمونِ **واقعی** بیاید، نه از دورِ شکسته."""
+    import shutil as _sh
+    import tempfile
+    with tempfile.TemporaryDirectory(prefix="lkg_sim_") as base:
+        published = os.path.join(base, "main")
+        os.makedirs(published)
+        plan = [("S", 6), ("F", 0), ("F", 0), ("S", 8), ("E", 0), ("F", 0)]
+        last_good, last_good_t = None, None
+        for k, (kind, n) in enumerate(plan):
+            now = _LKG_T0 + _lkg_dt.timedelta(minutes=15 * k)
+            ws = os.path.join(base, f"round{k}")
+            _sh.copytree(published, ws)                       # checkout = آخرین انتشار
+            for name in ("cascade", "google"):
+                lkg.stash(ws, name)
+            _lkg_aggregate(ws)
+            if kind == "S":
+                _lkg_round(ws, f"r{k}", n, now)
+                last_good, last_good_t = f"r{k}", now
+            elif kind == "E":
+                _lkg_round(ws, f"r{k}", 0, now)               # موفقِ ظاهری، فهرستِ تهی
+            ok = kind == "S"
+            bc = lkg.settle(ws, "cascade", producer_ok=kind in ("S", "E"), reason=kind, now=now)
+            if ok:
+                hl = json.load(open(os.path.join(ws, "health.json")))
+                hl["google"] = {"status": "published"}
+                json.dump(hl, open(os.path.join(ws, "health.json"), "w"))
+            bg = lkg.settle(ws, "google", producer_ok=ok, reason=kind, now=now)
+            for p in _LKG_ALL:
+                assert os.path.exists(os.path.join(ws, p)), (k, kind, p)
+            body = open(os.path.join(ws, "verified", "configs.txt")).read()
+            assert f"{last_good}-verified-0" in body, (k, kind)
+            assert bc["tested_at"] == lkg.stamp(last_good_t), (k, bc)
+            assert bg["tested_at"] == lkg.stamp(last_good_t), (k, bg)
+            assert bc["state"] == ("fresh" if ok else "stale"), (k, bc)
+            # «انتشار»: تنها مسیرهای خروجی به درختِ بعدی می‌روند (پوشهٔ .cache نه)
+            _sh.rmtree(published)
+            os.makedirs(published)
+            for p in _LKG_ALL + ("index.json", "health.json"):
+                src = os.path.join(ws, p)
+                (_sh.copytree if os.path.isdir(src) else _sh.copy2)(src, os.path.join(published, p))
+            assert not os.path.exists(os.path.join(published, ".cache"))
+
+
+def test_zzz_lkg_cli_reports_state_and_escalates_after_a_day() -> None:
+    import contextlib
+    import io as _io
+    import tempfile
+    with tempfile.TemporaryDirectory(prefix="lkg_cli_") as r:
+        _lkg_round(r, "old", 3, lkg.utc_now() - _lkg_dt.timedelta(hours=30))
+        gh_out = os.path.join(r, "gh_output")
+        assert lkg._main(["stash", "--set", "cascade", "--out", r]) == 0
+        _lkg_aggregate(r)
+        buf = _io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            rc = lkg._main(["settle", "--set", "cascade", "--out", r, "--outcome", "failure",
+                            "--github-output", gh_out])
+        assert rc == 0
+        assert "::error title=Last-known-good cascade is over 24h old::" in buf.getvalue(), buf.getvalue()
+        assert "cascade_fresh=false" in open(gh_out).read()
+    with tempfile.TemporaryDirectory(prefix="lkg_cli_") as r:
+        _lkg_round(r, "old", 3, lkg.utc_now() - _lkg_dt.timedelta(minutes=20))
+        gh_out = os.path.join(r, "gh_output")
+        lkg._main(["stash", "--set", "cascade", "--out", r])
+        buf = _io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            lkg._main(["settle", "--set", "cascade", "--out", r, "--outcome", "cancelled",
+                       "--github-output", gh_out])
+        assert "::warning title=Serving last-known-good cascade::" in buf.getvalue(), buf.getvalue()
+
+
+def test_zzz_lkg_headers_carry_the_test_time() -> None:
+    """سنِ واقعیِ خروجیِ برگشتی از خودِ فایل خوانده می‌شود."""
+    assert re.fullmatch(r"# tested: \d{4}-\d{2}-\d{2} \d{2}:\d{2} UTC\n", lkg.tested_line())
+    assert lkg.TESTED_RE.search(googleready._header(3, 2))
+    import tempfile
+    with tempfile.TemporaryDirectory(prefix="lkg_hdr_") as r:
+        stats = {"rounds": 3, "flaky_pct": 1.0, "fast_threshold_ms": 800, "verified": 1, "fast": 1,
+                 "secure": 1, "top_short_by": 0}
+        link = ("vless://11111111-1111-1111-1111-111111111111@1.2.3.4:443?security=tls"
+                "&type=tcp&sni=a.example.com#a")
+        pipeline.write_buckets(r, {"verified": [link], "fast": [link], "secure": [link], "top": [link],
+                                   "stats": stats})
+        for p in ("verified/configs.txt", "fast/configs.txt", "secure/configs.txt", "top100.txt"):
+            assert lkg._header_tested(os.path.join(r, p)), p
+
 
 
 if __name__ == "__main__":
