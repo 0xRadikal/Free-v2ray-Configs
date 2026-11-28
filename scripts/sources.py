@@ -39,7 +39,7 @@ sources.py — منابع کانفیگ رایگان.
 `all_sources()` فقط عضوهای زندهٔ لیست‌ها را برمی‌گرداند. پس عددِ بالا همیشه
 «تعدادِ منابعِ فعال» است، نه تعدادِ خطوطِ فایل.
 
-آخرین اعتبارسنجی همهٔ URLهای زیر: ۱۵ اکتبر ۲۰۲۶ — هر ۱۳ منبع HTTP 200
+آخرین اعتبارسنجی همهٔ URLهای زیر: ۱۵ اکتبر ۲۰۲۶ — هر ۱۴ منبع HTTP 200
 برگرداندند (۹ منبعِ `V2RAYCONFIGSPOOL` در همین تاریخ حذف و ۳ منبع افزوده شدند؛ پایین را
 ببینید).
 
@@ -74,7 +74,7 @@ sources.py — منابع کانفیگ رایگان.
 from __future__ import annotations
 from typing import List
 
-# ── سبک / با کیفیت (۸ منبع فعال) ──────────────────────────────────────────────
+# ── سبک / با کیفیت (۹ منبع فعال) ──────────────────────────────────────────────
 # نکته: چهار آدرس mci/sub_2..4 و mtn/sub_2..4 که قبلاً اینجا بودند حذف شدند؛
 # همهٔ آن‌ها HTTP 200 با بدنهٔ صفر بایت برمی‌گرداندند (منبع مرده ولی نامرئی).
 # سه منبعِ کامنت‌شدهٔ زیر عمداً پاک نشده‌اند: دلیلِ سنجیده‌شدهٔ کنارشان تنها
@@ -124,6 +124,8 @@ LIGHT_SOURCES: List[str] = [
     "https://raw.githubusercontent.com/Au1rxx/free-vpn-subscriptions/main/output/v2ray-base64.txt",
     "https://raw.githubusercontent.com/Danialsamadi/v2go/main/AllConfigsSub.txt",
     "https://raw.githubusercontent.com/LalatinaHub/LatinaSub/main/result/sub",
+    # FaryanVPN Free (Cloudflare CDN VLESS-WS-TLS, Ref #40)
+    "https://blankpaper.ir/free-sub/gh_radikal",
     # ── غیرفعال ۲۰۲۶-۰۸-۲۷ (کامنت، نه حذف) ───────────────────────────────────
     # w1770946466/Auto_proxy/Long_term_subscription_num — دلیلِ قاطع:
     # آخرین کامیتِ **همین مسیر** در بالادست `2024-03-20T18:13:17Z` است
